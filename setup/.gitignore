@@ -1,0 +1,9 @@
+doc/html
+doc/latex
+.idea
+build
+cmake-build*
+
+opencv/
+opencv*/
+Pangolin/

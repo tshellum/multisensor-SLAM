@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+command -v sudo > /dev/null 2>&1 || function sudo { eval ${@@Q}; }
+set -euxo pipefail
+
+# Find software directory
+cd && cd software
+
+
+# Install dependencies
+pip install tf
+
+# Install the default repository for kitti2bag: https://github.com/tomas789/kitti2bag
+# pip install kitti2bag
+
+# If erronous behaviour is experienced, rather try altertech's fork: https://github.com/alteretch/kitti2bag
+if [ ! -d "pykitti" ] 
+then
+  git clone https://github.com/utiasSTARS/pykitti.git # test on commit d3e1bb81676e831886726cc5ed79ce1f049aef2c
+fi
+cd pykitti
+sudo python setup.py install
+cd ..
+
+if [ ! -d "kitti2bag" ] 
+then
+  git clone https://github.com/AlterEtch/kitti2bag.git
+fi
+cd kitti2bag
+sudo python setup.py install
