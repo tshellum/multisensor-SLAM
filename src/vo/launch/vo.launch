@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+    <arg name="topic" default="camera"/>
+    <arg name="dist" default="100.0"/>
+    <arg name="matched" default="0.90"/>
+
+    <node 
+    name="vo"
+    pkg="vo"
+    type="vo_node"
+    args="$(arg topic) $(arg dist) $(arg matched)"
+    output="screen">
+    
+    <remap from="image" to="$(arg topic)"/>
+    </node>
+
+
+    <!-- <node pkg="tf" type="static_transform_publisher" name="link_broadcaster" args="0 0 0 0 0 0 0 static_world vo_keypoints 100" /> -->
+</launch>
