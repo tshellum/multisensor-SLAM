@@ -19,6 +19,9 @@ pip install scipy
 
 sudo snap install --classic code
 
+pip install -U latex
+sudo apt install texlive-fonts-recommended texlive-fonts-extra
+sudo apt install dvipng
 
 # Install Point cloud library
 # sudo apt install libpcl-dev
