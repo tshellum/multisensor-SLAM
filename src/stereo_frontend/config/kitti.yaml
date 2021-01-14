@@ -1,0 +1,34 @@
+# %YAML:1.0
+
+# Common parameters
+cam_left_topic : "/kitti/camera_gray_left/image"
+cam_right_topic: "/kitti/camera_gray_right/image"
+
+# Camera calibration 
+camera_left: 
+   image_width: 1382
+   image_height: 512
+   distortion_parameters:
+      k1: 0
+      k2: 0
+      p1: 0
+      p2: 0
+   projection_parameters:
+      fx: 718.8560
+      fy: 718.8560
+      cx: 607.1928
+      cy: 185.2157
+
+camera_right: 
+   image_width: 1382
+   image_height: 512
+   distortion_parameters:
+      k1: 0
+      k2: 0
+      p1: 0
+      p2: 0
+   projection_parameters:
+      fx: 718.8560
+      fy: 718.8560
+      cx: 607.1928
+      cy: 185.2157

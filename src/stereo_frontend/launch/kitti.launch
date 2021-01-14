@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+    <arg name = "cam_left_topic"  default = "/kitti/camera_gray_left/image"/>
+    <arg name = "cam_right_topic" default = "/kitti/camera_gray_right/image"/>
+
+    <rosparam file = "$(find stereo_frontend)/config/kitti.yaml" />
+
+    <node 
+        name   = "stereo_frontend"
+        pkg    = "stereo_frontend"
+        type   = "stereo_frontend_node"
+        args   = "$(arg cam_left_topic) $(arg cam_right_topic)"
+        output = "screen"
+    >
+    
+    <remap from = "cam_left"  to = "$(arg cam_left_topic)"/>
+    <remap from = "cam_right" to = "$(arg cam_right_topic)"/>
+    </node>
+</launch>

@@ -15,11 +15,12 @@
 // #include <opencv2/calib3d.hpp>
 
 /*** C++ libraries ***/
-
-
+#include <string>
 
 /*** Classes ***/
 #include "stereo_frontend/feature_management.h"
+#include "stereo_frontend/pinhole_model.h"
+
 
 class StereoFrontend
 {
@@ -35,12 +36,18 @@ class StereoFrontend
     
     // Classes
 	  FeatureManager detector_;
+    
+    // TODO: Read camera name
+    PinholeModel camera_left_;
+    // PinholeModel camera_left_("camera_left");
+    // PinholeModel   camera_right_("camera_right");
 
     // Parameters
 
   public:
     StereoFrontend()
     {
+      // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       sub_cam_left_.subscribe(nh_, "cam_left", 1);
       sub_cam_right_.subscribe(nh_, "cam_right", 1);
       sync_.reset(new Sync(MySyncPolicy(10), sub_cam_left_, sub_cam_right_));
@@ -85,6 +92,7 @@ class StereoFrontend
 
       // displayWindow(frame_left.image, frame_right.image, "Detections");
 
+      ROS_INFO_STREAM("\nK: " << camera_left_.get_K() );
     }
 
 
@@ -123,6 +131,7 @@ int main(int argc, char **argv)
 	StereoFrontend callback;
 
   ros::spin();
+  return 0;
 }
 
 
