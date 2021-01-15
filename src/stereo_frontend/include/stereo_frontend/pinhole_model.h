@@ -5,7 +5,6 @@
 #include <Eigen/Dense> 
 #include "opencv2/core/eigen.hpp"
 
-
 class PinholeModel
 {
 private:    
@@ -50,11 +49,17 @@ public:
 
     ~PinholeModel() {};
 
-
     cv::Mat K_cv() {return K_cv_;};
     Eigen::Matrix3d K_eig() {return K_eig_;};
     cv::Mat distortion() {return distortion_;};
+
+    cv::Mat undistort(cv::Mat img, cv::Mat K_undist);
 };
 
 
-
+cv::Mat PinholeModel::undistort(cv::Mat img, cv::Mat K_undist = cv::Mat())
+{
+	cv::Mat undist_img;
+    cv::undistort(img, undist_img, K_cv_, distortion_, K_undist);
+    return undist_img;
+}

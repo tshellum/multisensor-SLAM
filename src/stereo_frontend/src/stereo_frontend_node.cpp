@@ -1,4 +1,4 @@
-/*** ROS libraries ***/
+/*** ROS packages ***/
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>
 // #include <image_transport/image_transport.h>
@@ -7,20 +7,20 @@
 #include <message_filters/sync_policies/approximate_time.h>
 #include <cv_bridge/cv_bridge.h>
 
-/*** OpenCV libraries ***/
+/*** OpenCV packages ***/
 #include "opencv2/core.hpp"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
 // #include "opencv2/features2d.hpp"
 // #include <opencv2/calib3d.hpp>
 
-/*** C++ libraries ***/
+/*** C++ packages ***/
 #include <string>
 
 /*** Classes ***/
 #include "stereo_frontend/feature_management.h"
 #include "stereo_frontend/pinhole_model.h"
-
+#include "stereo_frontend/pose.h"
 
 class StereoFrontend
 {
@@ -38,11 +38,15 @@ class StereoFrontend
 	  FeatureManager detector_;
     PinholeModel   camera_left_;
     PinholeModel   camera_right_;
+    Pose           pose_;
+    Pose           ground_truth_;
 
     // Parameters
 
   public:
-    StereoFrontend() : camera_left_("camera_left", nh_), camera_right_("camera_right", nh_)
+    StereoFrontend() 
+    : camera_left_("camera_left", nh_), camera_right_("camera_right", nh_),
+      pose_("stamped_traj_estimate.txt"), ground_truth_("stamped_groundtruth.txt")
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       sub_cam_left_.subscribe(nh_, "cam_left", 1);
