@@ -21,6 +21,8 @@
 #include "stereo_frontend/feature_management.h"
 #include "stereo_frontend/pinhole_model.h"
 #include "stereo_frontend/pose.h"
+#include "stereo_frontend/support.h"
+
 
 class StereoFrontend
 {
@@ -46,14 +48,14 @@ class StereoFrontend
   public:
     StereoFrontend() 
     : camera_left_("camera_left", nh_), camera_right_("camera_right", nh_),
-      pose_("stamped_traj_estimate.txt"), ground_truth_("stamped_groundtruth.txt")
+      pose_("stamped_traj_estimate.txt"), ground_truth_("stamped_groundtruth.txt"),
+      detector_(1000, 20, 25)
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       sub_cam_left_.subscribe(nh_, "cam_left", 1);
       sub_cam_right_.subscribe(nh_, "cam_right", 1);
       sync_.reset(new Sync(MySyncPolicy(10), sub_cam_left_, sub_cam_right_));
       sync_->registerCallback(boost::bind(&StereoFrontend::callback, this, _1, _2));
-
 
     }
 
@@ -78,47 +80,21 @@ class StereoFrontend
       	return;
       }
 
-    	Frame frame_left;
-      frame_left.image = cv_ptr_left->image; 
-      frame_left.descriptor = cv::Mat(); 
-      frame_left.keypoints.clear(); 
+      // TODO: Formulate main system structure
+      camera_left_.undistort(cv_ptr_left->image);
+      camera_right_.undistort(cv_ptr_right->image);
 
-      Frame frame_right;
-      frame_right.image = cv_ptr_right->image; 
-      frame_right.descriptor = cv::Mat(); 
-      frame_right.keypoints.clear(); 
+      // camera_left_.crop(cv_ptr_left->image, 0, 0, cv_ptr_left->image.cols/2, cv_ptr_left->image.rows);
+      // camera_right_.crop(cv_ptr_right->image, 0, 0, cv_ptr_right->image.cols/2, cv_ptr_right->image.rows);
 
-      displayWindow(frame_left.image, frame_right.image);
+    	detector_.initiate_frames(cv_ptr_left->image, cv_ptr_right->image);
+ 			detector_.detectAndCompute();
 
- 			// detector_.detectAndCompute(frame_left);
- 			// detector_.detectAndCompute(frame_right);
+      displayWindowKeypoints(detector_.get_image_left(), detector_.get_image_right(), detector_.get_keypoints_left(), detector_.get_keypoints_right());
+    
 
-      // displayWindow(frame_left.image, frame_right.image, "Detections");
-    }
-
-
-
-    /*** Supporting functions ***/
-
-    void displayWindow(cv::Mat image1, cv::Mat image2=cv::Mat(), std::string name="Stereo images", int resizeWidth=1000, int resizeHeight=500, int key=3)
-    {
-      if (image2.empty())
-      {
-        cv::namedWindow(name, cv::WINDOW_NORMAL);
-        cv::imshow(name, image1);
-        cv::resizeWindow(name, resizeWidth, resizeHeight);
-        cv::waitKey(key);
-      }
-      else
-      {
-        cv::Mat splitimage;
-        cv::hconcat(image1, image2, splitimage);
-        
-        cv::namedWindow(name, cv::WINDOW_NORMAL);
-        cv::imshow(name, splitimage);
-        cv::resizeWindow(name, resizeWidth, resizeHeight);
-        cv::waitKey(key);
-      }
+    
+    
     }
 
 };

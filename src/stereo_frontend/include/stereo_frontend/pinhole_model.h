@@ -5,6 +5,8 @@
 #include <Eigen/Dense> 
 #include "opencv2/core/eigen.hpp"
 
+#include "stereo_frontend/support.h"
+
 class PinholeModel
 {
 private:    
@@ -53,13 +55,21 @@ public:
     Eigen::Matrix3d K_eig() {return K_eig_;};
     cv::Mat distortion() {return distortion_;};
 
-    cv::Mat undistort(cv::Mat img, cv::Mat K_undist);
+    // void set_dimentions(int width, int height) {width_=width; height_=height;} // width = columns, height = rows
+
+    void undistort(cv::Mat& img, cv::Mat K_undist);
+    void crop(cv::Mat& img, int x1, int x2, int y1, int y2);
 };
 
 
-cv::Mat PinholeModel::undistort(cv::Mat img, cv::Mat K_undist = cv::Mat())
+void PinholeModel::undistort(cv::Mat& img, cv::Mat K_undist = cv::Mat())
 {
 	cv::Mat undist_img;
     cv::undistort(img, undist_img, K_cv_, distortion_, K_undist);
-    return undist_img;
+}
+
+void PinholeModel::crop(cv::Mat& img, int x1, int y1, int x2, int y2)
+{   
+    // img(cv::Rect(x1, y1, x2, y2));
+    NotImplementedError(__func__, __FILE__);
 }
