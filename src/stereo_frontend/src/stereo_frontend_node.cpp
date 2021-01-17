@@ -88,13 +88,20 @@ class StereoFrontend
       // camera_right_.crop(cv_ptr_right->image, 0, 0, cv_ptr_right->image.cols/2, cv_ptr_right->image.rows);
 
     	detector_.initiate_frames(cv_ptr_left->image, cv_ptr_right->image);
- 			detector_.detectAndCompute();
 
-      displayWindowKeypoints(detector_.get_image_left(), detector_.get_image_right(), detector_.get_keypoints_left(), detector_.get_keypoints_right());
-    
+      if ((detector_.get_num_features_left_prev() < 200) || (detector_.get_num_features_right_prev() < 200))
+        detector_.detectAndCompute();    
+      else
+        detector_.track_stereo_features();
 
-    
-    
+
+      ROS_INFO_STREAM("left f: " << detector_.get_num_features_left_prev());
+      ROS_INFO_STREAM("right f: " << detector_.get_num_features_right_prev());
+
+      displayWindowKeypoints(detector_.get_cur_image_left(), detector_.get_cur_image_right(), detector_.get_cur_features_left(), detector_.get_cur_features_right());
+
+
+      detector_.set_cur_frames();
     }
 
 };
