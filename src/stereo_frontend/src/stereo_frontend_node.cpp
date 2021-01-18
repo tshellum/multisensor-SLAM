@@ -24,38 +24,41 @@
 #include "stereo_frontend/support.h"
 
 
+/*** Typedef ***/
+typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
+typedef message_filters::Synchronizer<MySyncPolicy> Sync;
+
+
+
 class StereoFrontend
 {
   private:
     // Nodes
-    ros::NodeHandle nh_;
-    message_filters::Subscriber<sensor_msgs::Image> sub_cam_left_;
-    message_filters::Subscriber<sensor_msgs::Image> sub_cam_right_;
-
-    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
-    typedef message_filters::Synchronizer<MySyncPolicy> Sync;
-    boost::shared_ptr<Sync> sync_;
+    ros::NodeHandle _nh;
+    message_filters::Subscriber<sensor_msgs::Image> _sub_cam_left;
+    message_filters::Subscriber<sensor_msgs::Image> _sub_cam_right;
+    boost::shared_ptr<Sync> _sync;
     
     // Classes
-	  FeatureManager detector_;
-    PinholeModel   camera_left_;
-    PinholeModel   camera_right_;
-    Pose           pose_;
-    Pose           ground_truth_;
+	  FeatureManager _detector;
+    PinholeModel   _camera_left;
+    PinholeModel   _camera_right;
+    Pose           _pose;
+    Pose           _ground_truth;
 
     // Parameters
 
   public:
     StereoFrontend() 
-    : camera_left_("camera_left", nh_), camera_right_("camera_right", nh_),
-      pose_("stamped_traj_estimate.txt"), ground_truth_("stamped_groundtruth.txt"),
-      detector_(1000, 20, 25)
+    : _camera_left("camera_left", _nh), _camera_right("camera_right", _nh),
+      _pose("stamped_traj_estimate.txt"), _ground_truth("stamped_groundtruth.txt"),
+      _detector(1000, 20, 25)
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
-      sub_cam_left_.subscribe(nh_, "cam_left", 1);
-      sub_cam_right_.subscribe(nh_, "cam_right", 1);
-      sync_.reset(new Sync(MySyncPolicy(10), sub_cam_left_, sub_cam_right_));
-      sync_->registerCallback(boost::bind(&StereoFrontend::callback, this, _1, _2));
+      _sub_cam_left.subscribe(_nh, "cam_left", 1);
+      _sub_cam_right.subscribe(_nh, "cam_right", 1);
+      _sync.reset(new Sync(MySyncPolicy(10), _sub_cam_left, _sub_cam_right));
+      _sync->registerCallback(boost::bind(&StereoFrontend::callback, this, _1, _2));
 
     }
 
@@ -81,27 +84,27 @@ class StereoFrontend
       }
 
       // TODO: Formulate main system structure
-      camera_left_.undistort(cv_ptr_left->image);
-      camera_right_.undistort(cv_ptr_right->image);
+      _camera_left.undistort(cv_ptr_left->image);
+      _camera_right.undistort(cv_ptr_right->image);
 
-      // camera_left_.crop(cv_ptr_left->image, 0, 0, cv_ptr_left->image.cols/2, cv_ptr_left->image.rows);
-      // camera_right_.crop(cv_ptr_right->image, 0, 0, cv_ptr_right->image.cols/2, cv_ptr_right->image.rows);
+      // _camera_left.crop(cv_ptr_left->image, 0, 0, cv_ptr_left->image.cols/2, cv_ptr_left->image.rows);
+      // _camera_right.crop(cv_ptr_right->image, 0, 0, cv_ptr_right->image.cols/2, cv_ptr_right->image.rows);
 
-    	detector_.initiate_frames(cv_ptr_left->image, cv_ptr_right->image);
+    	_detector.initiateFrames(cv_ptr_left->image, cv_ptr_right->image);
 
-      if ((detector_.get_num_features_left_prev() < 200) || (detector_.get_num_features_right_prev() < 200))
-        detector_.detectAndCompute();    
+      if ((_detector.getNumFeaturesLeftPrev() < 200) || (_detector.getNumFeaturesRightPrev() < 200))
+        _detector.detectAndCompute();    
       else
-        detector_.track_stereo_features();
+        _detector.trackStereoFeatures();
 
 
-      ROS_INFO_STREAM("left f: " << detector_.get_num_features_left_prev());
-      ROS_INFO_STREAM("right f: " << detector_.get_num_features_right_prev());
+      // ROS_INFO_STREAM("left f: " << _detector.getNumFeaturesLeftPrev());
+      // ROS_INFO_STREAM("right f: " << _detector.getNumFeaturesRightPrev());
 
-      displayWindowKeypoints(detector_.get_cur_image_left(), detector_.get_cur_image_right(), detector_.get_cur_features_left(), detector_.get_cur_features_right());
+      displayWindowKeypoints(_detector.getCurImageLeft(), _detector.getCurImageRight(), _detector.getCurFeaturesLeft(), _detector.getCurFeaturesRight());
 
 
-      detector_.set_cur_frames();
+      _detector.updatePrevFrames();
     }
 
 };

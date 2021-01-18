@@ -23,99 +23,92 @@ class FeatureManager
 {
 private:
     // Frames
-    Frame left_prev_;
-    Frame right_prev_;
-    Frame left_cur_;
-    Frame right_cur_;
+    Frame _left_prev;
+    Frame _right_prev;
+    Frame _left_cur;
+    Frame _right_cur;
 
     // Detectors
-    cv::Ptr<cv::GFTTDetector> extractor_; 
-    cv::Ptr<cv::Feature2D>    descriptor_; 
+    cv::Ptr<cv::GFTTDetector> _extractor; 
+    cv::Ptr<cv::Feature2D>    _descriptor; 
 
     // Detector parameters
-    unsigned int MAX_FEATURES_;
-    unsigned int GRID_SIZE_; // NxN size grid
-    int THRESHOLD_;
+    unsigned int _MAX_FEATURES;
+    unsigned int _GRID_SIZE; // NxN size grid
+    int _THRESHOLD;
 
     // Point parameters    
-    int n_id_;
+    int _n_id;
 
 
 public:
     FeatureManager(int MAX_FEATURES = 1000, int GRID_SIZE = 20, int THRESHOLD = 25) 
-    : GRID_SIZE_(GRID_SIZE), MAX_FEATURES_(MAX_FEATURES), THRESHOLD_(THRESHOLD),
-      n_id_(0)
+    : _GRID_SIZE(GRID_SIZE), _MAX_FEATURES(MAX_FEATURES), _THRESHOLD(THRESHOLD),
+      _n_id(0)
     {
-        extractor_ = cv::GFTTDetector::create(
-                                MAX_FEATURES_, // maximum number of features
+        _extractor = cv::GFTTDetector::create(
+                                _MAX_FEATURES, // maximum number of features
                                 0.01,          // quality level
                                 10);           // minimum allowed distance
 
-        descriptor_ = cv::ORB::create(MAX_FEATURES_);
+        _descriptor = cv::ORB::create(_MAX_FEATURES);
     }
     ~FeatureManager() {};
 
-    void initiate_frames(cv::Mat image_left, cv::Mat image_right);
+    void initiateFrames(cv::Mat image_left, cv::Mat image_right);
 
-    cv::Mat get_prev_image_left()  {return left_prev_.image;};
-    cv::Mat get_prev_image_right() {return right_prev_.image;};
-    cv::Mat get_cur_image_left()   {return left_cur_.image;};
-    cv::Mat get_cur_image_right()  {return right_cur_.image;};
+    cv::Mat getPrevImageLeft()  {return _left_prev.image;};
+    cv::Mat getPrevImageRight() {return _right_prev.image;};
+    cv::Mat getCurImageLeft()   {return _left_cur.image;};
+    cv::Mat getCurImageRight()  {return _right_cur.image;};
 
-    std::vector<cv::KeyPoint> get_prev_features_left()  {return left_prev_.features;};
-    std::vector<cv::KeyPoint> get_prev_features_right() {return right_prev_.features;};
-    std::vector<cv::KeyPoint> get_cur_features_left()   {return left_cur_.features;};
-    std::vector<cv::KeyPoint> get_cur_features_right()  {return right_cur_.features;};
+    std::vector<cv::KeyPoint> getPrevFeaturesLeft()  {return _left_prev.features;};
+    std::vector<cv::KeyPoint> getPrevFeaturesRight() {return _right_prev.features;};
+    std::vector<cv::KeyPoint> getCurFeaturesLeft()   {return _left_cur.features;};
+    std::vector<cv::KeyPoint> getCurFeaturesRight()  {return _right_cur.features;};
 
-    int get_num_features_left_prev()  {return left_prev_.features.size();};
-    int get_num_features_right_prev() {return right_prev_.features.size();};
-    int get_num_features_left_cur()   {return left_cur_.features.size();};
-    int get_num_features_right_cur()  {return right_cur_.features.size();};
+    int getNumFeaturesLeftPrev()  {return _left_prev.features.size();};
+    int getNumFeaturesRightPrev() {return _right_prev.features.size();};
+    int getNumFeaturesLeftCur()   {return _left_cur.features.size();};
+    int getNumFeaturesRightCur()  {return _right_cur.features.size();};
 
-    int get_default_norm();
+    int getDefaultNorm() {return _descriptor->defaultNorm();};
 
-    void set_cur_frames();
+    void updatePrevFrames();
 
-    void printit() {ROS_INFO("print");};
     void detectAndCompute();
     void bucketedFeatureDetection();
     void track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>& prev_kps, std::vector<cv::KeyPoint>& cur_kps);
-    void track_stereo_features();
+    void trackStereoFeatures();
     
 };
 
 
 
-void FeatureManager::initiate_frames(cv::Mat image_left, cv::Mat image_right)
+void FeatureManager::initiateFrames(cv::Mat image_left, cv::Mat image_right)
 {
-    left_cur_.image = image_left; 
-    left_cur_.descriptor = cv::Mat(); 
-    left_cur_.features.clear(); 
+    _left_cur.image = image_left; 
+    _left_cur.descriptor = cv::Mat(); 
+    _left_cur.features.clear(); 
 
-    right_cur_.image = image_right; 
-    right_cur_.descriptor = cv::Mat(); 
-    right_cur_.features.clear(); 
+    _right_cur.image = image_right; 
+    _right_cur.descriptor = cv::Mat(); 
+    _right_cur.features.clear(); 
 }
 
-void FeatureManager::set_cur_frames()
+void FeatureManager::updatePrevFrames()
 {
-    left_prev_ = left_cur_;
-    right_prev_ = right_cur_;
+    _left_prev = _left_cur;
+    _right_prev = _right_cur;
 }
-
-int FeatureManager::get_default_norm()
-{
-    return descriptor_->defaultNorm();
-}
-
 
 void FeatureManager::detectAndCompute()  
 {        
-    extractor_->detect(left_cur_.image, left_cur_.features, cv::Mat()); 
-    extractor_->detect(right_cur_.image, right_cur_.features, cv::Mat()); 
+    _extractor->detect(_left_cur.image, _left_cur.features, cv::Mat()); 
+    _extractor->detect(_right_cur.image, _right_cur.features, cv::Mat()); 
 
-    descriptor_->compute(left_cur_.image, left_cur_.features, left_cur_.descriptor); 
-    descriptor_->compute(right_cur_.image, right_cur_.features, right_cur_.descriptor); 
+    _descriptor->compute(_left_cur.image, _left_cur.features, _left_cur.descriptor); 
+    _descriptor->compute(_right_cur.image, _right_cur.features, _right_cur.descriptor); 
 }    
 
 
@@ -176,9 +169,8 @@ void FeatureManager::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::Ke
     cur_kps = tracked_kpts;
 }
 
-void FeatureManager::track_stereo_features()
+void FeatureManager::trackStereoFeatures()
 {
-    printit();
-    track(left_prev_.image, left_cur_.image, left_prev_.features, left_cur_.features);
-    track(right_prev_.image, right_cur_.image, right_prev_.features, right_cur_.features);
+    track(_left_prev.image, _left_cur.image, _left_prev.features, _left_cur.features);
+    track(_right_prev.image, _right_cur.image, _right_prev.features, _right_cur.features);
 }

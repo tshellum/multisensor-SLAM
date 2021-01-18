@@ -12,50 +12,50 @@ class PinholeModel
 private:    
     std::string name_;
 
-    int width_, height_;
+    int _width, _height;
 
     // Projection parameters
-    double fx_, fy_, cx_, cy_;
+    double _fx, _fy, _cx, _cy;
     
     // Distortion parameters
-    double k1_, k2_, p1_, p2_, k3_;
-    cv::Mat distortion_;
+    double _k1, _k2, _p1, _p2, _k3;
+    cv::Mat _distortion;
     
     // Calibration matrix
-    cv::Mat K_cv_;
-   	Eigen::Matrix3d K_eig_; 	
+    cv::Mat _K_cv;
+   	Eigen::Matrix3d _K_eig; 	
  
 public:
-    PinholeModel(const std::string name, ros::NodeHandle nh) : name_(name), k3_(0.0)
+    PinholeModel(const std::string name, ros::NodeHandle nh) : name_(name), _k3(0.0)
     {
-        nh.getParam("/"+name_+"/image_width", width_);
-        nh.getParam("/"+name_+"/image_height", height_);
-        nh.getParam("/"+name_+"/projection_parameters/fx", fx_);
-        nh.getParam("/"+name_+"/projection_parameters/fy", fy_);
-        nh.getParam("/"+name_+"/projection_parameters/cx", cx_);
-        nh.getParam("/"+name_+"/projection_parameters/cy", cy_);
-        nh.getParam("/"+name_+"/distortion_parameters/k1", k1_);
-        nh.getParam("/"+name_+"/distortion_parameters/k2", k2_);
-        nh.getParam("/"+name_+"/distortion_parameters/p1", p1_);
-        nh.getParam("/"+name_+"/distortion_parameters/p2", p2_);
+        nh.getParam("/"+name_+"/image_width", _width);
+        nh.getParam("/"+name_+"/image_height", _height);
+        nh.getParam("/"+name_+"/projection_parameters/fx", _fx);
+        nh.getParam("/"+name_+"/projection_parameters/fy", _fy);
+        nh.getParam("/"+name_+"/projection_parameters/cx", _cx);
+        nh.getParam("/"+name_+"/projection_parameters/cy", _cy);
+        nh.getParam("/"+name_+"/distortion_parameters/k1", _k1);
+        nh.getParam("/"+name_+"/distortion_parameters/k2", _k2);
+        nh.getParam("/"+name_+"/distortion_parameters/p1", _p1);
+        nh.getParam("/"+name_+"/distortion_parameters/p2", _p2);
 
-        K_cv_ = (cv::Mat_<double>(3,3) << 
-                fx_,   0, cx_,
-                  0, fy_, cy_,
+        _K_cv = (cv::Mat_<double>(3,3) << 
+                _fx,   0, _cx,
+                  0, _fy, _cy,
                   0,   0,   1);
         
-        cv::cv2eigen(K_cv_, K_eig_);
+        cv::cv2eigen(_K_cv, _K_eig);
 
-        distortion_ = (cv::Mat_<double>(5,1) << k1_, k2_, p1_, p2_, k3_);
+        _distortion = (cv::Mat_<double>(5,1) << _k1, _k2, _p1, _p2, _k3);
     };
 
     ~PinholeModel() {};
 
-    cv::Mat K_cv() {return K_cv_;};
-    Eigen::Matrix3d K_eig() {return K_eig_;};
-    cv::Mat distortion() {return distortion_;};
+    cv::Mat K_cv() {return _K_cv;};
+    Eigen::Matrix3d K_eig() {return _K_eig;};
+    cv::Mat distortion() {return _distortion;};
 
-    // void set_dimentions(int width, int height) {width_=width; height_=height;} // width = columns, height = rows
+    // void set_dimentions(int width, int height) {_width=width; _height=height;} // width = columns, height = rows
 
     void undistort(cv::Mat& img, cv::Mat K_undist);
     void crop(cv::Mat& img, int x1, int x2, int y1, int y2);
@@ -65,7 +65,7 @@ public:
 void PinholeModel::undistort(cv::Mat& img, cv::Mat K_undist = cv::Mat())
 {
 	cv::Mat undist_img;
-    cv::undistort(img, undist_img, K_cv_, distortion_, K_undist);
+    cv::undistort(img, undist_img, _K_cv, _distortion, K_undist);
 }
 
 void PinholeModel::crop(cv::Mat& img, int x1, int y1, int x2, int y2)
