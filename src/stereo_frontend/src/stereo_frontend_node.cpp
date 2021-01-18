@@ -105,12 +105,12 @@ class StereoFrontend
       if ((_detector.getNumFeaturesLeftPrev() < 200))
       {
         _detector.bucketedFeatureDetection();    
-        ROS_INFO_STREAM("New detect, number of features: " << _detector.getNumFeaturesLeftPrev());
+        ROS_INFO_STREAM("New detect, number of features: " << _detector.getNumFeaturesLeftCur());
       }
       else
       {
         _detector.trackBuckets();
-        ROS_INFO_STREAM("Tracking, number of features: " << _detector.getNumFeaturesLeftPrev());
+        ROS_INFO_STREAM("Tracking, number of features: " << _detector.getNumFeaturesLeftCur());
       }
 
       displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());

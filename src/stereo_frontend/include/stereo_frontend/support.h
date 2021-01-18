@@ -21,6 +21,7 @@ void displayWindow
   if (image2.empty())
   {
     cv::namedWindow(name, cv::WINDOW_NORMAL);
+
     cv::imshow(name, image1);
     cv::resizeWindow(name, resizeWidth, resizeHeight);
     cv::waitKey(key);
@@ -45,12 +46,12 @@ void displayWindowFeatures
   std::string name="Detections", int resizeWidth=1000, int resizeHeight=500, int key=3
 )
 {
-  cv::Mat img_kps1, img_kps2;
+  cv::Mat img_kps1 = image1; cv::Mat img_kps2;
   if (! kps1.empty())
     cv::drawKeypoints(image1, kps1, img_kps1, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
   if (! kps2.empty())
     cv::drawKeypoints(image2, kps2, img_kps2, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
-  
+
   displayWindow(img_kps1, img_kps2, name, resizeWidth, resizeHeight, key);
 }
 
