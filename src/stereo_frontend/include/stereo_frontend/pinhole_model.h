@@ -26,7 +26,7 @@ private:
    	Eigen::Matrix3d _K_eig; 	
  
 public:
-    PinholeModel(const std::string name, ros::NodeHandle nh) : name_(name), _k3(0.0)
+    PinholeModel(ros::NodeHandle nh, const std::string name) : name_(name), _k3(0.0)
     {
         nh.getParam("/"+name_+"/image_width", _width);
         nh.getParam("/"+name_+"/image_height", _height);
@@ -55,7 +55,8 @@ public:
     Eigen::Matrix3d K_eig() {return _K_eig;};
     cv::Mat distortion() {return _distortion;};
 
-    // void set_dimentions(int width, int height) {_width=width; _height=height;} // width = columns, height = rows
+    int getWidth()  {return _width;};
+    int getHeight() {return _height;};
 
     void undistort(cv::Mat& img, cv::Mat K_undist);
     void crop(cv::Mat& img, int x1, int x2, int y1, int y2);
@@ -68,8 +69,7 @@ void PinholeModel::undistort(cv::Mat& img, cv::Mat K_undist = cv::Mat())
     cv::undistort(img, undist_img, _K_cv, _distortion, K_undist);
 }
 
-void PinholeModel::crop(cv::Mat& img, int x1, int y1, int x2, int y2)
+void PinholeModel::crop(cv::Mat& img, int x, int y, int patch_width, int patch_height)
 {   
-    // img(cv::Rect(x1, y1, x2, y2));
-    NotImplementedError(__func__, __FILE__);
+    cv::Mat temp = img(cv::Rect(x, y, patch_width, patch_height)).clone(); img = temp;
 }

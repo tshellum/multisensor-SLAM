@@ -50,9 +50,9 @@ class StereoFrontend
 
   public:
     StereoFrontend() 
-    : _camera_left("camera_left", _nh), _camera_right("camera_right", _nh),
+    : _camera_left(_nh, "camera_left"), _camera_right(_nh, "camera_right"),
       _pose("stamped_traj_estimate.txt"), _ground_truth("stamped_groundtruth.txt"),
-      _detector(1000, 20, 25)
+      _detector(_nh, "camera_left", 50, 10)
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       _sub_cam_left.subscribe(_nh, "cam_left", 1);
@@ -87,21 +87,33 @@ class StereoFrontend
       _camera_left.undistort(cv_ptr_left->image);
       _camera_right.undistort(cv_ptr_right->image);
 
-      // _camera_left.crop(cv_ptr_left->image, 0, 0, cv_ptr_left->image.cols/2, cv_ptr_left->image.rows);
-      // _camera_right.crop(cv_ptr_right->image, 0, 0, cv_ptr_right->image.cols/2, cv_ptr_right->image.rows);
+      int patch_width = _camera_left.getWidth() - (_camera_left.getWidth() % _detector.getGridSize());
+      int patch_height = _camera_left.getHeight() - (_camera_left.getHeight() % _detector.getGridSize());
+      _camera_left.crop(cv_ptr_left->image, 0, 0, patch_width, patch_height);
+      _camera_right.crop(cv_ptr_right->image, 0, 0, patch_width, patch_height);
 
     	_detector.initiateFrames(cv_ptr_left->image, cv_ptr_right->image);
 
-      if ((_detector.getNumFeaturesLeftPrev() < 200) || (_detector.getNumFeaturesRightPrev() < 200))
-        _detector.detectAndCompute();    
+      // if ((_detector.getNumFeaturesLeftPrev() < 200) || (_detector.getNumFeaturesRightPrev() < 200))
+      //   _detector.detectAndCompute();    
+      // else
+      //   _detector.trackStereoFeatures();
+
+      // displayWindowKeypoints(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft(), _detector.getCurImageRight(), _detector.getCurFeaturesRight());
+
+
+      if ((_detector.getNumFeaturesLeftPrev() < 200))
+      {
+        _detector.bucketedFeatureDetection();    
+        ROS_INFO_STREAM("New detect, number of features: " << _detector.getNumFeaturesLeftPrev());
+      }
       else
-        _detector.trackStereoFeatures();
+      {
+        _detector.trackBuckets();
+        ROS_INFO_STREAM("Tracking, number of features: " << _detector.getNumFeaturesLeftPrev());
+      }
 
-
-      // ROS_INFO_STREAM("left f: " << _detector.getNumFeaturesLeftPrev());
-      // ROS_INFO_STREAM("right f: " << _detector.getNumFeaturesRightPrev());
-
-      displayWindowKeypoints(_detector.getCurImageLeft(), _detector.getCurImageRight(), _detector.getCurFeaturesLeft(), _detector.getCurFeaturesRight());
+      displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());
 
 
       _detector.updatePrevFrames();
