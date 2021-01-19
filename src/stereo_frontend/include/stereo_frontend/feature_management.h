@@ -1,9 +1,7 @@
 #pragma once
 
-#include <opencv2/core.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/videoio.hpp>
+#include <algorithm> 
+
 #include <opencv2/video.hpp>
 #include "opencv2/features2d.hpp"
 
@@ -34,8 +32,7 @@ private:
     cv::Ptr<cv::Feature2D>    _descriptor; 
 
     // Detector parameters
-    unsigned int _MAX_FEATURES;
-    unsigned int _MAX_FEATURES_PATCH;
+    int _MAX_FEATURES;
     int _THRESHOLD;
     
     // Function parameters
@@ -43,7 +40,7 @@ private:
     unsigned int _GRID_SIZE; // NxN size grid
     unsigned int _PATCH_W, _PATCH_H;
     unsigned int _N_BUCKETS;
-
+    unsigned int _DISTANCE;
     std::vector< std::vector<cv::KeyPoint> > _feature_buckets;
 
     // Point parameters    
@@ -51,21 +48,8 @@ private:
 
 
 public:
-    // FeatureManager(int MAX_FEATURES = 1000, int GRID_SIZE = 20, int THRESHOLD = 25) 
-    // : _GRID_SIZE(GRID_SIZE), _MAX_FEATURES(MAX_FEATURES), _THRESHOLD(THRESHOLD),
-    //   _n_id(0)
-    // {
-    //     _extractor = cv::FastFeatureDetector::create(THRESHOLD_, true); //threshold, NMS
-    //     // _extractor = cv::GFTTDetector::create(
-    //     //                         _MAX_FEATURES, // maximum number of features
-    //     //                         0.01,          // quality level
-    //     //                         10);           // minimum allowed distance
-
-    //     _descriptor = cv::ORB::create(_MAX_FEATURES);
-    // }
-
-    FeatureManager(ros::NodeHandle nh, const std::string name, unsigned int max_features = 1000, int grid_size = 20, int threshold = 25) 
-    : _GRID_SIZE(grid_size), _MAX_FEATURES(max_features), _THRESHOLD(threshold),
+    FeatureManager(ros::NodeHandle nh, const std::string name, unsigned int max_features = 10, int grid_size = 20, int threshold = 25, unsigned int distance = 5) 
+    : _GRID_SIZE(grid_size), _MAX_FEATURES(max_features), _THRESHOLD(threshold), _DISTANCE(distance),
       _N_BUCKETS(_GRID_SIZE*_GRID_SIZE)
     {
         int img_width_full, img_height_full;
@@ -78,7 +62,7 @@ public:
         _PATCH_W = _WIDTH / _GRID_SIZE;
         _PATCH_H = _HEIGHT / _GRID_SIZE;        
         
-        _feature_buckets.reserve(_N_BUCKETS);
+        _feature_buckets.reserve(_N_BUCKETS); // TODO: Doesn't work?
 
         _extractor = cv::FastFeatureDetector::create(_THRESHOLD, true); //threshold, NMS
         // _extractor = cv::GFTTDetector::create(
@@ -111,10 +95,12 @@ public:
     int getGridSize() {return _GRID_SIZE;};
     int getDefaultNorm() {return _descriptor->defaultNorm();};
 
+    void printNumFeaturesBuckets();
+
     void updatePrevFrames();
 
     void detectAndCompute();
-    void bucketedFeatureDetection(bool keep_previous_features);
+    void bucketedFeatureDetection(bool use_existing_features);
     void track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>& prev_kps, std::vector<cv::KeyPoint>& cur_kps);
     void track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>& features);
     void trackBuckets();
@@ -141,6 +127,14 @@ void FeatureManager::updatePrevFrames()
     _right_prev = _right_cur;
 }
 
+
+void FeatureManager::printNumFeaturesBuckets()
+{
+    for (unsigned int i = 0; i < _feature_buckets.size(); i++)
+        ROS_INFO_STREAM("Bucket number " << i << ". Amount of features: " << _feature_buckets[i].size());
+}
+
+
 void FeatureManager::detectAndCompute()  
 {        
     _extractor->detect(_left_cur.image, _left_cur.features, cv::Mat()); 
@@ -152,7 +146,7 @@ void FeatureManager::detectAndCompute()
 
 
 
-void FeatureManager::bucketedFeatureDetection(bool keep_previous_features = false)
+void FeatureManager::bucketedFeatureDetection(bool use_existing_features = false)
 {
     std::vector<cv::KeyPoint> patch_features; 
 
@@ -167,25 +161,69 @@ void FeatureManager::bucketedFeatureDetection(bool keep_previous_features = fals
             
             _extractor->detect(img_patch_cur, patch_features, mask); 
 
-
-
-            _feature_buckets[it_bucket].insert(std::end(_feature_buckets[it_bucket]), std::begin(patch_features), std::end(patch_features));
-
-            // Correct for patch position
-            for (cv::KeyPoint& feature : patch_features)
-            {
-                feature.pt.x += x;
-                feature.pt.y += y; 
-                feature.pt.id += _n_id++; 
-
-                _left_cur.features.push_back(feature);
-            }
+            // Sort to retain strongest features
+            std::sort(patch_features.begin(), patch_features.end(), 
+                [](const cv::KeyPoint& kpi, const cv::KeyPoint& kpj){ return kpi.response > kpj.response;  }
+            ); 
             
-            // TODO: Translate from python example: https://github.com/cgarg92/Stereo-visual-odometry/blob/master/Stereo.py
-            // if (len(keypoints) > 10):
-            //     keypoints = sorted(keypoints, key=lambda x: -x.response)
-            //     for kpt in keypoints[0:10]:
-            //         kp.append(kpt)
+            int max = std::min( _MAX_FEATURES, int(patch_features.size()) );
+            patch_features.erase(patch_features.begin()+max,patch_features.end());
+
+
+            // Initialize buckets 
+            // TODO: Simplfy using vec.reserve
+            if (_feature_buckets.size() < _N_BUCKETS)
+            {
+                for (cv::KeyPoint& new_feature : patch_features)
+                {   
+                    new_feature.class_id += _n_id++; 
+                }
+                _feature_buckets.push_back(patch_features);
+
+                for (cv::KeyPoint& new_feature : patch_features)
+                {   
+                    // Correct for patch position
+                    new_feature.pt.x += x;
+                    new_feature.pt.y += y; 
+
+                    _left_cur.features.push_back(new_feature);
+                }
+                continue;
+            }
+
+            // Retain tracked features and only add strongest features
+            // TODO: Check 3x3 frames
+            for (cv::KeyPoint& new_feature : patch_features)
+            {           
+                if (use_existing_features)
+                {
+                    int x0 = new_feature.pt.x;
+                    int y0 = new_feature.pt.y;
+    
+                    bool skip = false;
+                    for (cv::KeyPoint& existing_feature : _feature_buckets[it_bucket]) 
+                    {
+                        // NMS: Skip point if point is in vicinity of existing points
+                        if ( pow((existing_feature.pt.x - x0), 2) + pow((existing_feature.pt.y - y0), 2) < pow(_DISTANCE, 2) )
+                        {
+                            skip = true;
+                            break;
+                        }                        
+                    }
+
+                    if (skip)
+                        continue;
+                }
+
+                new_feature.class_id += _n_id++; 
+                _feature_buckets[it_bucket].push_back(new_feature);
+
+                // Correct for patch position
+                new_feature.pt.x += x;
+                new_feature.pt.y += y; 
+
+                _left_cur.features.push_back(new_feature);
+            }
 
             it_bucket++;
         }
@@ -300,37 +338,43 @@ void FeatureManager::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::Ke
 
 void FeatureManager::trackBuckets()
 {
-    std::vector<cv::KeyPoint> total_tracked_features;
-    std::vector<cv::KeyPoint> bucket_tracked_features;
-    total_tracked_features.reserve(_N_BUCKETS);
-    
-    unsigned int it_bucket = 0;
-    for (unsigned int x = 0; x < _WIDTH; x += _PATCH_W)
+    if (! _left_prev.features.empty())
     {
-        for (unsigned int y = 0; y < _HEIGHT; y += _PATCH_H)
+        std::vector<cv::KeyPoint> total_tracked_features;
+        std::vector<cv::KeyPoint> bucket_tracked_features;
+        total_tracked_features.reserve(_N_BUCKETS);
+        
+        unsigned int it_bucket = 0;
+        for (unsigned int x = 0; x < _WIDTH; x += _PATCH_W)
         {
-            cv::Mat img_patch_prev = _left_prev.image(cv::Rect(x, y, _PATCH_W, _PATCH_H)).clone();
-            cv::Mat img_patch_cur = _left_cur.image(cv::Rect(x, y, _PATCH_W, _PATCH_H)).clone();
-
-            if (! _feature_buckets[it_bucket].empty())
-                track(img_patch_prev, img_patch_cur, _feature_buckets[it_bucket]);   
-
-            bucket_tracked_features = _feature_buckets[it_bucket];
-
-            // Correct for patch position
-            for (cv::KeyPoint& feature : bucket_tracked_features)
+            for (unsigned int y = 0; y < _HEIGHT; y += _PATCH_H)
             {
-                feature.pt.x += x;
-                feature.pt.y += y;                 
-            }
+                cv::Mat img_patch_prev = _left_prev.image(cv::Rect(x, y, _PATCH_W, _PATCH_H)).clone();
+                cv::Mat img_patch_cur = _left_cur.image(cv::Rect(x, y, _PATCH_W, _PATCH_H)).clone();
 
-            total_tracked_features.insert(std::end(total_tracked_features), std::begin(bucket_tracked_features), std::end(bucket_tracked_features));
-            
-            it_bucket++;
+                if (! _feature_buckets[it_bucket].empty())
+                    track(img_patch_prev, img_patch_cur, _feature_buckets[it_bucket]);   
+
+                bucket_tracked_features = _feature_buckets[it_bucket];
+
+                // Correct for patch position
+                for (cv::KeyPoint& feature : bucket_tracked_features)
+                {
+                    feature.pt.x += x;
+                    feature.pt.y += y;                 
+                
+                    _left_cur.features.push_back(feature);
+                }
+
+                // total_tracked_features.insert(std::end(total_tracked_features), std::begin(bucket_tracked_features), std::end(bucket_tracked_features));
+                
+                it_bucket++;
+            }
         }
+
+        // _left_cur.features = total_tracked_features;
     }
 
-    _left_cur.features = total_tracked_features;
 }
 
 

@@ -47,12 +47,13 @@ class StereoFrontend
     Pose           _ground_truth;
 
     // Parameters
+    int tic, toc;
 
   public:
     StereoFrontend() 
     : _camera_left(_nh, "camera_left"), _camera_right(_nh, "camera_right"),
       _pose("stamped_traj_estimate.txt"), _ground_truth("stamped_groundtruth.txt"),
-      _detector(_nh, "camera_left", 50, 10)
+      _detector(_nh, "camera_left", 10, 10, 25, 10)
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       _sub_cam_left.subscribe(_nh, "cam_left", 1);
@@ -70,6 +71,8 @@ class StereoFrontend
 
     void callback(const sensor_msgs::ImageConstPtr &cam_left, const sensor_msgs::ImageConstPtr &cam_right)
     {
+      int tic = cv::getTickCount();
+
       cv_bridge::CvImagePtr cv_ptr_left;
       cv_bridge::CvImagePtr cv_ptr_right;
       try
@@ -94,29 +97,21 @@ class StereoFrontend
 
     	_detector.initiateFrames(cv_ptr_left->image, cv_ptr_right->image);
 
-      // if ((_detector.getNumFeaturesLeftPrev() < 200) || (_detector.getNumFeaturesRightPrev() < 200))
-      //   _detector.detectAndCompute();    
-      // else
-      //   _detector.trackStereoFeatures();
 
-      // displayWindowKeypoints(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft(), _detector.getCurImageRight(), _detector.getCurFeaturesRight());
+      _detector.trackBuckets();
+      _detector.bucketedFeatureDetection(true);    
+      ROS_INFO_STREAM("New detect, number of features: " << _detector.getNumFeaturesLeftCur());
 
-
-      if ((_detector.getNumFeaturesLeftPrev() < 200))
-      {
-        _detector.bucketedFeatureDetection();    
-        ROS_INFO_STREAM("New detect, number of features: " << _detector.getNumFeaturesLeftCur());
-      }
-      else
-      {
-        _detector.trackBuckets();
-        ROS_INFO_STREAM("Tracking, number of features: " << _detector.getNumFeaturesLeftCur());
-      }
 
       displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());
 
 
+
+      // End of iteration updates
       _detector.updatePrevFrames();
+
+      toc = cv::getTickCount();
+      ROS_INFO_STREAM("Time per iteration: " <<  (toc - tic)/ cv::getTickFrequency() << "\n");
     }
 
 };
