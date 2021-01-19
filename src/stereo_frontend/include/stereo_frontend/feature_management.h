@@ -63,6 +63,7 @@ public:
         _PATCH_H = _HEIGHT / _GRID_SIZE;        
         
         _feature_buckets.reserve(_N_BUCKETS); // TODO: Doesn't work?
+        
 
         _extractor = cv::FastFeatureDetector::create(_THRESHOLD, true); //threshold, NMS
         // _extractor = cv::GFTTDetector::create(
@@ -105,6 +106,8 @@ public:
     void track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>& features);
     void trackBuckets();
     void trackStereoFeatures();
+
+    void circularMatching(std::vector<cv::KeyPoint>& features_left_cur, std::vector<cv::KeyPoint>& features_right_cur);
     
 };
 
@@ -255,8 +258,7 @@ void FeatureManager::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::Ke
         error
     );
 
-
-    std::vector<cv::KeyPoint> tracked_kpts;
+    std::vector<cv::KeyPoint> tracked_kpts_prev, tracked_kpts_cur;
     for(uint i = 0; i < n_pts; ++i)
     {
         // Select good points - Status variable not enough..
@@ -266,7 +268,19 @@ void FeatureManager::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::Ke
             && (cur_pts[i].x < prev_img.cols) && (cur_pts[i].y < prev_img.rows)
         ) 
         {
-            tracked_kpts.push_back(
+            tracked_kpts_prev.push_back(
+                cv::KeyPoint
+                (
+                    prev_pts[i], 
+                    prev_kps[i].size, 
+                    prev_kps[i].angle, 
+                    prev_kps[i].response, 
+                    prev_kps[i].octave, 
+                    prev_kps[i].class_id
+                )
+            );
+            
+            tracked_kpts_cur.push_back(
                 cv::KeyPoint
                 (
                     cur_pts[i], 
@@ -279,8 +293,8 @@ void FeatureManager::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::Ke
             );
         }
     }
-
-    cur_kps = tracked_kpts;
+    prev_kps = tracked_kpts_prev;
+    cur_kps = tracked_kpts_cur;
 }
 
 
@@ -340,9 +354,7 @@ void FeatureManager::trackBuckets()
 {
     if (! _left_prev.features.empty())
     {
-        std::vector<cv::KeyPoint> total_tracked_features;
         std::vector<cv::KeyPoint> bucket_tracked_features;
-        total_tracked_features.reserve(_N_BUCKETS);
         
         unsigned int it_bucket = 0;
         for (unsigned int x = 0; x < _WIDTH; x += _PATCH_W)
@@ -364,23 +376,49 @@ void FeatureManager::trackBuckets()
                     feature.pt.y += y;                 
                 
                     _left_cur.features.push_back(feature);
-                }
-
-                // total_tracked_features.insert(std::end(total_tracked_features), std::begin(bucket_tracked_features), std::end(bucket_tracked_features));
-                
+                }                
                 it_bucket++;
             }
         }
-
-        // _left_cur.features = total_tracked_features;
     }
-
 }
 
 
-
-void FeatureManager::trackStereoFeatures()
+void FeatureManager::circularMatching(std::vector<cv::KeyPoint>& features_left_cur, std::vector<cv::KeyPoint>& features_right_cur)
 {
-    track(_left_prev.image, _left_cur.image, _left_prev.features, _left_cur.features);
-    track(_right_prev.image, _right_cur.image, _right_prev.features, _right_cur.features);
+    if (! _left_prev.image.empty())
+    {
+        std::vector<cv::KeyPoint> features_left_prev, features_right_prev;
+
+        // Track in circle
+        features_left_cur = _left_cur.features;
+        track(_left_cur.image, _left_prev.image, features_left_cur, features_left_prev);
+        track(_left_prev.image, _right_prev.image, features_left_prev, features_right_prev);        
+        track(_right_prev.image, _right_cur.image, features_right_prev, features_right_cur);
+        track(_right_cur.image, _left_cur.image, features_right_cur, features_left_cur);
+
+        int match_nr = 1;
+        std::vector<cv::KeyPoint> matched_left, matched_right;
+        for(unsigned int i = 0; i < features_left_cur.size(); i++)
+        {
+            for (cv::KeyPoint& original_feature : _left_cur.features)
+            {
+                if (features_left_cur[i].class_id != original_feature.class_id)
+                    continue;
+
+                if ( (( features_left_cur[i].pt.x - original_feature.pt.x) < 1) 
+                   && (( features_left_cur[i].pt.y == original_feature.pt.y) < 1) )
+                {
+                    matched_left.push_back(features_left_cur[i]);
+                    matched_right.push_back(features_right_cur[i]);
+
+                    break;
+                }
+            }
+            match_nr++;
+        }
+        features_left_cur = matched_left;
+        features_right_cur = matched_right;
+    }
 }
+

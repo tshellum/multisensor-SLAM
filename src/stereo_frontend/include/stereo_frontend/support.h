@@ -3,7 +3,7 @@
 #include <boost/algorithm/string.hpp>
 
 
-void NotImplementedError(std::string function_name, std::string filename)
+void NotImplementedError(std::string function_name, std::string filename) // call by NotImplementedError(__func__, __FILE__);
 {
   std::vector<std::string> entries;
   boost::split(entries, filename, boost::is_any_of("/"));

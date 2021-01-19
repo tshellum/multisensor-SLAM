@@ -87,6 +87,7 @@ class StereoFrontend
       }
 
       // TODO: Formulate main system structure
+      /***** Initiate *****/
       _camera_left.undistort(cv_ptr_left->image);
       _camera_right.undistort(cv_ptr_right->image);
 
@@ -97,17 +98,26 @@ class StereoFrontend
 
     	_detector.initiateFrames(cv_ptr_left->image, cv_ptr_right->image);
 
-
+      /***** Feature management *****/
       _detector.trackBuckets();
       _detector.bucketedFeatureDetection(true);    
-      ROS_INFO_STREAM("New detect, number of features: " << _detector.getNumFeaturesLeftCur());
-
+      ROS_INFO_STREAM("Detect - number of features: " << _detector.getNumFeaturesLeftCur());
 
       displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());
 
 
+      std::vector<cv::KeyPoint> features_left, features_right;
+      _detector.circularMatching(features_left, features_right);
 
-      // End of iteration updates
+      ROS_INFO_STREAM("Match - number of features: " << features_left.size());
+      ROS_INFO_STREAM("Match - number of features: " << features_right.size());
+
+      displayWindowFeatures(_detector.getCurImageLeft(), features_left, _detector.getCurImageRight(), features_right, "Matches");
+
+      /***** Point management *****/
+
+
+      /***** End-of-iteration updates *****/
       _detector.updatePrevFrames();
 
       toc = cv::getTickCount();
