@@ -97,18 +97,17 @@ public:
     int getDefaultNorm() {return _descriptor->defaultNorm();};
 
     void printNumFeaturesBuckets();
-
     void updatePrevFrames();
-
+    
     void detectAndCompute();
     void bucketedFeatureDetection(bool use_existing_features);
+
     void track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>& prev_kps, std::vector<cv::KeyPoint>& cur_kps);
+    // void track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::Point2f>& prev_pts, std::vector<cv::Point2f>& cur_pts);
     void track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>& features);
     void trackBuckets();
-    void trackStereoFeatures();
 
     void circularMatching(std::vector<cv::KeyPoint>& features_left_cur, std::vector<cv::KeyPoint>& features_right_cur);
-    
 };
 
 
@@ -296,6 +295,43 @@ void FeatureManager::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::Ke
     prev_kps = tracked_kpts_prev;
     cur_kps = tracked_kpts_cur;
 }
+
+
+// void FeatureManager::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::Point2f>& prev_pts, std::vector<cv::Point2f>& cur_pts)
+// {
+//     ROS_ERROR("Not to be used!");
+
+//     std::vector<uchar> status; 
+//     std::vector<float> error; 
+
+//     // https://docs.opencv.org/3.4/d4/dee/tutorial_optical_flow.html
+//     cv::calcOpticalFlowPyrLK(
+//         prev_img, 
+//         cur_img, 
+//         prev_pts, 
+//         cur_pts, 
+//         status, 
+//         error
+//     );
+
+//     std::vector<cv::KeyPoint> tracked_kpts_prev, tracked_kpts_cur;
+//     for(uint i = 0; i < n_pts; ++i)
+//     {
+//         // Select good points - Status variable not enough..
+//         if (
+//             (status[i] == 1) 
+//             && (cur_pts[i].x > 0) && (cur_pts[i].y > 0)
+//             && (cur_pts[i].x < prev_img.cols) && (cur_pts[i].y < prev_img.rows)
+//         ) 
+//         {
+//             tracked_kpts_prev.push_back(prev_pts[i]);
+            
+//             tracked_kpts_cur.push_back(cur_pts[i]);
+//         }
+//     }
+//     prev_kps = tracked_kpts_prev;
+//     cur_kps = tracked_kpts_cur;
+// }
 
 
 void FeatureManager::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>& features)

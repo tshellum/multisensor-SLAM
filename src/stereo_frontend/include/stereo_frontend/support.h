@@ -2,6 +2,8 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include <opencv2/opencv.hpp>
+
 
 void NotImplementedError(std::string function_name, std::string filename) // call by NotImplementedError(__func__, __FILE__);
 {
@@ -54,4 +56,49 @@ void displayWindowFeatures
 
   displayWindow(img_kps1, img_kps2, name, resizeWidth, resizeHeight, key);
 }
+
+
+cv::Mat drawPoints(cv::Mat image, std::vector<cv::Point2f> points)
+{
+    int r = 3;
+    for (int i=0;i<points.size();i++)
+        circle(image, cvPoint(points[i].x, points[i].y), r, CV_RGB(255,255,0), 1, 8, 0);
+
+    return image;    
+}
+
+
+cv::Mat drawEpiLines(cv::Mat image, cv::Mat F, int LeftRight, std::vector<cv::Point2f> points)
+{
+    std::vector<cv::Vec3f> epiLines;
+    cv::computeCorrespondEpilines(points, LeftRight, F, epiLines);
+
+    // for all epipolar lines
+    for (auto it = epiLines.begin(); it != epiLines.end(); ++it)
+    {
+        // draw the epipolar line between first and last column
+        cv::line(image, cv::Point(0, -(*it)[2] / (*it)[1]),
+                cv::Point(image.cols, -((*it)[2] + (*it)[0] * image.cols) / (*it)[1]),
+                cv::Scalar(255, 255, 255));
+    }
+
+    return image;   
+}
+
+
+// void displayWindowEpilines
+// (
+//   cv::Mat image1, std::vector<cv::KeyPoint> kps1={}, 
+//   cv::Mat image2=cv::Mat(), std::vector<cv::KeyPoint> kps2={},
+//   std::string name="Epipolar lines", int resizeWidth=1000, int resizeHeight=500, int key=3
+// )
+// {
+//   cv::Mat imageEpiLeft = drawKpts(previousKeyframe_.image.clone(), points2fPrev);
+//   imageEpiLeft = drawEpiLines(imageEpiLeft, F, 2, points2fCurr);
+//   cv::Mat imageEpiRight = drawKpts(currentFrame_.image.clone(), points2fCurr);
+//   drawEpiLines(imageEpiRight, F, 1, points2fPrev);
+  
+//   displayWindow(imageEpiLeft, imageEpiRight, name, resizeWidth, resizeHeight, key);
+// }
+
 
