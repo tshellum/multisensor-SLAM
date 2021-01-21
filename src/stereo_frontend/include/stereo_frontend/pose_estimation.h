@@ -22,12 +22,15 @@ private:
     Eigen::Matrix3d    _R_wb;
     Eigen::Quaterniond _q_wb;
     Eigen::Vector3d    _t_wb;
-    // Eigen::Matrix4d    _T_wb; // Transformation Matrix
+    // Eigen::Matrix4d    _T_wb;
     
+    // To correct global frame error
+    Eigen::Matrix3d _R_gnss;
+
     // Relative pose
     Eigen::Matrix3d _R_b1b2;
     Eigen::Vector3d _t_b1b2;
-    Eigen::Matrix4d _T_b1b2; // Transformation Matrix
+    Eigen::Matrix4d _T_b1b2;
     double _scale;    
 
     // Static transformation
@@ -42,9 +45,9 @@ private:
     std::string _filename;
 
 public:
-    Pose(std::string filename) 
+    Pose(ros::NodeHandle nh, std::string filename) 
     : _result_path(ros::package::getPath("stereo_frontend") + "/../../results/"),
-      _filename(filename), _scale(1.0), _start_time(0.0), _current_timestamp(0.0)
+      _filename(filename), _scale(0.0), _start_time(0.0), _current_timestamp(0.0)
     {
         // Create directory
         mkdir(_result_path.c_str(), 0777);
@@ -54,13 +57,12 @@ public:
         vo_results.open(_result_path + _filename, std::ofstream::out | std::ofstream::trunc);
         vo_results.close();
 
+        _t_b1b2.setZero();
         _R_b1b2.setIdentity();
         _T_b1b2.setIdentity();
-                
+    
+        _t_wb.setZero();
         _R_wb.setIdentity();
-        // _T_wb.setIdentity();
-        // _T_wb.block<3,3>(0,0) = _R_wb;
-        // _T_wb.block<3,1>(0,3) = _t_wb;
         _q_wb = _R_wb;
         
         _T_bc << 0, 0, 1, 0,
@@ -69,8 +71,24 @@ public:
                  0, 0, 0, 1;
         _T_cb = _T_bc.transpose();
 
-        // _t_wb = cv::Mat::zeros(3,1, CV_64F);
-		// _R_wb = cv::Mat::eye(3,3, CV_64F);
+        std::string frame[3] = {"x", "y", "z"};
+        nh.getParam("/GNSS_frame/surge", frame[0]);
+        nh.getParam("/GNSS_frame/sway", frame[1]);
+        nh.getParam("/GNSS_frame/yaw", frame[2]);
+
+        _R_gnss = Eigen::Matrix3d::Zero();
+        for(int i = 0; i < 3; i++)
+        {
+            if (frame[i] == "x") 
+                _R_gnss(0,i) = 1;
+            else if (frame[i] == "y")
+                _R_gnss(1,i) = 1;
+            else if (frame[i] == "z")
+                _R_gnss(2,i) = 1;
+            else
+                _R_gnss(i,i) = 1;
+        }  
+
     };
 
     ~Pose() {};
@@ -81,13 +99,18 @@ public:
     Eigen::Quaterniond getWorldQuaternion()  {return _q_wb;};
     Eigen::Vector3d getWorldTranslation()    {return _t_wb;};
     double getTimestamp()                    {return _current_timestamp;};
-    
+    double getScale()                        {return _scale;};
+
+    void readScale(double scale) {_scale = scale;};    
     void readTimestamp(double time);
     void readRotation(double qx, double qy, double qz,double qw);
     void readTranslation(double x, double y, double z);
 
     void setWorldFrame(Eigen::Matrix3d R_wb0, Eigen::Vector3d t_wb0);
     void transformOpenCV2Body(Eigen::Matrix3d R_c1c2, Eigen::Vector3d t_c1c2);
+    void correctGNSSFrame();
+
+    void estimateScaleFromGNSS(Eigen::Vector3d t, Eigen::Vector3d t_kf);
 
     void removeRANSACoutliers(cv::Mat inliers, std::vector<cv::Point2f>& points1, std::vector<cv::Point2f>& points2);
     void initialPoseEstimate(std::vector<cv::Point2f>& points_prev, std::vector<cv::Point2f>& points_cur, cv::Mat K);
@@ -104,7 +127,8 @@ void Pose::readTimestamp(double time)
         _start_time = time;
     else
         _current_timestamp = time - _start_time;
-};
+}
+
 
 void Pose::readRotation(double qx, double qy, double qz,double qw)
 {
@@ -129,6 +153,7 @@ void Pose::updatePose()
 {
     _t_wb = _t_wb + _R_wb * _t_b1b2 * _scale; 
 	_R_wb = _R_wb * _R_b1b2;
+    _q_wb = _R_wb;  // Update quaternion
 }
 
 
@@ -149,6 +174,42 @@ void Pose::transformOpenCV2Body(Eigen::Matrix3d R_c1c2, Eigen::Vector3d t_c1c2)
 
     _R_b1b2 = _T_b1b2.block<3,3>(0,0);
     _t_b1b2 = _T_b1b2.col(3).head(3);
+}
+
+
+void Pose::correctGNSSFrame()
+{
+    // std::string frame[3] = {"x", "y", "z"};
+    // nh.getParam("/GNSS_frame/surge", frame[0]);
+    // nh.getParam("/GNSS_frame/sway", frame[1]);
+    // nh.getParam("/GNSS_frame/yaw", frame[2]);
+
+    // Eigen::Matrix3d R_gnss = Eigen::Matrix3d::Zero();
+    // for(int i = 0; i < 3; i++)
+    // {
+    //     if (frame[i] == "x") 
+    //         R_gnss(0,i) = 1;
+    //     else if (frame[i] == "y")
+    //         R_gnss(1,i) = 1;
+    //     else if (frame[i] == "z")
+    //         R_gnss(2,i) = 1;
+    //     else
+    //         R_gnss(i,i) = 1;
+    // }  
+    
+    _R_wb *= _R_gnss;
+    _t_wb = _R_gnss * _t_wb;
+}
+
+
+void Pose::estimateScaleFromGNSS(Eigen::Vector3d t, Eigen::Vector3d t_kf)
+{
+    double scale = sqrt( pow(t.coeff(0) - t_kf.coeff(0), 2) // x²
+                 + pow(t.coeff(1) - t_kf.coeff(1), 2)       // y²
+                 + pow(t.coeff(2) - t_kf.coeff(2), 2) );    // z²
+
+    if (scale != 0) // if not same GNSS measurement
+        _scale = scale;
 }
 
 

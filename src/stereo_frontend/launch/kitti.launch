@@ -4,7 +4,8 @@
     <arg name = "cam_left_topic"  default = "/kitti/camera_gray_left/image"/>
     <arg name = "cam_right_topic" default = "/kitti/camera_gray_right/image"/>
 
-    <rosparam file = "$(find stereo_frontend)/config/kitti.yaml" />
+    <rosparam file = "$(find stereo_frontend)/config/kitti/camera.yaml" />
+    <rosparam file = "$(find stereo_frontend)/config/kitti/sensor_setup.yaml" />
 
     <node 
         name   = "stereo_frontend"

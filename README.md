@@ -33,9 +33,12 @@ $ sudo kitti2bag -s 00 odom_gray .
 
 TO BE WRITTEN
 
+Modify the config files to fit the dataset.
+
 ```bash
 $ roscore
 $ catkin build
 $ roslaunch package file.launch topic:=...
 $ rosbag play /path/to/rosbag
+$ rosrun rpg_trajectory_evaluation analyze_trajectory_single.py results/ --recalculate_errors
 ```

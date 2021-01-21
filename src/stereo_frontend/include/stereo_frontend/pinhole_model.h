@@ -58,12 +58,12 @@ public:
     int getWidth()  {return _width;};
     int getHeight() {return _height;};
 
-    void undistort(cv::Mat& img, cv::Mat K_undist);
+    void rectify(cv::Mat& img, cv::Mat K_undist);
     void crop(cv::Mat& img, int x1, int x2, int y1, int y2);
 };
 
 
-void PinholeModel::undistort(cv::Mat& img, cv::Mat K_undist = cv::Mat())
+void PinholeModel::rectify(cv::Mat& img, cv::Mat K_undist = cv::Mat())
 {
 	cv::Mat undist_img;
     cv::undistort(img, undist_img, _K_cv, _distortion, K_undist);
