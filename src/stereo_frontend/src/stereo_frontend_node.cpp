@@ -42,6 +42,7 @@ class StereoFrontend
   	ros::Subscriber _gnss_sub;
 
     // Classes
+    // StereoCameras     _stereo_cameras;
     PinholeModel      _camera_left;
     PinholeModel      _camera_right;
     FeatureManager    _detector;
@@ -58,7 +59,7 @@ class StereoFrontend
     StereoFrontend() 
     : _camera_left(_nh, "camera_left"), _camera_right(_nh, "camera_right"),
       _pose(_nh, "stamped_traj_estimate.txt"), _ground_truth(_nh, "stamped_groundtruth.txt"), _ground_truth_kf(_nh, "stamped_groundtruth.txt"),
-      _detector(_nh, "camera_left", 10, 10, 25, 10),
+      _detector(_nh, "camera_left", 10, 10, 25, 10), 
       _initialized(false)
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
@@ -166,7 +167,8 @@ class StereoFrontend
         std::vector<cv::Point2f> points_prev, points_cur;
         cv::KeyPoint::convert(tracked_prev, points_prev);
         cv::KeyPoint::convert(tracked_cur, points_cur);
-        _pose.initialPoseEstimate(points_prev, points_cur, _camera_left.K_cv());
+        
+        bool valid_pose = _pose.initialPoseEstimate(points_prev, points_cur, _camera_left.K_cv());
         _pose.updatePose();
 
         // ROS_INFO_STREAM("World rotation: " << _pose.getWorldRotation() );
@@ -174,15 +176,16 @@ class StereoFrontend
     
 
         /***** Point management *****/
-        std::vector<cv::Point2f> point2D_left, point2D_right;
-        cv::KeyPoint::convert(match_left, point2D_left);
-        cv::KeyPoint::convert(match_right, point2D_right);
+        _pcm.triangulate(match_left,
+                         match_right,
+                         _camera_left.K_cv(),
+                         _camera_right.K_cv(),
+                         _camera_right.getStereoRotation(),
+                         _camera_right.getStereoTranslation());
 
-        // cv::Mat point3d_homogenous(4, N, CV_64FC1);                                               // https://stackoverflow.com/questions/16295551/how-to-correctly-use-cvtriangulatepoints
-        // cv::triangulatePoints( K*Rt0, K*Rt1, point2D_left, point2D_right, point3d_homogenous);   // https://gist.github.com/cashiwamochi/8ac3f8bab9bf00e247a01f63075fedeb
+        // TODO: MLPnP
+        // _pcm.setExtrinsics(_pose.getWorldRotation(), _pose.getWorldTranslation());
 
-
-        // TODO: Refine pose estimate
 
 
         /***** End-of-iteration updates *****/

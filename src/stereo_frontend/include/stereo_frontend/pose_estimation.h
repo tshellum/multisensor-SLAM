@@ -107,13 +107,13 @@ public:
     void readTranslation(double x, double y, double z);
 
     void setWorldFrame(Eigen::Matrix3d R_wb0, Eigen::Vector3d t_wb0);
-    void transformOpenCV2Body(Eigen::Matrix3d R_c1c2, Eigen::Vector3d t_c1c2);
+    void transformCamera2Body(Eigen::Matrix3d R_c1c2, Eigen::Vector3d t_c1c2);
     void correctGNSSFrame();
-
     void estimateScaleFromGNSS(Eigen::Vector3d t, Eigen::Vector3d t_kf);
-
+    
+    bool isValidRotation(double thresh);
     void removeRANSACoutliers(cv::Mat inliers, std::vector<cv::Point2f>& points1, std::vector<cv::Point2f>& points2);
-    void initialPoseEstimate(std::vector<cv::Point2f>& points_prev, std::vector<cv::Point2f>& points_cur, cv::Mat K);
+    bool initialPoseEstimate(std::vector<cv::Point2f>& points_prev, std::vector<cv::Point2f>& points_cur, cv::Mat K);
     void updatePose();
 
     void toFile();
@@ -164,7 +164,7 @@ void Pose::setWorldFrame(Eigen::Matrix3d R_wb0, Eigen::Vector3d t_wb0)
 }
 
 
-void Pose::transformOpenCV2Body(Eigen::Matrix3d R_c1c2, Eigen::Vector3d t_c1c2)
+void Pose::transformCamera2Body(Eigen::Matrix3d R_c1c2, Eigen::Vector3d t_c1c2)
 {
     Eigen::Matrix4d T_c1c2 = Eigen::Matrix4d::Identity(4,4);
     T_c1c2.block<3,3>(0,0) = R_c1c2;
@@ -178,25 +178,7 @@ void Pose::transformOpenCV2Body(Eigen::Matrix3d R_c1c2, Eigen::Vector3d t_c1c2)
 
 
 void Pose::correctGNSSFrame()
-{
-    // std::string frame[3] = {"x", "y", "z"};
-    // nh.getParam("/GNSS_frame/surge", frame[0]);
-    // nh.getParam("/GNSS_frame/sway", frame[1]);
-    // nh.getParam("/GNSS_frame/yaw", frame[2]);
-
-    // Eigen::Matrix3d R_gnss = Eigen::Matrix3d::Zero();
-    // for(int i = 0; i < 3; i++)
-    // {
-    //     if (frame[i] == "x") 
-    //         R_gnss(0,i) = 1;
-    //     else if (frame[i] == "y")
-    //         R_gnss(1,i) = 1;
-    //     else if (frame[i] == "z")
-    //         R_gnss(2,i) = 1;
-    //     else
-    //         R_gnss(i,i) = 1;
-    // }  
-    
+{ 
     _R_wb *= _R_gnss;
     _t_wb = _R_gnss * _t_wb;
 }
@@ -211,6 +193,24 @@ void Pose::estimateScaleFromGNSS(Eigen::Vector3d t, Eigen::Vector3d t_kf)
     if (scale != 0) // if not same GNSS measurement
         _scale = scale;
 }
+
+
+
+bool Pose::isValidRotation(double thresh = M_PI/4)
+{
+    cv::Mat euler = cv::Mat::zeros(3,1, CV_64F);
+    cv::Mat R_b1b2;
+    cv::eigen2cv(_R_b1b2, R_b1b2);
+
+    cv::Rodrigues(R_b1b2, euler);
+    
+    double phi = euler.at<double>(0);
+    double theta = euler.at<double>(1);
+    double psi = euler.at<double>(2);
+    return (-thresh <= phi && phi <= thresh) && (-thresh <= theta && theta <= thresh) && (-thresh <= psi && psi <= thresh);
+}
+
+
 
 
 void Pose::removeRANSACoutliers(cv::Mat inliers, std::vector<cv::Point2f>& points1, std::vector<cv::Point2f>& points2)
@@ -230,7 +230,7 @@ void Pose::removeRANSACoutliers(cv::Mat inliers, std::vector<cv::Point2f>& point
 }
 
 
-void Pose::initialPoseEstimate(std::vector<cv::Point2f>& points_prev, std::vector<cv::Point2f>& points_cur, cv::Mat K)
+bool Pose::initialPoseEstimate(std::vector<cv::Point2f>& points_prev, std::vector<cv::Point2f>& points_cur, cv::Mat K)
 {
     if (points_cur.size() >= 8) // 5 for Essential, 8 for fundamental
     {
@@ -249,11 +249,17 @@ void Pose::initialPoseEstimate(std::vector<cv::Point2f>& points_prev, std::vecto
         cv::cv2eigen(R_c1c2_opencv, R_c1c2);
         cv::cv2eigen(R_c1c2_opencv, t_c1c2);
         
-        transformOpenCV2Body(R_c1c2, t_c1c2);
+        transformCamera2Body(R_c1c2, t_c1c2);
+        
+        if (!isValidRotation())
+            return false;
+
+        return true;
     }
     else
     {
         ROS_INFO("Too few features detected for pose estimation...");
+        return false;
     }
     
 }

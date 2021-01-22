@@ -1,8 +1,12 @@
 #pragma once
 
+#include <ros/package.h>
+
 #include <boost/algorithm/string.hpp>
 
 #include <opencv2/opencv.hpp>
+
+#include <sys/stat.h> 
 
 
 void NotImplementedError(std::string function_name, std::string filename) // call by NotImplementedError(__func__, __FILE__);
@@ -101,4 +105,49 @@ cv::Mat drawEpiLines(cv::Mat image, cv::Mat F, int LeftRight, std::vector<cv::Po
 //   displayWindow(imageEpiLeft, imageEpiRight, name, resizeWidth, resizeHeight, key);
 // }
 
+
+
+void writePointToImg(cv::Mat& image1, cv::Mat& image2, std::vector<cv::KeyPoint> kps1, std::vector<cv::KeyPoint> kps2)
+{
+  cv::Mat img_kps1; cv::Mat img_kps2;
+  if (! kps1.empty())
+    cv::drawKeypoints(image1, kps1, img_kps1, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
+  if (! kps2.empty())
+    cv::drawKeypoints(image2, kps2, img_kps2, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
+  
+  image1 = img_kps1;
+  image2 = img_kps2;
+}
+
+
+void saveImgWithKps(cv::Mat image1, cv::Mat image2, std::vector<cv::KeyPoint> kps1, std::vector<cv::KeyPoint> kps2)
+{  
+  std::vector<int> compression_params;
+  compression_params.push_back(cv::IMWRITE_PNG_COMPRESSION);
+  compression_params.push_back(9);
+
+  std::string result_path = ros::package::getPath("stereo_frontend") + "/../../results/img_kpts/";
+  // Create directory
+  mkdir(result_path.c_str(), 0777);
+
+
+  for(int i = 0; i < kps1.size(); i++) 
+  {
+    cv::Mat img_kp1 = image1; cv::Mat img_kp2 = image2;
+    std::vector<cv::KeyPoint> kp1, kp2;
+    kp1.push_back(kps1[i]);
+    kp2.push_back(kps2[i]);
+    writePointToImg(img_kp1, img_kp2, kp1, kp2);
+
+    std::string padded_i = std::to_string(i);
+    while (padded_i.size() < 3)
+    {
+      padded_i = std::to_string(0) + padded_i;
+    }
+
+    cv::imwrite(result_path + std::to_string(i) + "_left.png", img_kp1, compression_params);
+    cv::imwrite(result_path + std::to_string(i) + "_right.png", img_kp2, compression_params);
+  }
+
+}
 
