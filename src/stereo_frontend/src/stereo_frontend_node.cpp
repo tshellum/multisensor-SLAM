@@ -42,9 +42,7 @@ class StereoFrontend
   	ros::Subscriber _gnss_sub;
 
     // Classes
-    // StereoCameras     _stereo_cameras;
-    PinholeModel      _camera_left;
-    PinholeModel      _camera_right;
+    StereoCameras     _stereo;
     FeatureManager    _detector;
     PointCloudManager _pcm;
     Pose              _pose;
@@ -57,7 +55,7 @@ class StereoFrontend
 
   public:
     StereoFrontend() 
-    : _camera_left(_nh, "camera_left"), _camera_right(_nh, "camera_right"),
+    : _stereo(_nh, 10),
       _pose(_nh, "stamped_traj_estimate.txt"), _ground_truth(_nh, "stamped_groundtruth.txt"), _ground_truth_kf(_nh, "stamped_groundtruth.txt"),
       _detector(_nh, "camera_left", 10, 10, 25, 10), 
       _initialized(false)
@@ -98,6 +96,7 @@ class StereoFrontend
     }
 
 
+
     void callback(const sensor_msgs::ImageConstPtr &cam_left, const sensor_msgs::ImageConstPtr &cam_right)
     {
       /***** Initialize *****/
@@ -108,7 +107,6 @@ class StereoFrontend
       }
       else
       {         
-        // Ground truth      
         _tic = cv::getTickCount();
 
         _pose.readTimestamp(ros::Time::now().toSec()); 
@@ -130,14 +128,7 @@ class StereoFrontend
           return;
         }
 
-        _camera_left.rectify(cv_ptr_left->image);
-        _camera_right.rectify(cv_ptr_right->image);
-
-        int patch_width = _camera_left.getWidth() - (_camera_left.getWidth() % _detector.getGridSize());
-        int patch_height = _camera_left.getHeight() - (_camera_left.getHeight() % _detector.getGridSize());
-        _camera_left.crop(cv_ptr_left->image, 0, 0, patch_width, patch_height);
-        _camera_right.crop(cv_ptr_right->image, 0, 0, patch_width, patch_height);
-
+        _stereo.prepareImages(cv_ptr_left->image, cv_ptr_right->image);
         _detector.initiateFrames(cv_ptr_left->image, cv_ptr_right->image);
 
 
@@ -168,7 +159,7 @@ class StereoFrontend
         cv::KeyPoint::convert(tracked_prev, points_prev);
         cv::KeyPoint::convert(tracked_cur, points_cur);
         
-        bool valid_pose = _pose.initialPoseEstimate(points_prev, points_cur, _camera_left.K_cv());
+        bool valid_pose = _pose.initialPoseEstimate(points_prev, points_cur, _stereo.left().K_cv());
         _pose.updatePose();
 
         // ROS_INFO_STREAM("World rotation: " << _pose.getWorldRotation() );
@@ -176,12 +167,9 @@ class StereoFrontend
     
 
         /***** Point management *****/
-        _pcm.triangulate(match_left,
-                         match_right,
-                         _camera_left.K_cv(),
-                         _camera_right.K_cv(),
-                         _camera_right.getStereoRotation(),
-                         _camera_right.getStereoTranslation());
+        cv::Mat P_l, P_r;
+        _stereo.calculatePerspectiveMatrix(P_l, P_r);
+        _pcm.triangulate(match_left, match_right, P_l, P_r);
 
         // TODO: MLPnP
         // _pcm.setExtrinsics(_pose.getWorldRotation(), _pose.getWorldTranslation());
@@ -219,14 +207,7 @@ class StereoFrontend
       	return;
       }
 
-      _camera_left.rectify(cv_ptr_left->image);
-      _camera_right.rectify(cv_ptr_right->image);
-
-      int patch_width = _camera_left.getWidth() - (_camera_left.getWidth() % _detector.getGridSize());
-      int patch_height = _camera_left.getHeight() - (_camera_left.getHeight() % _detector.getGridSize());
-      _camera_left.crop(cv_ptr_left->image, 0, 0, patch_width, patch_height);
-      _camera_right.crop(cv_ptr_right->image, 0, 0, patch_width, patch_height);
-
+      _stereo.prepareImages(cv_ptr_left->image, cv_ptr_right->image);
     	_detector.initiateFrames(cv_ptr_left->image, cv_ptr_right->image);
 
 
