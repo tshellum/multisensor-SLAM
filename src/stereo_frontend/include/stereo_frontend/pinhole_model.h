@@ -176,7 +176,7 @@ void StereoCameras::calculatePerspectiveMatrix(cv::Mat& P_l, cv::Mat& P_r)
 										P_r,
 										Q);
 
-	// ROS_INFO_STREAM("R: " << R);
+	// ROS_INFO_STREAM("R: " << R); 
 	// ROS_INFO_STREAM("t: " << t);
 
 	// ROS_INFO_STREAM("P_l: " << P_l);

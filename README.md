@@ -1,6 +1,6 @@
 # multisensor-SLAM
 
-## Software setup
+## Software installation
 
 Software dependencies and installation procedure are specified in the "Setup"-folder.
 
@@ -29,16 +29,23 @@ $ sudo kitti2bag -s 00 odom_gray .
 # $ kitti2bag -t 2011_09_26 -r 0002 raw_synced .
 ```
 
+## Setup
+
+```bash
+$ git clone https://github.com/tshellum/multisensor-SLAM.git
+$ cd multisensor-SLAM
+$ git submodule update --init --recursive
+```
+
+
 ## Usage
 
-TO BE WRITTEN
-
-Modify the config files to fit the dataset.
+Modify the config files to fit the dataset that is to be used.
 
 ```bash
 $ roscore
 $ catkin build
-$ roslaunch package file.launch topic:=...
+$ roslaunch stereo_frontend kitti.launch
 $ rosbag play /path/to/rosbag
 $ rosrun rpg_trajectory_evaluation analyze_trajectory_single.py results/ --recalculate_errors
 ```
