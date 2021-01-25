@@ -22,7 +22,8 @@ find_package(catkin REQUIRED COMPONENTS
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(OpenCV 3.2 REQUIRED)
-find_package(Eigen3 3.3 REQUIRED) 
+find_package(Eigen3 3.3 REQUIRED)
+# find_package(opengv REQUIRED) 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -156,6 +157,9 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(${PROJECT_NAME}_node src/stereo_frontend_node.cpp)
+# if (opengv_FOUND)
+#   add_executable(main_opengv_demo main.cpp)
+# endif (opengv_FOUND)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -186,7 +190,9 @@ target_link_libraries(${PROJECT_NAME}_node
   # ${CMAKE_THREAD_LIBS_INIT}
   # ${PCL_LIBRARIES}
 )
-
+# if (opengv_FOUND)
+#   target_link_libraries(main_opengv_demo opengv)
+# endif (opengv_FOUND)
 
 #############
 ## Install ##

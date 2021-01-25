@@ -65,7 +65,8 @@ void PointCloudManager::triangulate(std::vector<cv::KeyPoint> match_left,
 
         point3D_cartesian.push_back(wp);
         
-        ROS_INFO_STREAM("wp: " << wp);
+        if (i % 10 == 0)
+            ROS_INFO_STREAM("wp: " << wp);
     }
     
     _pc.world_points = point3D_cartesian;    
