@@ -26,7 +26,7 @@ private:
    	Eigen::Matrix3d _K_eig; 	
 
     // Extrinsic parameters
-    cv::Mat _R_clcr, _t_clcr;
+    // cv::Mat _R_clcr, _t_clcr;
 
 public:
     PinholeModel(ros::NodeHandle nh, const std::string name) : name_(name), _k3(0.0)
@@ -157,7 +157,7 @@ void StereoCameras::calculatePerspectiveMatrix(cv::Mat& P_l, cv::Mat& P_r)
 {
 	cv::Mat Rt_l = cv::Mat::eye(3, 4, CV_64FC1);
 	cv::Mat Rt_r = cv::Mat::eye(3, 4, CV_64FC1);
-	cv::hconcat(_R_clcr, _t_clcr, Rt_l);
+	cv::hconcat(_R_clcr, _t_clcr, Rt_r);
 
 	// ROS_INFO_STREAM("_camera_left.K_cv()*Rt_l: " << _camera_left.K_cv()*Rt_l);
 	// ROS_INFO_STREAM("_camera_right.K_cv()*Rt_r: " << _camera_right.K_cv()*Rt_r);

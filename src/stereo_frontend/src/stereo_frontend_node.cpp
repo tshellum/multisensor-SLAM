@@ -1,11 +1,14 @@
 /*** ROS packages ***/
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>
+
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <cv_bridge/cv_bridge.h>
 #include <tf2_ros/transform_listener.h>
+// #include <sensor_msgs/PointCloud.h> 
+#include <sensor_msgs/PointCloud2.h>
 
 /*** OpenCV packages ***/
 #include "opencv2/core.hpp"
@@ -41,6 +44,7 @@ class StereoFrontend
     boost::shared_ptr<Sync> _sync;
     
   	ros::Subscriber _gnss_sub;
+	  ros::Publisher _keypoint_pub; 
 
     // Classes
     StereoCameras     _stereo;
@@ -68,6 +72,8 @@ class StereoFrontend
       _sync->registerCallback(boost::bind(&StereoFrontend::callback, this, _1, _2));
 
  			_gnss_sub = _nh.subscribe("/tf", 1, &StereoFrontend::readTf, this);
+		
+      _keypoint_pub = _nh.advertise<sensor_msgs::PointCloud2>("vo_keypoints", 1000);
 
     }
 
@@ -168,13 +174,21 @@ class StereoFrontend
     
 
         /***** Point management *****/
-        cv::Mat P_l, P_r;
-        _stereo.calculatePerspectiveMatrix(P_l, P_r);
-        _pcm.triangulate(match_left, match_right, P_l, P_r, _stereo.left().K_cv());
+        // cv::Mat P_l, P_r;
+        // _stereo.calculatePerspectiveMatrix(P_l, P_r);
+        // _pcm.triangulate(match_left, match_right, P_l, P_r);
+
+        _pcm.triangulate(match_left, match_right, _stereo.getStereoRotation(), _stereo.getStereoTranslation(), _stereo.left().K_cv());
 
         // TODO: MLPnP
         // _pcm.setExtrinsics(_pose.getWorldRotation(), _pose.getWorldTranslation());
 
+        std::vector<cv::Point3f> world_points = _pcm.getWorldPoints();
+
+
+        /***** Publish *****/
+        sensor_msgs::PointCloud2Ptr message(new sensor_msgs::PointCloud2);
+        _pcm.constructPCMessage(cam_left->header, message);
 
 
         /***** End-of-iteration updates *****/
@@ -187,6 +201,14 @@ class StereoFrontend
         ROS_INFO_STREAM("Time per iteration: " <<  (_toc - _tic)/ cv::getTickFrequency() << "\n");
       }
     }
+
+
+
+
+    /*****************************************************************************************************************/
+
+
+
 
 
     // To initialize: basicly same as main loop
