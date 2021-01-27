@@ -162,19 +162,19 @@ void StereoCameras::calculatePerspectiveMatrix(cv::Mat& P_l, cv::Mat& P_r)
 	// ROS_INFO_STREAM("_camera_left.K_cv()*Rt_l: " << _camera_left.K_cv()*Rt_l);
 	// ROS_INFO_STREAM("_camera_right.K_cv()*Rt_r: " << _camera_right.K_cv()*Rt_r);
 
-	cv::Mat R, t, Q;
-	cv::stereoRectify(_camera_left.K_cv(), 
-										_camera_left.distortion(),
-										_camera_right.K_cv(), 
-										_camera_right.distortion(),
-										cv::Size(_camera_left.getWidth(), _camera_left.getHeight()),
-										_R_clcr,
-										_t_clcr,
-										R,
-										t,
-										P_l,
-										P_r,
-										Q);
+	// cv::Mat R, t, Q;
+	// cv::stereoRectify(_camera_left.K_cv(), 
+	// 									_camera_left.distortion(),
+	// 									_camera_right.K_cv(), 
+	// 									_camera_right.distortion(),
+	// 									cv::Size(_camera_left.getWidth(), _camera_left.getHeight()),
+	// 									_R_clcr,
+	// 									_t_clcr,
+	// 									R,
+	// 									t,
+	// 									P_l,
+	// 									P_r,
+	// 									Q);
 
 	// ROS_INFO_STREAM("R: " << R); 
 	// ROS_INFO_STREAM("t: " << t);

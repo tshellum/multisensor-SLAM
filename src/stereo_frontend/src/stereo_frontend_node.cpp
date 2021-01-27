@@ -24,6 +24,7 @@
 #include "stereo_frontend/support.h"
 #include "stereo_frontend/point_cloud_management.h"
 
+
 /*** Typedef ***/
 typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
 typedef message_filters::Synchronizer<MySyncPolicy> Sync;
@@ -169,7 +170,7 @@ class StereoFrontend
         /***** Point management *****/
         cv::Mat P_l, P_r;
         _stereo.calculatePerspectiveMatrix(P_l, P_r);
-        _pcm.triangulate(match_left, match_right, P_l, P_r);
+        _pcm.triangulate(match_left, match_right, P_l, P_r, _stereo.left().K_cv());
 
         // TODO: MLPnP
         // _pcm.setExtrinsics(_pose.getWorldRotation(), _pose.getWorldTranslation());
