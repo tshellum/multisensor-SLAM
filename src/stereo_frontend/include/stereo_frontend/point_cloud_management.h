@@ -10,25 +10,35 @@
 #include <sensor_msgs/PointCloud2.h>
 
 
-struct PointCloud 
+/*** PCL packages ***/
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/PCLPointCloud2.h>
+
+struct PointCloudFrame 
 {
-    std::vector<cv::Point3f> world_points;
+    // std::vector<cv::Point3f> world_points;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
     Eigen::Matrix3d R_wb;
     Eigen::Vector3d t_wb;
     int id;
+
+    PointCloudFrame() : cloud(new pcl::PointCloud<pcl::PointXYZ>) {};
 };
 
 
 class PointCloudManager
 {
 private:
-    PointCloud _pc;
+    PointCloudFrame _pc;
 public:
     PointCloudManager(){};
     ~PointCloudManager(){};
 
-		std::vector<cv::Point3f> getWorldPoints() {return _pc.world_points;};
+		// std::vector<cv::Point3f> getWorldPoints() {return _pc.world_points;};
+		pcl::PointCloud<pcl::PointXYZ> getPointCloud() {return *_pc.cloud;};
 
+    void setPointCloudHeader(std_msgs::Header header);
     void setExtrinsics(Eigen::Matrix3d R_wb, Eigen::Vector3d t_wb);
 
     void keypoint2bearing(std::vector<cv::KeyPoint> match_left, 
@@ -50,8 +60,15 @@ public:
 										cv::Mat K);
 
 
-		void constructPCMessage(std_msgs::Header header, sensor_msgs::PointCloud2Ptr message);
+		void constructPCMessage(std_msgs::Header header, pcl::PCLPointCloud2 message);
 };
+
+void PointCloudManager::setPointCloudHeader(std_msgs::Header header)
+{
+  _pc.cloud->header.frame_id = "stereo_point_cloud";
+  _pc.cloud->header.stamp = _pc.cloud->header.stamp;
+}
+
 
 
 void PointCloudManager::setExtrinsics(Eigen::Matrix3d R_wb, Eigen::Vector3d t_wb)
@@ -96,42 +113,42 @@ void PointCloudManager::keypoint2bearing(std::vector<cv::KeyPoint> match_left,
 
 
 
-void PointCloudManager::triangulate(std::vector<cv::KeyPoint> match_left, 
-                                    std::vector<cv::KeyPoint> match_right,
-                                    cv::Mat P_l, 
-                                    cv::Mat P_r)
-{
-    std::vector<cv::Point2f> point2D_left, point2D_right;
-    cv::KeyPoint::convert(match_left, point2D_left);
-    cv::KeyPoint::convert(match_right, point2D_right);
+// void PointCloudManager::triangulate(std::vector<cv::KeyPoint> match_left, 
+//                                     std::vector<cv::KeyPoint> match_right,
+//                                     cv::Mat P_l, 
+//                                     cv::Mat P_r)
+// {
+//     std::vector<cv::Point2f> point2D_left, point2D_right;
+//     cv::KeyPoint::convert(match_left, point2D_left);
+//     cv::KeyPoint::convert(match_right, point2D_right);
 
-    int N = point2D_left.size();
-    cv::Mat point3D_homogenous(4, N, CV_64FC1);                                                 // https://stackoverflow.com/questions/16295551/how-to-correctly-use-cvtriangulatepoints
-    cv::triangulatePoints(P_l, P_r, point2D_left, point2D_right, point3D_homogenous); // https://gist.github.com/cashiwamochi/8ac3f8bab9bf00e247a01f63075fedeb
+//     int N = point2D_left.size();
+//     cv::Mat point3D_homogenous(4, N, CV_64FC1);                                                 // https://stackoverflow.com/questions/16295551/how-to-correctly-use-cvtriangulatepoints
+//     cv::triangulatePoints(P_l, P_r, point2D_left, point2D_right, point3D_homogenous); // https://gist.github.com/cashiwamochi/8ac3f8bab9bf00e247a01f63075fedeb
 
-    std::vector<cv::Point3f> point3D_cartesian;
-    for(int i = 0; i < N; i++) 
-    {
-        cv::Point3f wp;
-        cv::Mat p3c;
-        cv::Mat p3h = point3D_homogenous.col(i);
-        // ROS_INFO_STREAM("p3h: " << p3h);
+//     std::vector<cv::Point3f> point3D_cartesian;
+//     for(int i = 0; i < N; i++) 
+//     {
+//         cv::Point3f wp;
+//         cv::Mat p3c;
+//         cv::Mat p3h = point3D_homogenous.col(i);
+//         // ROS_INFO_STREAM("p3h: " << p3h);
 
-        cv::convertPointsFromHomogeneous(p3h.t(), p3c);
-        // ROS_INFO_STREAM("p3c: " << p3c);
+//         cv::convertPointsFromHomogeneous(p3h.t(), p3c);
+//         // ROS_INFO_STREAM("p3c: " << p3c);
 
-        wp.x = p3c.at<float>(0);
-        wp.y = p3c.at<float>(1);
-        wp.z = p3c.at<float>(2);
+//         wp.x = p3c.at<float>(0);
+//         wp.y = p3c.at<float>(1);
+//         wp.z = p3c.at<float>(2);
 
-        point3D_cartesian.push_back(wp);
+//         point3D_cartesian.push_back(wp);
         
-        // if (i % 10 == 0)
-				// ROS_INFO_STREAM("wp: " << wp);
-    }
+//         // if (i % 10 == 0)
+// 				// ROS_INFO_STREAM("wp: " << wp);
+//     }
     
-    // _pc.world_points = point3D_cartesian;    
-}
+//     // _pc.world_points = point3D_cartesian;    
+// }
 
 
 
@@ -171,55 +188,32 @@ void PointCloudManager::triangulate(std::vector<cv::KeyPoint> match_left,
     int N = point2D_left.size();
     cv::Mat point3D_homogenous(4, N, CV_64FC1);                                                 // https://stackoverflow.com/questions/16295551/how-to-correctly-use-cvtriangulatepoints
 		cv::triangulatePoints(K*Rt_l, K*Rt_r, point2D_left, point2D_right, point3D_homogenous); // https://gist.github.com/cashiwamochi/8ac3f8bab9bf00e247a01f63075fedeb
-
-    std::vector<cv::Point3f> point3D_cartesian;
-    for(int i = 0; i < N; i++) 
-    {
-        cv::Point3f wp;
-        cv::Mat p3c;
-        cv::Mat p3h = point3D_homogenous.col(i);
-        // ROS_INFO_STREAM("p3h: " << p3h);
-
-        cv::convertPointsFromHomogeneous(p3h.t(), p3c);
-        // ROS_INFO_STREAM("p3c: " << p3c);
-
-				
-        wp.y = p3c.at<float>(0);
-        wp.z = p3c.at<float>(1);
-        wp.x = p3c.at<float>(2);
-
-				if (wp.x > 0)
-        	point3D_cartesian.push_back(wp);
-        
-        // if (i % 10 == 0)
-				// ROS_INFO_STREAM("wp: " << wp);
-    }
     
-    _pc.world_points = point3D_cartesian;    
+    for(int i = 0; i < point3D_homogenous.cols; i++)
+    {
+      cv::Mat p3c;
+      cv::convertPointsFromHomogeneous(point3D_homogenous.col(i).t(), p3c);
+
+      // Create pcl point following the body frame 
+      pcl::PointXYZ pt;
+      pt.x = p3c.at<float>(2);
+      pt.y = p3c.at<float>(0);
+      pt.z = p3c.at<float>(1);
+
+      // when color needs to be added:
+      //uint32_t rgb = (static_cast<uint32_t>(pr) << 16 | static_cast<uint32_t>(pg) << 8 | static_cast<uint32_t>(pb));
+      //point.rgb = *reinterpret_cast<float*>(&rgb);
+    
+      if (pt.x > 0)
+      {
+        _pc.cloud->points.push_back(pt);
+
+        // if (i % 10 == 0)
+        // ROS_INFO_STREAM("wp: " << pt);
+      }
+    }
+
+    _pc.cloud->width = (int)_pc.cloud->points.size();
+    _pc.cloud->height = 1;
 }
 
-
-
-// Following https://github.com/HKUST-Aerial-Robotics/VINS-Mono/blob/master/feature_tracker/src/feature_tracker_node.cpp
-void PointCloudManager::constructPCMessage(std_msgs::Header header, sensor_msgs::PointCloud2Ptr message)
-{
-	message->header = header;
-	message->header.frame_id = "world";
-	
-	// sensor_msgs::PointCloud pc;  
-	// pc.header = msg->header; 
-
-	// sensor_msgs::ChannelFloat32 ids; 
-
-	// for (const cv::KeyPoint& kp : trackedFrame->keypoints)
-	// {
-	// 	geometry_msgs::Point32 p; 
-	// 	p.x = kp.pt.x; 
-	// 	p.y = kp.pt.y; 
-	// 	p.z = 1; 
-	// 	pc.points.push_back(p); 
-	// 	ids.push_back(kp.class_id); 
-	// }
-
-
-}

@@ -4,6 +4,9 @@
 #include <ros/ros.h>
 #include <ros/package.h>
 
+#include <geometry_msgs/PoseStamped.h>
+#include <tf2_eigen/tf2_eigen.h>
+
 /*** C++ packages ***/
 #include <fstream>
 #include <sys/stat.h> 
@@ -22,7 +25,6 @@ private:
     Eigen::Matrix3d    _R_wb;
     Eigen::Quaterniond _q_wb;
     Eigen::Vector3d    _t_wb;
-    // Eigen::Matrix4d    _T_wb;
     
     // To correct global frame error
     Eigen::Matrix3d _R_gnss;
@@ -30,7 +32,7 @@ private:
     // Relative pose
     Eigen::Matrix3d _R_b1b2;
     Eigen::Vector3d _t_b1b2;
-    Eigen::Matrix4d _T_b1b2;
+    Eigen::Affine3d _T_b1b2;
     double _scale;    
 
     // Static transformation
@@ -117,7 +119,7 @@ public:
     void updatePose();
 
     void toFile();
-
+    geometry_msgs::PoseStamped toPoseStamped(std_msgs::Header header);
 };
 
 
@@ -166,14 +168,15 @@ void Pose::setWorldFrame(Eigen::Matrix3d R_wb0, Eigen::Vector3d t_wb0)
 
 void Pose::transformCamera2Body(Eigen::Matrix3d R_c1c2, Eigen::Vector3d t_c1c2)
 {
-    Eigen::Matrix4d T_c1c2 = Eigen::Matrix4d::Identity(4,4);
-    T_c1c2.block<3,3>(0,0) = R_c1c2;
-    T_c1c2.block<3,1>(0,3) = t_c1c2;
+    // https://eigen.tuxfamily.org/dox/classEigen_1_1Transform.html
+    Eigen::Affine3d T_c1c2 = Eigen::Affine3d::Identity();
+    T_c1c2.linear() = R_c1c2;
+    T_c1c2.translation() = t_c1c2;
 
     _T_b1b2 = _T_bc * T_c1c2 * _T_cb;
 
-    _R_b1b2 = _T_b1b2.block<3,3>(0,0);
-    _t_b1b2 = _T_b1b2.col(3).head(3);
+    _R_b1b2 = _T_b1b2.linear();
+    _t_b1b2 = _T_b1b2.translation();
 }
 
 
@@ -280,4 +283,14 @@ void Pose::toFile()
             << _q_wb.w() 		   << "\n";	// w quaternion
 
     results.close();
+}
+
+
+
+geometry_msgs::PoseStamped Pose::toPoseStamped(std_msgs::Header header)
+{
+    tf2::Stamped<Eigen::Affine3d> tf2_stamped_T(_T_b1b2, header.stamp, "global_pose");
+    geometry_msgs::PoseStamped stamped_pose_msg = tf2::toMsg(tf2_stamped_T);
+
+    return stamped_pose_msg;
 }

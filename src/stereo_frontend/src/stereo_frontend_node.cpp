@@ -7,8 +7,8 @@
 #include <message_filters/sync_policies/approximate_time.h>
 #include <cv_bridge/cv_bridge.h>
 #include <tf2_ros/transform_listener.h>
-// #include <sensor_msgs/PointCloud.h> 
 #include <sensor_msgs/PointCloud2.h>
+#include <geometry_msgs/PoseStamped.h>
 
 /*** OpenCV packages ***/
 #include "opencv2/core.hpp"
@@ -28,6 +28,10 @@
 #include "stereo_frontend/point_cloud_management.h"
 
 
+/*** PCL packages ***/
+#include "pcl_ros/point_cloud.h"
+
+
 /*** Typedef ***/
 typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
 typedef message_filters::Synchronizer<MySyncPolicy> Sync;
@@ -44,7 +48,8 @@ class StereoFrontend
     boost::shared_ptr<Sync> _sync;
     
   	ros::Subscriber _gnss_sub;
-	  ros::Publisher _keypoint_pub; 
+	  ros::Publisher  _wp_pub; 
+    ros::Publisher  _pose_pub;
 
     // Classes
     StereoCameras     _stereo;
@@ -72,9 +77,8 @@ class StereoFrontend
       _sync->registerCallback(boost::bind(&StereoFrontend::callback, this, _1, _2));
 
  			_gnss_sub = _nh.subscribe("/tf", 1, &StereoFrontend::readTf, this);
-		
-      _keypoint_pub = _nh.advertise<sensor_msgs::PointCloud2>("vo_keypoints", 1000);
-
+      _wp_pub   = _nh.advertise<sensor_msgs::PointCloud2>("/frontend/world_points", 1000);
+		  _pose_pub = _nh.advertise<geometry_msgs::PoseStamped>("/frontend/pose_relative", 1000);
     }
 
     ~StereoFrontend()
@@ -179,16 +183,18 @@ class StereoFrontend
         // _pcm.triangulate(match_left, match_right, P_l, P_r);
 
         _pcm.triangulate(match_left, match_right, _stereo.getStereoRotation(), _stereo.getStereoTranslation(), _stereo.left().K_cv());
-
+        _pcm.setPointCloudHeader(cam_left->header);
         // TODO: MLPnP
         // _pcm.setExtrinsics(_pose.getWorldRotation(), _pose.getWorldTranslation());
 
-        std::vector<cv::Point3f> world_points = _pcm.getWorldPoints();
 
 
         /***** Publish *****/
-        sensor_msgs::PointCloud2Ptr message(new sensor_msgs::PointCloud2);
-        _pcm.constructPCMessage(cam_left->header, message);
+        pcl::PointCloud<pcl::PointXYZ> pc_msg = _pcm.getPointCloud();
+        _wp_pub.publish(pc_msg);
+
+        geometry_msgs::PoseStamped pose_msg = _pose.toPoseStamped(cam_left->header); 
+        _pose_pub.publish(pose_msg);  
 
 
         /***** End-of-iteration updates *****/
