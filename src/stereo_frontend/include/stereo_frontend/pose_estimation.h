@@ -289,7 +289,7 @@ void Pose::toFile()
 
 geometry_msgs::PoseStamped Pose::toPoseStamped(std_msgs::Header header)
 {
-    tf2::Stamped<Eigen::Affine3d> tf2_stamped_T(_T_b1b2, header.stamp, "global_pose");
+    tf2::Stamped<Eigen::Affine3d> tf2_stamped_T(_T_b1b2, header.stamp, "relative_pose");
     geometry_msgs::PoseStamped stamped_pose_msg = tf2::toMsg(tf2_stamped_T);
 
     return stamped_pose_msg;

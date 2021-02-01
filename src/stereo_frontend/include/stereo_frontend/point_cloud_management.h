@@ -15,6 +15,9 @@
 #include <pcl/point_types.h>
 #include <pcl/PCLPointCloud2.h>
 
+#include <pcl_conversions/pcl_conversions.h>
+
+
 struct PointCloudFrame 
 {
     // std::vector<cv::Point3f> world_points;
@@ -58,9 +61,8 @@ public:
 										cv::Mat R_r, 
                     cv::Mat t_r,
 										cv::Mat K);
-
-
-		void constructPCMessage(std_msgs::Header header, pcl::PCLPointCloud2 message);
+    
+    sensor_msgs::PointCloud2 toPointCloud2Msg(std_msgs::Header header);
 };
 
 void PointCloudManager::setPointCloudHeader(std_msgs::Header header)
@@ -217,3 +219,14 @@ void PointCloudManager::triangulate(std::vector<cv::KeyPoint> match_left,
     _pc.cloud->height = 1;
 }
 
+
+sensor_msgs::PointCloud2 PointCloudManager::toPointCloud2Msg(std_msgs::Header header)
+{
+  sensor_msgs::PointCloud2 cloud_msg;
+  pcl::toROSMsg(*_pc.cloud, cloud_msg);
+
+  cloud_msg.header.stamp = header.stamp;
+  cloud_msg.header.frame_id = "point_cloud";
+
+  return cloud_msg;
+}

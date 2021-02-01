@@ -29,18 +29,15 @@
 
 
 /*** PCL packages ***/
-#include "pcl_ros/point_cloud.h"
-
-
-/*** Typedef ***/
-typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
-typedef message_filters::Synchronizer<MySyncPolicy> Sync;
-
-
+// #include "pcl_ros/point_cloud.h"
 
 class StereoFrontend
 {
   private:
+    // Typedef
+    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
+    typedef message_filters::Synchronizer<MySyncPolicy> Sync;
+    
     // Nodes
     ros::NodeHandle _nh; // TODO: Trenger man flere nodehandlers
     message_filters::Subscriber<sensor_msgs::Image> _sub_cam_left;
@@ -48,7 +45,7 @@ class StereoFrontend
     boost::shared_ptr<Sync> _sync;
     
   	ros::Subscriber _gnss_sub;
-	  ros::Publisher  _wp_pub; 
+	  ros::Publisher  _cloud_pub; 
     ros::Publisher  _pose_pub;
 
     // Classes
@@ -77,7 +74,7 @@ class StereoFrontend
       _sync->registerCallback(boost::bind(&StereoFrontend::callback, this, _1, _2));
 
  			_gnss_sub = _nh.subscribe("/tf", 1, &StereoFrontend::readTf, this);
-      _wp_pub   = _nh.advertise<sensor_msgs::PointCloud2>("/frontend/world_points", 1000);
+      _cloud_pub   = _nh.advertise<sensor_msgs::PointCloud2>("/frontend/point_cloud", 1000);
 		  _pose_pub = _nh.advertise<geometry_msgs::PoseStamped>("/frontend/pose_relative", 1000);
     }
 
@@ -173,9 +170,6 @@ class StereoFrontend
         bool valid_pose = _pose.initialPoseEstimate(points_prev, points_cur, _stereo.left().K_cv());
         _pose.updatePose();
 
-        // ROS_INFO_STREAM("World rotation: " << _pose.getWorldRotation() );
-        // ROS_INFO_STREAM("World translation: " << _pose.getWorldTranslation() );
-    
 
         /***** Point management *****/
         // cv::Mat P_l, P_r;
@@ -184,17 +178,15 @@ class StereoFrontend
 
         _pcm.triangulate(match_left, match_right, _stereo.getStereoRotation(), _stereo.getStereoTranslation(), _stereo.left().K_cv());
         _pcm.setPointCloudHeader(cam_left->header);
+
         // TODO: MLPnP
         // _pcm.setExtrinsics(_pose.getWorldRotation(), _pose.getWorldTranslation());
 
 
 
         /***** Publish *****/
-        pcl::PointCloud<pcl::PointXYZ> pc_msg = _pcm.getPointCloud();
-        _wp_pub.publish(pc_msg);
-
-        geometry_msgs::PoseStamped pose_msg = _pose.toPoseStamped(cam_left->header); 
-        _pose_pub.publish(pose_msg);  
+        _cloud_pub.publish(_pcm.toPointCloud2Msg(cam_left->header));
+        _pose_pub.publish(_pose.toPoseStamped(cam_left->header));  
 
 
         /***** End-of-iteration updates *****/
@@ -272,7 +264,6 @@ int main(int argc, char **argv)
 	StereoFrontend callback;
 
   ros::spin();
-  return 0;
 }
 
 

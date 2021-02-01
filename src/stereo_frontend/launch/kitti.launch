@@ -18,4 +18,12 @@
     <remap from = "cam_left"  to = "$(arg cam_left_topic)"/>
     <remap from = "cam_right" to = "$(arg cam_right_topic)"/>
     </node>
+
+    <!-- <node 
+        pkg="tf2_ros" 
+        type="static_transform_publisher" 
+        name="world_origin_broadcaster" 
+        args="0 0 0 0 0 0 1 world_origin_parent world_origin" 
+    /> -->
+
 </launch>
