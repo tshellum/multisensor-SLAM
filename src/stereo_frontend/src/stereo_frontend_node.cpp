@@ -151,15 +151,15 @@ class StereoFrontend
         _detector.trackBuckets();
         _detector.bucketedFeatureDetection(true);    
 
-        ROS_INFO_STREAM("Detect - number of features: " << _detector.getNumFeaturesLeftCur());
-        displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());
+        // ROS_INFO_STREAM("Detect - number of features: " << _detector.getNumFeaturesLeftCur());
+        // displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());
 
         // Match features
         std::vector<cv::KeyPoint> match_left, match_right;
         _detector.circularMatching(match_left, match_right);
 
-        ROS_INFO_STREAM("Match - number of features: " << match_left.size());
-        displayWindowFeatures(_detector.getCurImageLeft(), match_left, _detector.getCurImageRight(), match_right, "Matches");
+        // ROS_INFO_STREAM("Match - number of features: " << match_left.size());
+        // displayWindowFeatures(_detector.getCurImageLeft(), match_left, _detector.getCurImageRight(), match_right, "Matches");
 
 
         /***** Pose estimation *****/

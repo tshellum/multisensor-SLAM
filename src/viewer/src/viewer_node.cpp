@@ -20,6 +20,9 @@ private:
   typedef message_filters::Synchronizer<SyncPolicy> Sync;
   boost::shared_ptr<Sync> _sync;
 
+
+  Visualization viz;
+
 public:
   Viewer()
   {
@@ -29,9 +32,11 @@ public:
     _sync->registerCallback(boost::bind(&Viewer::callback, this, _1, _2));
   }
 
-  void callback(const geometry_msgs::PoseStampedConstPtr &pose_msg, const sensor_msgs::PointCloud2ConstPtr &pc_msg)
+  void callback(const geometry_msgs::PoseStampedConstPtr &pose_msg, const sensor_msgs::PointCloud2ConstPtr &cloud_msg)
   {
-    ROS_INFO("Synchronization successful");
+    viz.updatePose(*pose_msg);
+    viz.readCloud(*cloud_msg);
+    // viz.show();
   }
 
 };
