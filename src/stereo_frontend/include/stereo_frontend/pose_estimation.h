@@ -25,6 +25,8 @@ private:
     Eigen::Matrix3d    _R_wb;
     Eigen::Quaterniond _q_wb;
     Eigen::Vector3d    _t_wb;
+    Eigen::Affine3d    _T_wb;
+    bool _is_set;
     
     // To correct global frame error
     Eigen::Matrix3d _R_gnss;
@@ -49,7 +51,8 @@ private:
 public:
     Pose(ros::NodeHandle nh, std::string filename) 
     : _result_path(ros::package::getPath("stereo_frontend") + "/../../results/"),
-      _filename(filename), _scale(0.0), _start_time(0.0), _current_timestamp(0.0)
+      _filename(filename), _scale(0.0), _start_time(0.0), _current_timestamp(0.0),
+      _is_set(false)
     {
         // Create directory
         mkdir(_result_path.c_str(), 0777);
@@ -66,11 +69,18 @@ public:
         _t_wb.setZero();
         _R_wb.setIdentity();
         _q_wb = _R_wb;
+        _T_wb.setIdentity();
         
-        _T_bc << 0, 0, 1, 0,
-                 1, 0, 0, 0,
+        _T_bc << 1, 0, 0, 0,
+                 0, 0, 1, 0,
                  0, 1, 0, 0,
                  0, 0, 0, 1;
+
+        // _T_bc << 0, 0, 1, 0,
+        //          1, 0, 0, 0,
+        //          0, 1, 0, 0,
+        //          0, 0, 0, 1;
+
         _T_cb = _T_bc.transpose();
 
         std::string frame[3] = {"x", "y", "z"};
@@ -89,37 +99,42 @@ public:
                 _R_gnss(2,i) = 1;
             else
                 _R_gnss(i,i) = 1;
-        }  
-
+        }
     };
 
     ~Pose() {};
 
-    Eigen::Matrix3d getRelativeRoation()     {return _R_b1b2;};
-    Eigen::Vector3d getRelativeTranslation() {return _t_b1b2;};
-    Eigen::Matrix3d getWorldRotation()       {return _R_wb;};
-    Eigen::Quaterniond getWorldQuaternion()  {return _q_wb;};
-    Eigen::Vector3d getWorldTranslation()    {return _t_wb;};
-    double getTimestamp()                    {return _current_timestamp;};
-    double getScale()                        {return _scale;};
+    Eigen::Matrix3d getRelativeRoation()        {return _R_b1b2;};
+    Eigen::Vector3d getRelativeTranslation()    {return _t_b1b2;};
+    Eigen::Affine3d getRelativeTransformation() {return _T_b1b2;};
+    Eigen::Matrix3d getWorldRotation()          {return _R_wb;};
+    Eigen::Quaterniond getWorldQuaternion()     {return _q_wb;};
+    Eigen::Vector3d getWorldTranslation()       {return _t_wb;};
+    Eigen::Affine3d getWorldTransformation()    {return _T_wb;};
+    double getTimestamp()                       {return _current_timestamp;};
+    double getScale()                           {return _scale;};
+    bool isSet()                                {return _is_set;};
 
     void readScale(double scale) {_scale = scale;};    
     void readTimestamp(double time);
     void readRotation(double qx, double qy, double qz,double qw);
     void readTranslation(double x, double y, double z);
 
-    void setWorldFrame(Eigen::Matrix3d R_wb0, Eigen::Vector3d t_wb0);
+    void setWorldCenter(Eigen::Matrix3d R_wb0, Eigen::Vector3d t_wb0);
     void transformCamera2Body(Eigen::Matrix3d R_c1c2, Eigen::Vector3d t_c1c2);
     void correctGNSSFrame();
     void estimateScaleFromGNSS(Eigen::Vector3d t, Eigen::Vector3d t_kf);
     
     bool isValidRotation(double thresh);
+    bool isValidTranslation(double thresh);
     void removeRANSACoutliers(cv::Mat inliers, std::vector<cv::Point2f>& points1, std::vector<cv::Point2f>& points2);
     bool initialPoseEstimate(std::vector<cv::Point2f>& points_prev, std::vector<cv::Point2f>& points_cur, cv::Mat K);
     void updatePose();
 
     void toFile();
+    void toFile0();
     geometry_msgs::PoseStamped toPoseStamped(std_msgs::Header header);
+    geometry_msgs::PoseStamped toPoseStamped(std_msgs::Header header, Eigen::Affine3d T);
 };
 
 
@@ -150,19 +165,24 @@ void Pose::readTranslation(double x, double y, double z)
              z;
 }
 
-
+// TODO: Skrive om til transformasjoner
 void Pose::updatePose()
 {
     _t_wb = _t_wb + _R_wb * _t_b1b2 * _scale; 
 	_R_wb = _R_wb * _R_b1b2;
     _q_wb = _R_wb;  // Update quaternion
+
+    _T_wb.linear() = _R_wb;
+    _T_wb.translation() = _t_wb;
 }
 
 
-void Pose::setWorldFrame(Eigen::Matrix3d R_wb0, Eigen::Vector3d t_wb0)
+void Pose::setWorldCenter(Eigen::Matrix3d R_wb0, Eigen::Vector3d t_wb0)
 {
-    _t_wb = t_wb0;
+    _t_wb = t_wb0; 
     _R_wb = R_wb0;
+
+    _is_set = true;
 }
 
 
@@ -174,7 +194,7 @@ void Pose::transformCamera2Body(Eigen::Matrix3d R_c1c2, Eigen::Vector3d t_c1c2)
     T_c1c2.translation() = t_c1c2;
 
     _T_b1b2 = _T_bc * T_c1c2 * _T_cb;
-
+    
     _R_b1b2 = _T_b1b2.linear();
     _t_b1b2 = _T_b1b2.translation();
 }
@@ -199,7 +219,7 @@ void Pose::estimateScaleFromGNSS(Eigen::Vector3d t, Eigen::Vector3d t_kf)
 
 
 
-bool Pose::isValidRotation(double thresh = M_PI/4)
+bool Pose::isValidRotation(double thresh = M_PI/3)
 {
     cv::Mat euler = cv::Mat::zeros(3,1, CV_64F);
     cv::Mat R_b1b2;
@@ -214,6 +234,14 @@ bool Pose::isValidRotation(double thresh = M_PI/4)
 }
 
 
+bool Pose::isValidTranslation(double thresh = 0.8)
+{
+    double x = _t_b1b2.coeff(0);
+    double y = _t_b1b2.coeff(1);
+    double z = _t_b1b2.coeff(2);
+
+    return (-thresh <= y && y <= thresh) && (0 <= x); 
+}
 
 
 void Pose::removeRANSACoutliers(cv::Mat inliers, std::vector<cv::Point2f>& points1, std::vector<cv::Point2f>& points2)
@@ -254,7 +282,7 @@ bool Pose::initialPoseEstimate(std::vector<cv::Point2f>& points_prev, std::vecto
         
         transformCamera2Body(R_c1c2, t_c1c2);
         
-        if (!isValidRotation())
+        if ((!isValidRotation()) || (!isValidTranslation()))
             return false;
 
         return true;
@@ -274,22 +302,47 @@ void Pose::toFile()
     std::ofstream results;
     results.open (_result_path + _filename, std::ios_base::app);
     results << _current_timestamp  << " "   // timestamp for current pose
-            << _t_wb.coeff(0) << " "	// x translation 
-            << _t_wb.coeff(1) << " "	// y translation
-            << _t_wb.coeff(2) << " "	// z translation 
-            << _q_wb.x()		 	   << " "	// x quaternion
-            << _q_wb.y()		 	   << " "	// y quaternion
-            << _q_wb.z()		 	   << " "	// y quaternion
-            << _q_wb.w() 		   << "\n";	// w quaternion
+            << _t_wb.coeff(0)      << " "	// x translation 
+            << _t_wb.coeff(1)      << " "	// y translation
+            << _t_wb.coeff(2)      << " "	// z translation 
+            << _q_wb.x()	       << " "	// x quaternion
+            << _q_wb.y()	       << " "	// y quaternion
+            << _q_wb.z()	       << " "	// y quaternion
+            << _q_wb.w() 	       << "\n";	// w quaternion
+
+    results.close();
+}
+
+void Pose::toFile0()
+{
+    // Ground truth
+    std::ofstream results;
+    results.open (_result_path + _filename, std::ios_base::app);
+    results << _current_timestamp  << " "   // timestamp for current pose
+            << 0      << " "	// x translation 
+            << 0      << " "	// y translation
+            << 0      << " "	// z translation 
+            << 0	       << " "	// x quaternion
+            << 0	       << " "	// y quaternion
+            << 0	       << " "	// y quaternion
+            << 0 	       << "\n";	// w quaternion
 
     results.close();
 }
 
 
-
 geometry_msgs::PoseStamped Pose::toPoseStamped(std_msgs::Header header)
 {
     tf2::Stamped<Eigen::Affine3d> tf2_stamped_T(_T_b1b2, header.stamp, "relative_pose");
+    geometry_msgs::PoseStamped stamped_pose_msg = tf2::toMsg(tf2_stamped_T);
+
+    return stamped_pose_msg;
+}
+
+
+geometry_msgs::PoseStamped Pose::toPoseStamped(std_msgs::Header header, Eigen::Affine3d T)
+{
+    tf2::Stamped<Eigen::Affine3d> tf2_stamped_T(T, header.stamp, "relative_pose");
     geometry_msgs::PoseStamped stamped_pose_msg = tf2::toMsg(tf2_stamped_T);
 
     return stamped_pose_msg;

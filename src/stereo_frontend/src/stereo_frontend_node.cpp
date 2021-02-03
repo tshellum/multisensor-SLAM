@@ -46,7 +46,8 @@ class StereoFrontend
     
   	ros::Subscriber _gnss_sub;
 	  ros::Publisher  _cloud_pub; 
-    ros::Publisher  _pose_pub;
+    ros::Publisher  _pose_relative_pub;
+    ros::Publisher  _pose_world_pub;
 
     // Classes
     StereoCameras     _stereo;
@@ -73,9 +74,10 @@ class StereoFrontend
       _sync.reset(new Sync(MySyncPolicy(10), _sub_cam_left, _sub_cam_right));
       _sync->registerCallback(boost::bind(&StereoFrontend::callback, this, _1, _2));
 
- 			_gnss_sub = _nh.subscribe("/tf", 1, &StereoFrontend::readTf, this);
-      _cloud_pub   = _nh.advertise<sensor_msgs::PointCloud2>("/frontend/point_cloud", 1000);
-		  _pose_pub = _nh.advertise<geometry_msgs::PoseStamped>("/frontend/pose_relative", 1000);
+ 			_gnss_sub  = _nh.subscribe("/tf", 1, &StereoFrontend::readTf, this);
+      _cloud_pub = _nh.advertise<sensor_msgs::PointCloud2>("/frontend/point_cloud", 1000);
+		  _pose_relative_pub  = _nh.advertise<geometry_msgs::PoseStamped>("/frontend/pose_relative", 1000);
+		  _pose_world_pub     = _nh.advertise<geometry_msgs::PoseStamped>("/frontend/pose_world", 1000);
     }
 
     ~StereoFrontend()
@@ -100,6 +102,9 @@ class StereoFrontend
 
       _ground_truth.correctGNSSFrame();
       
+      // if (!_pose.isSet())
+      //   _pose.setWorldCenter(_ground_truth.getWorldRotation(), _ground_truth.getWorldTranslation());
+
       _ground_truth.toFile();
     }
 
@@ -108,10 +113,12 @@ class StereoFrontend
     void callback(const sensor_msgs::ImageConstPtr &cam_left, const sensor_msgs::ImageConstPtr &cam_right)
     {
       /***** Initialize *****/
-      if (!_initialized)
+      // if ((!_initialized) || !_pose.isSet())
+      if (!_initialized) 
       {
         init_cb(cam_left, cam_right);
         _initialized = true;
+        ROS_INFO("Initialized");
       }
       else
       {         
@@ -151,8 +158,8 @@ class StereoFrontend
         _detector.trackBuckets();
         _detector.bucketedFeatureDetection(true);    
 
-        // ROS_INFO_STREAM("Detect - number of features: " << _detector.getNumFeaturesLeftCur());
-        // displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());
+        ROS_INFO_STREAM("Detect - number of features: " << _detector.getNumFeaturesLeftCur());
+        displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());
 
         // Match features
         std::vector<cv::KeyPoint> match_left, match_right;
@@ -186,7 +193,8 @@ class StereoFrontend
 
         /***** Publish *****/
         _cloud_pub.publish(_pcm.toPointCloud2Msg(cam_left->header));
-        _pose_pub.publish(_pose.toPoseStamped(cam_left->header));  
+        _pose_relative_pub.publish(_pose.toPoseStamped(cam_left->header, _pose.getRelativeTransformation()));  
+        _pose_world_pub.publish(_pose.toPoseStamped(cam_left->header, _pose.getWorldTransformation()));  
 
 
         /***** End-of-iteration updates *****/
@@ -237,8 +245,8 @@ class StereoFrontend
       _detector.trackBuckets();
       _detector.bucketedFeatureDetection(true);    
 
-      ROS_INFO_STREAM("Detect - number of features: " << _detector.getNumFeaturesLeftCur());
-      displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());
+      // ROS_INFO_STREAM("Detect - number of features: " << _detector.getNumFeaturesLeftCur());
+      // displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());
 
       // Match features
       // std::vector<cv::KeyPoint> match_left, match_right;

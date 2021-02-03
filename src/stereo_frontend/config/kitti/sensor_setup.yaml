@@ -5,9 +5,13 @@
 
 # A bug with kitti2bag sets the wrong coordinate system for /tf --> Need this for correction
 GNSS_frame:
-   surge: "x"
+   surge: "y"
    sway : "z"
-   yaw  : "y"
+   yaw  : "x"
+   
+   # surge: "x"
+   # sway : "z"
+   # yaw  : "y"
 
 # Transformation from GNSS/IMU to LiDAR and then camera
 IMU_to_LiDAR:

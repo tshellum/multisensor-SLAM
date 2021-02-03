@@ -20,6 +20,7 @@ private:
   typedef message_filters::Synchronizer<SyncPolicy> Sync;
   boost::shared_ptr<Sync> _sync;
 
+  ros::Timer _viewer_timer;    
 
   Visualization viz;
 
@@ -30,15 +31,28 @@ public:
     _cloud_sub.subscribe(_nh, "point_cloud_topic", 1);
     _sync.reset(new Sync(SyncPolicy(10), _pose_sub, _cloud_sub));
     _sync->registerCallback(boost::bind(&Viewer::callback, this, _1, _2));
+
+    _viewer_timer = _nh.createTimer(ros::Duration(0.1), &Viewer::timerCB,this);
   }
 
   void callback(const geometry_msgs::PoseStampedConstPtr &pose_msg, const sensor_msgs::PointCloud2ConstPtr &cloud_msg)
   {
     viz.updatePose(*pose_msg);
     viz.readCloud(*cloud_msg);
+    viz.setEnvironment();
+    viz.addCamera();
+    
     // viz.show();
+    viz.spinOnce();
   }
 
+  void timerCB(const ros::TimerEvent&)
+  {
+      if(viz.wasStopped())
+          {
+              ros::shutdown();
+          }
+  }
 };
 
 int main(int argc, char **argv)
