@@ -20,6 +20,12 @@
 #include <pcl/console/parse.h>
 
 
+// http://www.pcl-users.org/Cloud-Viewer-amp-PCLVisualizer-td4032856.html
+// http://www.pcl-users.org/Visualize-PointCloud-in-ROS-failed-td4039937.html
+// http://www.pcl-users.org/How-to-draw-camera-pyramids-in-Visualizer-td4019124.html
+// https://pcl.readthedocs.io/projects/tutorials/en/latest/pcl_visualizer.html
+
+
 class Visualization
 {
 private:
@@ -56,7 +62,7 @@ public:
 
 		_viewer.setBackgroundColor (1.0, 0.5, 1.0);
 		_viewer.addCoordinateSystem (10, _T_w0, "world center", 0);
-
+		// _viewer.setPosition(0, 1000);
 		// _viewer.addCoordinateSystem (1.0, "world center", 0);   
 	};
 	~Visualization() {};
@@ -88,10 +94,24 @@ void Visualization::updatePose(const geometry_msgs::PoseStamped msg)
 
 void Visualization::readCloud(const sensor_msgs::PointCloud2 msg) 
 {
-	pcl::fromROSMsg(msg, *_cloud);
+	pcl::PointCloud<pcl::PointXYZ> cloud_msg;
+	pcl::fromROSMsg(msg, cloud_msg);
 
-	// _viewer.addPointCloud<pcl::PointXYZ>(_cloud, std::to_string(++n_id));
-	// _viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, std::to_string(n_id));
+	pcl::PointCloud<pcl::PointXYZ> cloud_bodyframe;
+	for(int n = 0; n < cloud_msg.points.size(); n++)
+	{
+		pcl::PointXYZ pt;
+		pt.x = cloud_msg.points[n].y;
+		pt.y = cloud_msg.points[n].x;
+		pt.z = cloud_msg.points[n].z;
+
+		cloud_bodyframe.points.push_back(pt);
+	}
+
+	*_cloud = cloud_bodyframe;
+
+	_viewer.addPointCloud<pcl::PointXYZ>(_cloud, std::to_string(++n_id));
+	_viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, std::to_string(n_id));
 
 }
 

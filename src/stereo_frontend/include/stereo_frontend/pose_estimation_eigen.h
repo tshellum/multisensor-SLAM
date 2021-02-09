@@ -70,11 +70,16 @@ public:
         _R_wb.setIdentity();
         _q_wb = _R_wb;
         _T_wb.setIdentity();
-        
+
         _T_bc << 1, 0, 0, 0,
                  0, 0, 1, 0,
                  0, 1, 0, 0,
                  0, 0, 0, 1;
+
+        // _T_bc << 1,  0,  0, 0,
+        //          0,  0, -1, 0,
+        //          0, -1,  0, 0,
+        //          0,  0,  0, 1;
 
         // _T_bc << 0, 0, 1, 0,
         //          1, 0, 0, 0,
@@ -88,6 +93,7 @@ public:
         nh.getParam("/GNSS_frame/sway", frame[1]);
         nh.getParam("/GNSS_frame/yaw", frame[2]);
 
+
         _R_gnss = Eigen::Matrix3d::Zero();
         for(int i = 0; i < 3; i++)
         {
@@ -100,6 +106,11 @@ public:
             else
                 _R_gnss(i,i) = 1;
         }
+        // ROS_INFO_STREAM("_R_gnss: " << _R_gnss);
+
+        // _R_gnss << 0,  0, -1,
+        //            1,  0,  0,
+        //            0, -1,  0;
     };
 
     ~Pose() {};
@@ -193,7 +204,8 @@ void Pose::transformCamera2Body(Eigen::Matrix3d R_c1c2, Eigen::Vector3d t_c1c2)
     T_c1c2.linear() = R_c1c2;
     T_c1c2.translation() = t_c1c2;
 
-    _T_b1b2 = _T_bc * T_c1c2 * _T_cb;
+    // _T_b1b2 = _T_bc * T_c1c2 * _T_cb;
+    _T_b1b2 = T_c1c2;
     
     _R_b1b2 = _T_b1b2.linear();
     _t_b1b2 = _T_b1b2.translation();
@@ -282,7 +294,7 @@ bool Pose::initialPoseEstimate(std::vector<cv::Point2f>& points_prev, std::vecto
         
         transformCamera2Body(R_c1c2, t_c1c2);
         
-        if ((!isValidRotation()) || (!isValidTranslation()))
+        if ((!isValidRotation()) || (!isValidTranslation() || _scale > 0.1))
             return false;
 
         return true;
@@ -342,6 +354,8 @@ geometry_msgs::PoseStamped Pose::toPoseStamped(std_msgs::Header header)
 
 geometry_msgs::PoseStamped Pose::toPoseStamped(std_msgs::Header header, Eigen::Affine3d T)
 {
+    // T = _T_bc * T * _T_cb;
+
     tf2::Stamped<Eigen::Affine3d> tf2_stamped_T(T, header.stamp, "relative_pose");
     geometry_msgs::PoseStamped stamped_pose_msg = tf2::toMsg(tf2_stamped_T);
 

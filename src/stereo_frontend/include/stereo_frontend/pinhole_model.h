@@ -91,8 +91,10 @@ private:
 	int _patch_width, _patch_height;
 
 	// Tranformation between cameras - Will be used for triangulation
-	cv::Mat _R_clcr, _t_clcr;
-	cv::Mat _R_crcl, _t_crcl;
+	cv::Mat _P_cl, _P_cr;	
+
+    Eigen::Affine3d _T_clcr;
+    Eigen::Affine3d _T_crcl;
 
 public:
 	StereoCameras(ros::NodeHandle nh, int grid_size) 
@@ -113,33 +115,51 @@ public:
 		nh.getParam("/stereo/rotation/r32", r32);
 		nh.getParam("/stereo/rotation/r33", r33);
 
-		_R_clcr = (cv::Mat_<double>(3,3) << r11, r12, r13,
-																				r21, r22, r23,
-																				r31, r32, r33);
-
 		double x, y, z;
 		nh.getParam("/stereo/translation/t1", x);
 		nh.getParam("/stereo/translation/t2", y);
 		nh.getParam("/stereo/translation/t3", z);
 
-		_t_clcr = (cv::Mat_<double>(3,1) << x, 
-																				y, 
-																				z);
+
+		_P_cl = cv::Mat::eye(cv::Size(4,3), CV_64FC1);
+		_P_cl = _camera_left.K_cv() * _P_cl;
+
+		_P_cr = cv::Mat::eye(cv::Size(4,3), CV_64FC1);
+		_P_cr.at<double>(0,3) = x;		
+		// _P_cr.at<double>(1,3) = y;		
+		// _P_cr.at<double>(2,3) = z;		
+		_P_cr = _camera_right.K_cv() * _P_cr;
 
 
-		_R_crcl = _R_clcr.t();
-		_t_crcl = -_t_clcr;
+		_T_clcr.linear() << r11, r12, r13,
+							r21, r22, r23,
+							r31, r32, r33;
+		_T_clcr.translation() << x, 
+								 y, 
+								 z;
+
+		_T_crcl.linear() << r11, r21, r31,
+							r12, r22, r32,
+							r13, r23, r33;
+		_T_crcl.translation() << -x, 
+								 -y, 
+								 -z;
+
 	};
 	~StereoCameras() {};
 
 	PinholeModel left()  {return _camera_left;};
 	PinholeModel right() {return _camera_right;};
 
-	cv::Mat getStereoRotation() {return _R_clcr;};
-	cv::Mat getStereoTranslation() {return _t_clcr;};
+	cv::Mat leftProjMat() {return _P_cl;};
+	cv::Mat rightProjMat() {return _P_cr;};
+	Eigen::Affine3d getStereoTransformation() {return _T_clcr;};
+	Eigen::Affine3d getInverseStereoTransformation() {return _T_crcl;};
 
 	void prepareImages(cv::Mat& img_left, cv::Mat& img_right);
-	void calculatePerspectiveMatrix(cv::Mat& P_l, cv::Mat& P_r);
+	cv::Mat createProjectionMatrix(Eigen::Affine3d T,
+                                   Eigen::Matrix3d K);
+
 };
 
 
@@ -153,35 +173,16 @@ void StereoCameras::prepareImages(cv::Mat& img_left, cv::Mat& img_right)
 }
 
 
-void StereoCameras::calculatePerspectiveMatrix(cv::Mat& P_l, cv::Mat& P_r)
+cv::Mat StereoCameras::createProjectionMatrix(Eigen::Affine3d T,
+											  Eigen::Matrix3d K)
 {
-	cv::Mat Rt_l = cv::Mat::eye(3, 4, CV_64FC1);
-	cv::Mat Rt_r = cv::Mat::eye(3, 4, CV_64FC1);
-	cv::hconcat(_R_clcr, _t_clcr, Rt_r);
-
-	// ROS_INFO_STREAM("_camera_left.K_cv()*Rt_l: " << _camera_left.K_cv()*Rt_l);
-	// ROS_INFO_STREAM("_camera_right.K_cv()*Rt_r: " << _camera_right.K_cv()*Rt_r);
-
-	// cv::Mat R, t, Q;
-	// cv::stereoRectify(_camera_left.K_cv(), 
-	// 									_camera_left.distortion(),
-	// 									_camera_right.K_cv(), 
-	// 									_camera_right.distortion(),
-	// 									cv::Size(_camera_left.getWidth(), _camera_left.getHeight()),
-	// 									_R_clcr,
-	// 									_t_clcr,
-	// 									R,
-	// 									t,
-	// 									P_l,
-	// 									P_r,
-	// 									Q);
-
-	// ROS_INFO_STREAM("R: " << R); 
-	// ROS_INFO_STREAM("t: " << t);
-
-	// ROS_INFO_STREAM("P_l: " << P_l);
-	// ROS_INFO_STREAM("P_r: " << P_r << "\n");
-	
-	P_l = _camera_left.K_cv()*Rt_l;
-	P_r = _camera_right.K_cv()*Rt_r;
+  cv::Mat R, t, Rt, K_cv;
+  Eigen::Matrix3d R_mat = T.linear();
+  Eigen::Vector3d t_mat = T.translation();
+  cv::eigen2cv(R_mat, R);
+  cv::eigen2cv(t_mat, t);
+  cv::eigen2cv(K, K_cv);
+  
+  cv::hconcat(R, t, Rt);
+  return K_cv*Rt;
 }

@@ -23,7 +23,8 @@
 /*** Classes ***/
 #include "stereo_frontend/feature_management.h"
 #include "stereo_frontend/pinhole_model.h"
-#include "stereo_frontend/pose_estimation.h"
+// #include "stereo_frontend/pose_estimation_eigen.h"
+#include "stereo_frontend/pose_estimation_cv.h"
 #include "stereo_frontend/support.h"
 #include "stereo_frontend/point_cloud_management.h"
 
@@ -179,23 +180,20 @@ class StereoFrontend
 
 
         /***** Point management *****/
-        // cv::Mat P_l, P_r;
-        // _stereo.calculatePerspectiveMatrix(P_l, P_r);
-        // _pcm.triangulate(match_left, match_right, P_l, P_r);
+        // _pcm.triangulate(match_left, match_right, _stereo.leftProjMat(), _stereo.rightProjMat(), _pose.getWorldTransformation());
+        _pcm.triangulate(match_left, match_right, _stereo.leftProjMat(), _stereo.rightProjMat(), _pose.getWorldRotation(), _pose.getWorldTranslation());
 
-        _pcm.triangulate(match_left, match_right, _stereo.getStereoRotation(), _stereo.getStereoTranslation(), _stereo.left().K_cv());
-        _pcm.setPointCloudHeader(cam_left->header);
+        // ROS_INFO_STREAM("cloud: \n" << _pcm.getPointCloud());
+        // ROS_INFO_STREAM("R_wb: \n" <<  _pose.getWorldRotation());
+        // ROS_INFO_STREAM("t_wb: \n" << _pose.getWorldTranslation());
 
         // TODO: MLPnP
-        // _pcm.setExtrinsics(_pose.getWorldRotation(), _pose.getWorldTranslation());
-
-
 
         /***** Publish *****/
+        _pcm.setPointCloudHeader(cam_left->header);
         _cloud_pub.publish(_pcm.toPointCloud2Msg(cam_left->header));
         _pose_relative_pub.publish(_pose.toPoseStamped(cam_left->header, _pose.getRelativeTransformation()));  
-        _pose_world_pub.publish(_pose.toPoseStamped(cam_left->header, _pose.getWorldTransformation()));  
-
+        _pose_world_pub.publish(_pose.toPoseStamped(cam_left->header, _pose.getWorldTransformation()));    
 
         /***** End-of-iteration updates *****/
         _pose.toFile();
