@@ -27,7 +27,7 @@
 #include "stereo_frontend/pose_estimation_cv.h"
 #include "stereo_frontend/support.h"
 #include "stereo_frontend/point_cloud_management.h"
-
+#include "motionBA/gtsam_pose_estimator.h"
 
 /*** PCL packages ***/
 // #include "pcl_ros/point_cloud.h"

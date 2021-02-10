@@ -24,6 +24,7 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(OpenCV 3.2 REQUIRED)
 find_package(Eigen3 3.3 REQUIRED)
 # find_package(opengv REQUIRED) 
+find_package(GTSAM REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -138,7 +139,7 @@ include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
-  # gtsam
+  gtsam
   # ${Boost_INCLUDE_DIRS}
   # ${PCL_INCLUDE_DIRS}
 )
@@ -175,7 +176,7 @@ add_executable(${PROJECT_NAME}_node src/stereo_frontend_node.cpp)
 target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
-  # gtsam
+  gtsam
   # Eigen3::Eigen 
   # Sophus::Sophus
   # ${Boost_FILESYSTEM_LIBRARY}
