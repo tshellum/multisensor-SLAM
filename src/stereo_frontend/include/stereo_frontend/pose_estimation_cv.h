@@ -22,6 +22,10 @@
 /*** Classes ***/
 #include "stereo_frontend/support.h"
 
+
+// TODO: #include "affine.hpp"
+// cv::Affine3d cv_T_W_V(cv_R_W_V, cv_t_W_V);
+
 class Pose
 {
 private:

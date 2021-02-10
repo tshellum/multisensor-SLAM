@@ -24,6 +24,8 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(OpenCV 3.2 REQUIRED)
 find_package(Eigen3 3.3 REQUIRED)
 # find_package(opengv REQUIRED) 
+# find_package(Sophus REQUIRED)
+# find_package(GTSAMCMakeTools)
 find_package(GTSAM REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -139,6 +141,8 @@ include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
+  # ${sophus_INCLUDE_DIRS}
+  # ${GTSAM_INCLUDE_DIRS}
   gtsam
   # ${Boost_INCLUDE_DIRS}
   # ${PCL_INCLUDE_DIRS}
@@ -176,6 +180,9 @@ add_executable(${PROJECT_NAME}_node src/stereo_frontend_node.cpp)
 target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
+  # ${sophus_LIBRARIES}
+  # ${GTSAM_LIBRARIES}
+  # Sophus::Sophus
   gtsam
   # Eigen3::Eigen 
   # Sophus::Sophus

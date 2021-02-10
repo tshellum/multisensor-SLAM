@@ -27,10 +27,8 @@
 #include "stereo_frontend/pose_estimation_cv.h"
 #include "stereo_frontend/support.h"
 #include "stereo_frontend/point_cloud_management.h"
-#include "motionBA/gtsam_pose_estimator.h"
+#include "motionBA/motionBA.h"
 
-/*** PCL packages ***/
-// #include "pcl_ros/point_cloud.h"
 
 class StereoFrontend
 {
@@ -51,23 +49,25 @@ class StereoFrontend
     ros::Publisher  _pose_world_pub;
 
     // Classes
-    StereoCameras     _stereo;
-    FeatureManager    _detector;
-    PointCloudManager _pcm;
-    Pose              _pose;
-    Pose              _ground_truth;
-    Pose              _ground_truth_kf;
+    StereoCameras        _stereo;
+    FeatureManager       _detector;
+    PointCloudManager    _pcm;
+    Pose                 _pose;
+    Pose                 _ground_truth;
+    Pose                 _ground_truth_kf;
+    MotionBundleAdjuster _motionBA;
 
     // Parameters
     int _tic, _toc;
-    bool _initialized;
+    bool _processed_first_frame, _initialized;
 
   public:
     StereoFrontend() 
     : _stereo(_nh, 10),
       _pose(_nh, "stamped_traj_estimate.txt"), _ground_truth(_nh, "stamped_groundtruth.txt"), _ground_truth_kf(_nh, "stamped_groundtruth.txt"),
       _detector(_nh, "camera_left", 10, 10, 25, 10), 
-      _initialized(false)
+      _motionBA(_stereo.left().K_eig()),
+      _processed_first_frame(false), _initialized(false)
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       _sub_cam_left.subscribe(_nh, "cam_left", 1);
@@ -113,81 +113,88 @@ class StereoFrontend
 
     void callback(const sensor_msgs::ImageConstPtr &cam_left, const sensor_msgs::ImageConstPtr &cam_right)
     {
-      /***** Initialize *****/
-      // if ((!_initialized) || !_pose.isSet())
-      if (!_initialized) 
+      /***** Initialize *****/     
+      _tic = cv::getTickCount();
+
+      _pose.readTimestamp(ros::Time::now().toSec()); 
+      _pose.estimateScaleFromGNSS(_ground_truth.getWorldTranslation(), _ground_truth_kf.getWorldTranslation());
+
+      _ground_truth_kf = _ground_truth;
+
+      //Frames
+      cv_bridge::CvImagePtr cv_ptr_left;
+      cv_bridge::CvImagePtr cv_ptr_right;
+      try
       {
-        init_cb(cam_left, cam_right);
-        _initialized = true;
-        ROS_INFO("Initialized");
+        cv_ptr_left  = cv_bridge::toCvCopy(cam_left, sensor_msgs::image_encodings::MONO8);
+        cv_ptr_right = cv_bridge::toCvCopy(cam_right, sensor_msgs::image_encodings::MONO8);
       }
-      else
-      {         
-        _tic = cv::getTickCount();
+      catch (cv_bridge::Exception& e)
+      {
+        ROS_ERROR("cv_bridge exception: %s", e.what());
+        return;
+      }
 
-        _pose.readTimestamp(ros::Time::now().toSec()); 
-        _pose.estimateScaleFromGNSS(_ground_truth.getWorldTranslation(), _ground_truth_kf.getWorldTranslation());
-
-        _ground_truth_kf = _ground_truth;
-
-        //Frames
-        cv_bridge::CvImagePtr cv_ptr_left;
-        cv_bridge::CvImagePtr cv_ptr_right;
-        try
-        {
-          cv_ptr_left  = cv_bridge::toCvCopy(cam_left, sensor_msgs::image_encodings::MONO8);
-          cv_ptr_right = cv_bridge::toCvCopy(cam_right, sensor_msgs::image_encodings::MONO8);
-        }
-        catch (cv_bridge::Exception& e)
-        {
-          ROS_ERROR("cv_bridge exception: %s", e.what());
-          return;
-        }
-
-        _stereo.prepareImages(cv_ptr_left->image, cv_ptr_right->image);
-        _detector.initiateFrames(cv_ptr_left->image, cv_ptr_right->image);
+      _stereo.prepareImages(cv_ptr_left->image, cv_ptr_right->image);
+      _detector.initiateFrames(cv_ptr_left->image, cv_ptr_right->image);
 
 
-        /***** Feature management *****/
+      if (_processed_first_frame) 
+      {
+        /***** Pose estimation *****/
         // Track features for initial pose estimate
         std::vector<cv::KeyPoint> tracked_prev = _detector.getPrevFeaturesLeft();
         std::vector<cv::KeyPoint> tracked_cur;
         if (! tracked_prev.empty())
+        {
           _detector.track(_detector.getPrevImageLeft(), _detector.getCurImageLeft(), tracked_prev, tracked_cur);
-        
-        // Manage features for stereo analysis
-        _detector.trackBuckets();
-        _detector.bucketedFeatureDetection(true);    
+        }
 
-        ROS_INFO_STREAM("Detect - number of features: " << _detector.getNumFeaturesLeftCur());
-        displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());
-
-        // Match features
-        std::vector<cv::KeyPoint> match_left, match_right;
-        _detector.circularMatching(match_left, match_right);
-
-        // ROS_INFO_STREAM("Match - number of features: " << match_left.size());
-        // displayWindowFeatures(_detector.getCurImageLeft(), match_left, _detector.getCurImageRight(), match_right, "Matches");
-
-
-        /***** Pose estimation *****/
         std::vector<cv::Point2f> points_prev, points_cur;
         cv::KeyPoint::convert(tracked_prev, points_prev);
         cv::KeyPoint::convert(tracked_cur, points_cur);
         
-        bool valid_pose = _pose.initialPoseEstimate(points_prev, points_cur, _stereo.left().K_cv());
+        _pose.initialPoseEstimate(points_prev, points_cur, _stereo.left().K_cv());
         _pose.updatePose();
 
 
-        /***** Point management *****/
-        // _pcm.triangulate(match_left, match_right, _stereo.leftProjMat(), _stereo.rightProjMat(), _pose.getWorldTransformation());
+        // Refine pose estimate
+        if (_initialized)
+        {
+          PoseEstimate init_pose_estimate(points_cur, _pcm.getWorldPoints(), _pose.getWorldTransformation());
+
+          ROS_INFO("-------------------------------------------------");
+          ROS_INFO_STREAM("init_pose_estimate.linear(): \n" << init_pose_estimate.T_wb.linear());
+          ROS_INFO_STREAM("init_pose_estimate.translation(): \n" << init_pose_estimate.T_wb.translation());
+
+          init_pose_estimate = _motionBA.estimate(init_pose_estimate);
+        
+          ROS_INFO_STREAM("refined.linear(): \n" << init_pose_estimate.T_wb.linear());
+          ROS_INFO_STREAM("refined.translation(): \n" << init_pose_estimate.T_wb.translation());
+          ROS_INFO("-------------------------------------------------");
+        }
+        
+      }
+
+
+      /***** Feature management *****/
+      // Manage features for stereo analysis
+      _detector.trackBuckets();
+      _detector.bucketedFeatureDetection(true);    
+
+      ROS_INFO_STREAM("Detect - number of features: " << _detector.getNumFeaturesLeftCur());
+      displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());
+
+
+      /***** Point management *****/
+      if (_processed_first_frame) 
+      {
+        // Match features for triangulation
+        std::vector<cv::KeyPoint> match_left, match_right;
+        _detector.circularMatching(match_left, match_right);
+
         _pcm.triangulate(match_left, match_right, _stereo.leftProjMat(), _stereo.rightProjMat(), _pose.getWorldRotation(), _pose.getWorldTranslation());
 
-        // ROS_INFO_STREAM("cloud: \n" << _pcm.getPointCloud());
-        // ROS_INFO_STREAM("R_wb: \n" <<  _pose.getWorldRotation());
-        // ROS_INFO_STREAM("t_wb: \n" << _pose.getWorldTranslation());
-
-        // TODO: MLPnP
 
         /***** Publish *****/
         _pcm.setPointCloudHeader(cam_left->header);
@@ -197,69 +204,21 @@ class StereoFrontend
 
         /***** End-of-iteration updates *****/
         _pose.toFile();
-        // _ground_truth_kf.toFile();
 
-        _detector.updatePrevFrames();
-
-        _toc = cv::getTickCount();
-        ROS_INFO_STREAM("Time per iteration: " <<  (_toc - _tic)/ cv::getTickFrequency() << "\n");
+        _initialized = true;
       }
+
+      _detector.updatePrevFrames(); 
+      _processed_first_frame = true;
+
+      _toc = cv::getTickCount();
+      ROS_INFO_STREAM("Time per iteration: " <<  (_toc - _tic)/ cv::getTickFrequency() << "\n");
     }
-
-
-
-
-    /*****************************************************************************************************************/
-
-
-
-
-
-    // To initialize: basicly same as main loop
-    void init_cb(const sensor_msgs::ImageConstPtr &cam_left, const sensor_msgs::ImageConstPtr &cam_right)
-    {
-      _ground_truth_kf = _ground_truth;
-
-      //Frames
-      cv_bridge::CvImagePtr cv_ptr_left;
-      cv_bridge::CvImagePtr cv_ptr_right;
-      try
-      {
-      	cv_ptr_left  = cv_bridge::toCvCopy(cam_left, sensor_msgs::image_encodings::MONO8);
-      	cv_ptr_right = cv_bridge::toCvCopy(cam_right, sensor_msgs::image_encodings::MONO8);
-      }
-      catch (cv_bridge::Exception& e)
-      {
-      	ROS_ERROR("cv_bridge exception: %s", e.what());
-      	return;
-      }
-
-      _stereo.prepareImages(cv_ptr_left->image, cv_ptr_right->image);
-    	_detector.initiateFrames(cv_ptr_left->image, cv_ptr_right->image);
-
-
-      /***** Feature management *****/
-      // Manage features for stereo analysis
-      _detector.trackBuckets();
-      _detector.bucketedFeatureDetection(true);    
-
-      // ROS_INFO_STREAM("Detect - number of features: " << _detector.getNumFeaturesLeftCur());
-      // displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());
-
-      // Match features
-      // std::vector<cv::KeyPoint> match_left, match_right;
-      // _detector.circularMatching(match_left, match_right);
-
-      // ROS_INFO_STREAM("Match - number of features: " << match_left.size());
-      // displayWindowFeatures(_detector.getCurImageLeft(), match_left, _detector.getCurImageRight(), match_right, "Matches");
-
-
-      /***** End-of-iteration updates *****/
-      _detector.updatePrevFrames();    
-    }
-
 
 };
+
+
+
 
 int main(int argc, char **argv)
 {
@@ -271,7 +230,3 @@ int main(int argc, char **argv)
 
   ros::spin();
 }
-
-
-
-
