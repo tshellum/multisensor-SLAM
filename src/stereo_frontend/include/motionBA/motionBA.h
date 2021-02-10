@@ -68,10 +68,6 @@ PoseEstimate MotionBundleAdjuster::estimate(PoseEstimate init_estimate)
   gtsam::Values initial;
   initial.insert(X(1), gtsam::Pose3(gtsam::Rot3(init_pose.linear()), init_pose.translation()));
 
-  // const auto& init_pose = init_estimate.pose_W_C;
-  // gtsam::Values initial;
-  // initial.insert(X(1), gtsam::Pose3(gtsam::Rot3(init_pose.rotationMatrix()), init_pose.translation()));
-
   // Find the optimal camera pose given correspondences and assumed noise model.
   gtsam::Values result;
   try
@@ -86,6 +82,5 @@ PoseEstimate MotionBundleAdjuster::estimate(PoseEstimate init_estimate)
 
   // Update pose estimate.
   init_estimate.T_wb = Eigen::Affine3d{result.at<gtsam::Pose3>(X(1)).matrix()};
-  // init_estimate.pose_W_C = Sophus::SE3d{result.at<gtsam::Pose3>(X(1)).matrix()};
   return init_estimate;
 }

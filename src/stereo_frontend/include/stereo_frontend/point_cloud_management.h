@@ -218,17 +218,17 @@ void PointCloudManager::triangulate(std::vector<cv::KeyPoint> match_left,
 
     if (pt3D.at<double>(2) > 0)
     {
+      cv::Point3f pt_cv;
+      pt_cv.x = pt3D.at<double>(0);
+      pt_cv.y = pt3D.at<double>(1);
+      pt_cv.z = pt3D.at<double>(2);
+
       pt3D = t_wb + R_wb*pt3D;    
 
       pcl::PointXYZ pt;
       pt.x = pt3D.at<double>(0);
       pt.y = pt3D.at<double>(1);
       pt.z = pt3D.at<double>(2);
-
-      cv::Point3f pt_cv;
-      pt_cv.x = pt3D.at<double>(0);
-      pt_cv.y = pt3D.at<double>(1);
-      pt_cv.z = pt3D.at<double>(2);
 
       _pc.cloud->points.push_back(pt);
       _pc.cloud_cv.push_back(pt_cv);

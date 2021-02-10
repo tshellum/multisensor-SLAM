@@ -202,7 +202,7 @@ cv::Mat Pose::constructTransformation(cv::Mat R, cv::Mat t)
 // TODO: Skrive om til transformasjoner
 void Pose::updatePose()
 {
-    _t_wb = (_t_wb + _R_wb * _t_b1b2 * _scale); 
+    _t_wb = (_t_wb + _R_wb * _t_b1b2); 
 	_R_wb = _R_wb * _R_b1b2;
     
     _T_wb = constructTransformation(_R_wb, _t_wb);
@@ -285,9 +285,10 @@ bool Pose::initialPoseEstimate(std::vector<cv::Point2f>& points_prev, std::vecto
         E = cv::findEssentialMat(points_prev, points_cur, K, cv::RANSAC, 0.999, 1.0, inliers); 
         removeRANSACoutliers(inliers, points_prev, points_cur);	// Track + match
         cv::recoverPose(E, points_prev, points_cur, K, _R_b1b2, _t_b1b2); // z = viewer direction, x and y follows camera frame
-
+        _t_b1b2 *= _scale;
+       
         _T_b1b2 = constructTransformation(_R_b1b2, _t_b1b2);
-        _T_b1b2 = _T_cam * _T_b1b2 * _T_cam;
+        // _T_b1b2 = _T_cam * _T_b1b2 * _T_cam;
         _R_b1b2 = getRotation(_T_b1b2);
         _t_b1b2 = getTranslation(_T_b1b2);
 

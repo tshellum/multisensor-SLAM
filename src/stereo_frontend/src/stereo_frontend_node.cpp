@@ -161,7 +161,7 @@ class StereoFrontend
         // Refine pose estimate
         if (_initialized)
         {
-          PoseEstimate init_pose_estimate(points_cur, _pcm.getWorldPoints(), _pose.getWorldTransformation());
+          PoseEstimate init_pose_estimate(points_cur, _pcm.getWorldPoints(), _pose.getRelativeTransformation());
 
           ROS_INFO("-------------------------------------------------");
           ROS_INFO_STREAM("init_pose_estimate.linear(): \n" << init_pose_estimate.T_wb.linear());

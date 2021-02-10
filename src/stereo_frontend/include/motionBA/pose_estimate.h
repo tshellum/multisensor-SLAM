@@ -17,14 +17,6 @@ struct PoseEstimate
 
   PoseEstimate() {};
 
-  PoseEstimate(std::vector<cv::Point2f> image_points, std::vector<cv::Point3f> world_points)
-  : image_inlier_points(image_points), world_inlier_points(world_points) 
-  {};
-
-  // PoseEstimate(std::vector<cv::Point2f> image_points, std::vector<cv::Point3f> world_points, Sophus::SE3d pose)
-  // : image_inlier_points(image_points), world_inlier_points(world_points), pose_W_C(pose) 
-  // {};
-
   PoseEstimate(std::vector<cv::Point2f> image_points, std::vector<cv::Point3f> world_points, cv::Mat T)
   : image_inlier_points(image_points), world_inlier_points(world_points) 
   {
