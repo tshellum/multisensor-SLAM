@@ -27,7 +27,7 @@ private:
 public:
   Viewer()
   {
-    _pose_sub.subscribe(_nh, "pose_relative_topic", 1);
+    _pose_sub.subscribe(_nh, "pose_topic", 1);
     _cloud_sub.subscribe(_nh, "point_cloud_topic", 1);
     _sync.reset(new Sync(SyncPolicy(10), _pose_sub, _cloud_sub));
     _sync->registerCallback(boost::bind(&Viewer::callback, this, _1, _2));

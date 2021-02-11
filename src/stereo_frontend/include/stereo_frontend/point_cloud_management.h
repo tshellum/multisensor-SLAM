@@ -261,7 +261,7 @@ void PointCloudManager::triangulate(std::vector<cv::KeyPoint> match_left,
   cv::triangulatePoints(P_cl, P_cr, point2D_left, point2D_right, point3D_homogenous); // https://gist.github.com/cashiwamochi/8ac3f8bab9bf00e247a01f63075fedeb
 
   int n_err = 0;
-  for(int i = 0; i < point2D_left.size()/2; i++)
+  for(int i = 0; i < point2D_left.size(); i++)
   {
     // cv::convertPointsFromHomogeneous(point3D_homogenous.col(i).t(), pt3D);
     // cv::Mat pt3D = DLT(point2D_left[i], point2D_right[i], P_l, P_r);

@@ -201,8 +201,8 @@ class StereoFrontend
       _detector.trackBuckets();
       _detector.bucketedFeatureDetection(true);    
 
-      ROS_INFO_STREAM("Detect - number of features: " << _detector.getNumFeaturesLeftCur());
-      displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());
+      // ROS_INFO_STREAM("Detect - number of features: " << _detector.getNumFeaturesLeftCur());
+      // displayWindowFeatures(_detector.getCurImageLeft(), _detector.getCurFeaturesLeft());
 
 
       /***** Point management *****/
