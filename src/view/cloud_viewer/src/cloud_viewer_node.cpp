@@ -37,7 +37,8 @@ public:
 
   void callback(const geometry_msgs::PoseStampedConstPtr &pose_msg, const sensor_msgs::PointCloud2ConstPtr &cloud_msg)
   {
-    viz.updatePose(*pose_msg);
+    // viz.updatePoseRelative(*pose_msg);
+    viz.updatePoseWorld(*pose_msg);
     viz.readCloud(*cloud_msg);
     viz.setEnvironment();
     viz.addCamera();

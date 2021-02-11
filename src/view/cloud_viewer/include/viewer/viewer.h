@@ -67,7 +67,8 @@ public:
 	};
 	~Visualization() {};
 
-	void updatePose(const geometry_msgs::PoseStamped msg);
+	void updatePoseRelative(const geometry_msgs::PoseStamped msg);
+	void updatePoseWorld(const geometry_msgs::PoseStamped msg);
 
 	void readCloud(const sensor_msgs::PointCloud2 msg);
 	void addCamera();
@@ -80,12 +81,24 @@ public:
 };
 
 
-void Visualization::updatePose(const geometry_msgs::PoseStamped msg)
+void Visualization::updatePoseRelative(const geometry_msgs::PoseStamped msg)
 {
 	Eigen::Affine3d T_b1b2;
 	tf2::fromMsg(msg.pose, T_b1b2);
 
 	_T_wb = _T_wb * T_b1b2;
+	_t_wb = _T_wb.translation();
+	_R_wb = _T_wb.linear();
+	_q_wb = _R_wb;
+}
+
+
+void Visualization::updatePoseWorld(const geometry_msgs::PoseStamped msg)
+{
+	Eigen::Affine3d T_wb;
+	tf2::fromMsg(msg.pose, T_wb);
+
+	_T_wb = T_wb;
 	_t_wb = _T_wb.translation();
 	_R_wb = _T_wb.linear();
 	_q_wb = _R_wb;

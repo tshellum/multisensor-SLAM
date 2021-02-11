@@ -178,7 +178,7 @@ void FeatureManager::bucketedFeatureDetection(bool use_existing_features = false
             {
                 for (cv::KeyPoint& new_feature : patch_features)
                 {   
-                    new_feature.class_id += _n_id++; 
+                    new_feature.class_id = _n_id++; 
                 }
                 _feature_buckets.push_back(patch_features);
 
@@ -217,7 +217,7 @@ void FeatureManager::bucketedFeatureDetection(bool use_existing_features = false
                         continue;
                 }
 
-                new_feature.class_id += _n_id++; 
+                new_feature.class_id = _n_id++; 
                 _feature_buckets[it_bucket].push_back(new_feature);
 
                 // Correct for patch position

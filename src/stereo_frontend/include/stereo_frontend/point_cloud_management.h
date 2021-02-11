@@ -22,14 +22,16 @@
 
 struct PointCloudFrame 
 {
-    std::vector<cv::Point3f> cloud_cv;
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
+    std::vector<cv::Point3f> cloud_cv;
+    std::vector<int> ids;
     Eigen::Matrix3d R_wb;
     Eigen::Vector3d t_wb;
-    int id;
+    int id_point_cloud;
 
     PointCloudFrame() : cloud(new pcl::PointCloud<pcl::PointXYZ>) {};
 };
+
 
 
 class PointCloudManager
@@ -42,6 +44,10 @@ public:
 
 		std::vector<cv::Point3f> getWorldPoints() {return _pc.cloud_cv;};
 		pcl::PointCloud<pcl::PointXYZ> getPointCloud() {return *_pc.cloud;};
+
+    void filterCorrespondences(std::vector<cv::KeyPoint> kpts_prev, std::vector<cv::KeyPoint> kpts_cur,
+                               std::vector<cv::Point2f>& img_pts_prev, std::vector<cv::Point2f>& img_pts_cur, 
+                               std::vector<cv::Point3f>& world_pts_prev);
 
     void setPointCloudHeader(std_msgs::Header header);
     void setExtrinsics(Eigen::Matrix3d R_wb, Eigen::Vector3d t_wb);
@@ -79,6 +85,53 @@ public:
 
     sensor_msgs::PointCloud2 toPointCloud2Msg(std_msgs::Header header);
 };
+
+
+
+void PointCloudManager::filterCorrespondences(std::vector<cv::KeyPoint> kpts_prev, std::vector<cv::KeyPoint> kpts_cur,
+                                              std::vector<cv::Point2f>& img_pts_prev, std::vector<cv::Point2f>& img_pts_cur, 
+                                              std::vector<cv::Point3f>& world_pts_prev)
+{
+  // for(int i = 0; i < kpts_cur.size(); i++)
+  // {
+  //   ROS_INFO_STREAM("kpts_prev[i].class_id: \n" << kpts_prev[i].class_id);
+  //   ROS_INFO_STREAM("kpts_cur[i].class_id: \n" << kpts_cur[i].class_id);
+  // }
+
+  if (_pc.ids.size())
+  {
+    // ROS_INFO_STREAM("filterCorrespondences - _pc.ids.size(): " << _pc.ids.size());
+    // ROS_INFO_STREAM("img_pts_prev.size(): " << img_pts_prev.size());
+
+    for(int i = 0; i < kpts_cur.size(); i++)
+    {
+      for(int j = 0; j < _pc.ids.size(); j++)
+      {
+        if(kpts_cur[i].class_id == _pc.ids[j])
+        {
+          img_pts_prev.push_back(kpts_prev[i].pt);
+          img_pts_cur.push_back(kpts_cur[i].pt);
+          world_pts_prev.push_back(_pc.cloud_cv[j]);
+          
+          break;
+        }
+      }
+    }
+  }
+  else
+  {
+    // ROS_INFO("filterCorrespondences - else");
+
+    cv::KeyPoint::convert(kpts_prev, img_pts_prev);
+    cv::KeyPoint::convert(kpts_cur, img_pts_cur);
+  }
+
+  // ROS_INFO_STREAM("img_pts_prev.size(): " << img_pts_prev.size());
+  // ROS_INFO_STREAM("img_pts_cur.size(): " << img_pts_cur.size());
+  // ROS_INFO_STREAM("world_pts_prev.size(): " << world_pts_prev.size());
+
+}
+
 
 void PointCloudManager::setPointCloudHeader(std_msgs::Header header)
 {
@@ -179,7 +232,7 @@ void PointCloudManager::triangulate(std::vector<cv::KeyPoint> match_left,
 
       _pc.cloud->points.push_back(pt);
       _pc.cloud_cv.push_back(pt_cv);
-      
+      _pc.ids.push_back(match_left[i].class_id);
     }
     else
     {
@@ -197,6 +250,8 @@ void PointCloudManager::triangulate(std::vector<cv::KeyPoint> match_left,
                                     cv::Mat t_wb)
 {
   _pc.cloud->clear();
+  _pc.cloud_cv.clear();
+  _pc.ids.clear();
 
   std::vector<cv::Point2f> point2D_left, point2D_right;
   cv::KeyPoint::convert(match_left, point2D_left);
@@ -206,14 +261,14 @@ void PointCloudManager::triangulate(std::vector<cv::KeyPoint> match_left,
   cv::triangulatePoints(P_cl, P_cr, point2D_left, point2D_right, point3D_homogenous); // https://gist.github.com/cashiwamochi/8ac3f8bab9bf00e247a01f63075fedeb
 
   int n_err = 0;
-  for(int i = 0; i < point2D_left.size(); i++)
+  for(int i = 0; i < point2D_left.size()/2; i++)
   {
     // cv::convertPointsFromHomogeneous(point3D_homogenous.col(i).t(), pt3D);
     // cv::Mat pt3D = DLT(point2D_left[i], point2D_right[i], P_l, P_r);
 
     cv::Mat pt3Dh = point3D_homogenous.col(i); 
     cv::Mat pt3Dc = pt3Dh.rowRange(0,3)/pt3Dh.at<float>(3); // / Homogenous to cartesian
-    cv::Mat pt3D; // / Homogenous to cartesian
+    cv::Mat pt3D; 
     pt3Dc.convertTo(pt3D, CV_64FC1);
 
     if (pt3D.at<double>(2) > 0)
@@ -232,6 +287,7 @@ void PointCloudManager::triangulate(std::vector<cv::KeyPoint> match_left,
 
       _pc.cloud->points.push_back(pt);
       _pc.cloud_cv.push_back(pt_cv);
+      _pc.ids.push_back(match_left[i].class_id);
     }
     else
     {
@@ -368,7 +424,7 @@ sensor_msgs::PointCloud2 PointCloudManager::toPointCloud2Msg(std_msgs::Header he
     pcl::PointXYZ pt;
     pt.x = _pc.cloud->points[n].z;
     pt.y = _pc.cloud->points[n].x;
-    pt.z = _pc.cloud->points[n].y;
+    pt.z = -_pc.cloud->points[n].y;
 
     cloud_bodyframe.points.push_back(pt);
 	}

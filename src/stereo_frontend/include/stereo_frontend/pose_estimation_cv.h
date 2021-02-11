@@ -147,8 +147,8 @@ public:
     bool isValidRotation(double thresh);
     bool isValidTranslation(double thresh);
     void removeRANSACoutliers(cv::Mat inliers, std::vector<cv::Point2f>& points1, std::vector<cv::Point2f>& points2);
-    bool initialPoseEstimate(std::vector<cv::Point2f>& points_prev, std::vector<cv::Point2f>& points_cur, cv::Mat K);
-    bool PnP(std::vector<cv::Point2f> img_pts, std::vector<cv::Point3f> world_pts, cv::Mat K, cv::Mat distortion);
+    bool initialPoseEstimate(std::vector<cv::Point2f> points_prev, std::vector<cv::Point2f> points_cur, cv::Mat K);
+    cv::Affine3d PnP(std::vector<cv::Point2f> img_pts, std::vector<cv::Point3f> world_pts, cv::Mat K, cv::Mat distortion);
     void updatePose();
 
     void toFile();
@@ -245,6 +245,7 @@ bool Pose::isValidRotation(double thresh = M_PI/3)
     double phi   = euler.at<double>(0);
     double theta = euler.at<double>(1);
     double psi   = euler.at<double>(2);
+
     return (-thresh <= phi && phi <= thresh) && (-thresh <= theta && theta <= thresh) && (-thresh <= psi && psi <= thresh);
 }
 
@@ -255,7 +256,8 @@ bool Pose::isValidTranslation(double thresh = 0.8)
     double y = _t_b1b2.at<double>(1);
     double z = _t_b1b2.at<double>(2);
 
-    return (-thresh <= y && y <= thresh) && (0 <= x); 
+    // return (-thresh <= y && y <= thresh) && (0 <= x); 
+    return (-thresh <= x && x <= thresh) && (0 <= z); 
 }
 
 
@@ -276,7 +278,7 @@ void Pose::removeRANSACoutliers(cv::Mat inliers, std::vector<cv::Point2f>& point
 }
 
 
-bool Pose::initialPoseEstimate(std::vector<cv::Point2f>& points_prev, std::vector<cv::Point2f>& points_cur, cv::Mat K)
+bool Pose::initialPoseEstimate(std::vector<cv::Point2f> points_prev, std::vector<cv::Point2f> points_cur, cv::Mat K)
 {
     if (points_cur.size() >= 8) // 5 for Essential, 8 for fundamental
     {
@@ -288,11 +290,11 @@ bool Pose::initialPoseEstimate(std::vector<cv::Point2f>& points_prev, std::vecto
         _t_b1b2 *= _scale;
        
         _T_b1b2 = constructTransformation(_R_b1b2, _t_b1b2);
-        // _T_b1b2 = _T_cam * _T_b1b2 * _T_cam;
+        _T_b1b2 = _T_cam * _T_b1b2 * _T_cam;
         _R_b1b2 = getRotation(_T_b1b2);
         _t_b1b2 = getTranslation(_T_b1b2);
 
-        if ((!isValidRotation()) || (!isValidTranslation() || _scale > 0.1))
+        if ((!isValidRotation()) || (!isValidTranslation() || _scale < 0.1))
             return false;
 
         return true;
@@ -305,12 +307,14 @@ bool Pose::initialPoseEstimate(std::vector<cv::Point2f>& points_prev, std::vecto
     
 }
 
-bool Pose::PnP(std::vector<cv::Point2f> img_pts, std::vector<cv::Point3f> world_pts, cv::Mat K, cv::Mat distortion)
+cv::Affine3d Pose::PnP(std::vector<cv::Point2f> img_pts, std::vector<cv::Point3f> world_pts, cv::Mat K, cv::Mat distortion)
 {
     cv::Mat R,t;
-    // cv::solvePnP(world_pts, img_pts, K, distortion, R, t, false, cv::SOLVEPNP_EPNP);
-    
-    return false;
+    cv::solvePnP(world_pts, img_pts, K, distortion, R, t, false, cv::SOLVEPNP_EPNP);
+    t*=_scale;
+
+    cv::Affine3d T = cv::Affine3d(R, t);
+    return T;
 }
 
 

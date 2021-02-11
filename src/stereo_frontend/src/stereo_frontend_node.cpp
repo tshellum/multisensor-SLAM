@@ -60,6 +60,7 @@ class StereoFrontend
     // Parameters
     int _tic, _toc;
     bool _processed_first_frame, _initialized;
+    bool _valid_estimate;
 
   public:
     StereoFrontend() 
@@ -67,7 +68,8 @@ class StereoFrontend
       _pose(_nh, "stamped_traj_estimate.txt"), _ground_truth(_nh, "stamped_groundtruth.txt"), _ground_truth_kf(_nh, "stamped_groundtruth.txt"),
       _detector(_nh, "camera_left", 10, 10, 25, 10), 
       _motionBA(_stereo.left().K_eig()),
-      _processed_first_frame(false), _initialized(false)
+      _processed_first_frame(false), _initialized(false),
+      _valid_estimate(true)
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       _sub_cam_left.subscribe(_nh, "cam_left", 1);
@@ -119,8 +121,6 @@ class StereoFrontend
       _pose.readTimestamp(ros::Time::now().toSec()); 
       _pose.estimateScaleFromGNSS(_ground_truth.getWorldTranslation(), _ground_truth_kf.getWorldTranslation());
 
-      _ground_truth_kf = _ground_truth;
-
       //Frames
       cv_bridge::CvImagePtr cv_ptr_left;
       cv_bridge::CvImagePtr cv_ptr_right;
@@ -150,28 +150,47 @@ class StereoFrontend
           _detector.track(_detector.getPrevImageLeft(), _detector.getCurImageLeft(), tracked_prev, tracked_cur);
         }
 
-        std::vector<cv::Point2f> points_prev, points_cur;
-        cv::KeyPoint::convert(tracked_prev, points_prev);
-        cv::KeyPoint::convert(tracked_cur, points_cur);
-        
-        _pose.initialPoseEstimate(points_prev, points_cur, _stereo.left().K_cv());
-        _pose.updatePose();
+        std::vector<cv::Point2f> img_pts_prev, img_pts_cur;
+        std::vector<cv::Point3f> world_pts_prev;
+        // cv::KeyPoint::convert(tracked_prev, img_pts_prev);
+        // cv::KeyPoint::convert(tracked_cur, img_pts_cur);
 
+        _pcm.filterCorrespondences(tracked_prev, tracked_cur, img_pts_prev, img_pts_cur, world_pts_prev);
+          
+        _valid_estimate = _pose.initialPoseEstimate(img_pts_prev, img_pts_cur, _stereo.left().K_cv());
+        if (_valid_estimate)
+        {
+          _pose.updatePose();
+          _ground_truth_kf = _ground_truth;
+        }
 
         // Refine pose estimate
         if (_initialized)
         {
-          PoseEstimate init_pose_estimate(points_cur, _pcm.getWorldPoints(), _pose.getRelativeTransformation());
+          // PoseEstimate init_pose_estimate(img_pts_prev, world_pts_prev, _pose.getRelativeTransformation());
+          // PoseEstimate init_pose_estimate(img_pts_prev, _pcm.getWorldPoints(), _pose.getRelativeTransformation());
 
-          ROS_INFO("-------------------------------------------------");
-          ROS_INFO_STREAM("init_pose_estimate.linear(): \n" << init_pose_estimate.T_wb.linear());
-          ROS_INFO_STREAM("init_pose_estimate.translation(): \n" << init_pose_estimate.T_wb.translation());
+          // ROS_INFO("-------------------------------------------------");
+          // ROS_INFO_STREAM("_pcm.getWorldPoints().size(): \n" << _pcm.getWorldPoints().size());
+          // ROS_INFO_STREAM("init_pose_estimate.linear(): \n" << init_pose_estimate.T_wb.linear());
+          // ROS_INFO_STREAM("init_pose_estimate.translation(): \n" << init_pose_estimate.T_wb.translation());
 
-          init_pose_estimate = _motionBA.estimate(init_pose_estimate);
-        
-          ROS_INFO_STREAM("refined.linear(): \n" << init_pose_estimate.T_wb.linear());
-          ROS_INFO_STREAM("refined.translation(): \n" << init_pose_estimate.T_wb.translation());
-          ROS_INFO("-------------------------------------------------");
+          // init_pose_estimate = _motionBA.estimate(init_pose_estimate);
+
+          // ROS_INFO_STREAM("refined.linear(): \n" << init_pose_estimate.T_wb.linear());
+          // ROS_INFO_STREAM("refined.translation(): \n" << init_pose_estimate.T_wb.translation());
+          // ROS_INFO("-------------------------------------------------");
+
+          // ROS_INFO("-------------------------------------------------");
+          // ROS_INFO_STREAM("init_pose_estimate.linear(): \n" << init_pose_estimate.T_wb.linear());
+          // ROS_INFO_STREAM("init_pose_estimate.translation(): \n" << init_pose_estimate.T_wb.translation());
+
+          // cv::Affine3d T = _pose.PnP(img_pts_cur, world_pts_prev, _stereo.left().K_cv(), _stereo.left().distortion());
+
+          // ROS_INFO_STREAM("T.linear(): \n" << T.linear());
+          // ROS_INFO_STREAM("T.translation(): \n" << T.translation());
+          // ROS_INFO("-------------------------------------------------");
+
         }
         
       }
@@ -197,14 +216,16 @@ class StereoFrontend
 
 
         /***** Publish *****/
-        _pcm.setPointCloudHeader(cam_left->header);
-        _cloud_pub.publish(_pcm.toPointCloud2Msg(cam_left->header));
-        _pose_relative_pub.publish(_pose.toPoseStamped(cam_left->header, _pose.getRelativeTransformation()));  
-        _pose_world_pub.publish(_pose.toPoseStamped(cam_left->header, _pose.getWorldTransformation()));    
+        if (_valid_estimate)
+        {
+          _pcm.setPointCloudHeader(cam_left->header);
+          _cloud_pub.publish(_pcm.toPointCloud2Msg(cam_left->header));
+          _pose_relative_pub.publish(_pose.toPoseStamped(cam_left->header, _pose.getRelativeTransformation()));  
+          _pose_world_pub.publish(_pose.toPoseStamped(cam_left->header, _pose.getWorldTransformation()));    
 
-        /***** End-of-iteration updates *****/
-        _pose.toFile();
-
+          /***** End-of-iteration updates *****/
+          _pose.toFile();
+        }
         _initialized = true;
       }
 
