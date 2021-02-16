@@ -3,10 +3,13 @@
 #include <tf2_ros/transform_listener.h>
 #include <sensor_msgs/NavSatFix.h>
 
-#include <gtsam/navigation/GPSFactor.h>
-#include <gtsam/inference/Symbol.h>
-
-
+// #include <gtsam/navigation/GPSFactor.h>
+#include <gtsam/slam/PriorFactor.h> 
+#include <gtsam/nonlinear/NonlinearFactorGraph.h> 
+#include <gtsam/geometry/Point3.h> 
+#include <gtsam/geometry/Rot3.h> 
+#include <gtsam/geometry/Pose3.h> 
+#include <gtsam/inference/Symbol.h> 
 
 class GNSSHandler
 {

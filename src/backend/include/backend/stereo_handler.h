@@ -4,7 +4,11 @@
 
 /*** GTSAM packages ***/
 #include <gtsam/slam/BetweenFactor.h>
-
+#include <gtsam/nonlinear/NonlinearFactorGraph.h> 
+#include <gtsam/geometry/Point3.h> 
+#include <gtsam/geometry/Rot3.h> 
+#include <gtsam/geometry/Pose3.h> 
+#include <gtsam/inference/Symbol.h> 
 
 
 class StereoHandler
@@ -27,10 +31,14 @@ public:
 
   // int searchCorrespondence(double timestamp, std::vector<double>& pose_timestamps);
   // int searchCorrespondence(double timestamp, std::map<double, int>& timestamped_ids);
-  int searchCorrespondence(ros::Time stamp, std::map<double, int>& timestamped_ids);
+  // int searchCorrespondence(ros::Time stamp, std::map<double, int>& timestamped_ids);
 
-  void addPose2Graph(int& pose_id, std::map<double, int>& timestamped_ids,
+  // void addPose2Graph(int& pose_id, std::map<double, int>& timestamped_ids,
+  //                    const geometry_msgs::PoseStampedConstPtr &pose_msg, gtsam::NonlinearFactorGraph& graph);
+
+  void addPose2Graph(int& pose_id,
                      const geometry_msgs::PoseStampedConstPtr &pose_msg, gtsam::NonlinearFactorGraph& graph);
+
   void addCloud2Graph(int pose_id,  
                       const sensor_msgs::PointCloud2ConstPtr &cloud_msg, gtsam::NonlinearFactorGraph& graph);
 
@@ -138,16 +146,37 @@ public:
 
 
 
-void StereoHandler::addPose2Graph(int& pose_id, std::map<double, int>& timestamped_ids, 
-                                  const geometry_msgs::PoseStampedConstPtr &msg, gtsam::NonlinearFactorGraph& graph)
-{
-  double timestamp = msg->header.stamp.sec + (msg->header.stamp.nsec / 1e9);
-  // int pose_relative_id = searchCorrespondence(timestamp, timestamped_ids);
-  // int pose_relative_id = searchCorrespondence(msg->header.stamp.sec, msg->header.stamp.nsec, timestamped_ids);
-  int pose_relative_id = pose_id;
-  if (pose_id == pose_relative_id)
-    timestamped_ids.insert(timestamped_ids.end(), std::pair<double,int>(timestamp, ++pose_id));
+// void StereoHandler::addPose2Graph(int& pose_id, std::map<double, int>& timestamped_ids, 
+//                                   const geometry_msgs::PoseStampedConstPtr &msg, gtsam::NonlinearFactorGraph& graph)
+// {
+//   double timestamp = msg->header.stamp.sec + (msg->header.stamp.nsec / 1e9);
+//   // int pose_relative_id = searchCorrespondence(timestamp, timestamped_ids);
+//   // int pose_relative_id = searchCorrespondence(msg->header.stamp.sec, msg->header.stamp.nsec, timestamped_ids);
+//   int pose_relative_id = pose_id;
+//   if (pose_id == pose_relative_id)
+//     timestamped_ids.insert(timestamped_ids.end(), std::pair<double,int>(timestamp, ++pose_id));
 
+//   _rotation = gtsam::Rot3::Quaternion(msg->pose.orientation.x,
+//                                       msg->pose.orientation.y,
+//                                       msg->pose.orientation.z,
+//                                       msg->pose.orientation.w);
+
+//   _translation = gtsam::Point3(msg->pose.position.x,
+//                                msg->pose.position.y,
+//                                msg->pose.position.z);
+
+//   graph.push_back(gtsam::BetweenFactor<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id-1), 
+//                                                      gtsam::symbol_shorthand::X(pose_id), 
+//                                                      gtsam::Pose3(_rotation, _translation), 
+//                                                      _NOISE)); 
+// }
+
+
+
+void StereoHandler::addPose2Graph(int& pose_id, 
+                                  const geometry_msgs::PoseStampedConstPtr &msg, 
+                                  gtsam::NonlinearFactorGraph& graph)
+{
   _rotation = gtsam::Rot3::Quaternion(msg->pose.orientation.x,
                                       msg->pose.orientation.y,
                                       msg->pose.orientation.z,
@@ -164,12 +193,8 @@ void StereoHandler::addPose2Graph(int& pose_id, std::map<double, int>& timestamp
 }
 
 
-
-
-
 void StereoHandler::addCloud2Graph(int pose_id, const sensor_msgs::PointCloud2ConstPtr &cloud_msg, gtsam::NonlinearFactorGraph& graph)
 {
 
 }
-
 

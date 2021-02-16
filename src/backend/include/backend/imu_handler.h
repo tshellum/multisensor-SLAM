@@ -1,8 +1,13 @@
 #pragma once
 
-#include <gtsam/navigation/CombinedImuFactor.h>
 #include <sensor_msgs/Imu.h>
 
+#include <gtsam/navigation/CombinedImuFactor.h>
+#include <gtsam/nonlinear/NonlinearFactorGraph.h> 
+#include <gtsam/geometry/Point3.h> 
+#include <gtsam/geometry/Rot3.h> 
+#include <gtsam/geometry/Pose3.h> 
+#include <gtsam/inference/Symbol.h> 
 
 class IMUHandler
 {
@@ -13,7 +18,7 @@ private:
   gtsam::noiseModel::Robust::shared_ptr _velocity_noise_model;
   gtsam::noiseModel::Robust::shared_ptr _bias_noise_model;
   gtsam::NavState _prev_state;
-  gtsam::NavState _prop_state;
+  gtsam::NavState _pred_state;
   gtsam::imuBias::ConstantBias _prev_bias;
   gtsam::PreintegratedCombinedMeasurements* _preintegrated;
 public:
@@ -65,7 +70,7 @@ public:
     _prior_imu_bias = gtsam::imuBias::ConstantBias(acc_bias, gyro_bias);
 
     _prev_state = gtsam::NavState(prior_pose, gtsam::Vector3(0, 0, 0));
-    _prop_state = _prev_state;
+    _pred_state = _prev_state;
     _prev_bias = _prior_imu_bias;
 
     _preintegrated = new gtsam::PreintegratedCombinedMeasurements(p, _prior_imu_bias);
@@ -111,13 +116,11 @@ void IMUHandler::add2graph(int& pose_id, gtsam::Values& initial_estimate, gtsam:
     );
   }
 
-  _prop_state = _preintegrated->predict(_prev_state, _prev_bias);
-
-  gtsam::Pose3 delta(gtsam::Rot3::Rodrigues(0.1, 0.1, 0.03), gtsam::Point3(0.035, 0.035, 0.02));
+  _pred_state = _preintegrated->predict(_prev_state, _prev_bias);
 
   //Legger inn initial estimates fordi det maa man ha
-  initial_estimate.insert(gtsam::symbol_shorthand::X(pose_id), _prop_state.pose().compose(delta));
-  initial_estimate.insert(gtsam::symbol_shorthand::V(pose_id), _prop_state.velocity());
+  initial_estimate.insert(gtsam::symbol_shorthand::X(pose_id), _pred_state.pose());
+  initial_estimate.insert(gtsam::symbol_shorthand::V(pose_id), _pred_state.velocity());
   initial_estimate.insert(gtsam::symbol_shorthand::B(pose_id), _prev_bias);
 
   //Her legger vi inn info fra imu i grafen
