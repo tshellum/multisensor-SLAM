@@ -8,12 +8,14 @@
 
 /*** GTSAM packages ***/
 #include <gtsam/nonlinear/ISAM2.h>
-#include <gtsam/slam/PriorFactor.h>
 
 /*** Class packages ***/
 #include "backend/gnss_handler.h"
 #include "backend/stereo_handler.h"
 #include "backend/imu_handler.h"
+
+/*** Standard library ***/ 
+#include <fstream>
 
 
 class Backend
@@ -106,7 +108,7 @@ void Backend::stereo_callback(const geometry_msgs::PoseStampedConstPtr& pose_msg
   // ROS_INFO("--------------------------------------------");  
   // ROS_INFO_STREAM("POSE before: " << _pose_id);
 
-  _stereo.addPose2Graph(_pose_id, _timestamped_ids, pose_msg, _graph);
+  _stereo.addPose2Graph(_pose_id, pose_msg, _graph);
   _stereo.addCloud2Graph(_pose_id, cloud_msg, _graph);
   
   // ROS_INFO_STREAM("POSE after: " << _pose_id);
@@ -135,8 +137,8 @@ void Backend::saveGraph()
 {
   // graph.print(": "); 
   // graph.printErrors(result); 
-
-  _graph.saveGraph(_result_path + _filename);
+  std::ofstream f(_result_path + _filename); 
+  _graph.saveGraph(f);
 }
 
 
