@@ -1,12 +1,10 @@
 /*** ROS packages ***/
 #include <ros/ros.h> 
 #include <ros/package.h>
-#include <geometry_msgs/PoseStamped.h>
+
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
-#include <sensor_msgs/PointCloud2.h>
-#include <geometry_msgs/PoseStamped.h>
 
 /*** GTSAM packages ***/
 #include <gtsam/nonlinear/ISAM2.h>
@@ -15,6 +13,7 @@
 /*** Class packages ***/
 #include "backend/gnss_handler.h"
 #include "backend/stereo_handler.h"
+#include "backend/imu_handler.h"
 
 
 class Backend
@@ -43,11 +42,16 @@ private:
 
   // Graph 
   gtsam::Values _initial_estimate; 
+  gtsam::Values _current_estimate;
   gtsam::NonlinearFactorGraph _graph;
+  
+  int _pose_id;
+  std::vector<double> _timestamps;
+  std::map<double, int> _timestamped_ids;
 
   // Classes
-  int _pose_id;
   GNSSHandler   _gnss;
+  IMUHandler    _imu;
   StereoHandler _stereo;
 
 public:
@@ -72,7 +76,8 @@ public:
 
 
   void gnss_callback(const tf2_msgs::TFMessage& msg);
-  void stereo_callback(const geometry_msgs::PoseStampedConstPtr &pose_msg, const sensor_msgs::PointCloud2ConstPtr &cloud_msg);
+  void imu_callback(const sensor_msgs::ImuConstPtr& imu_msg);
+  void stereo_callback(const geometry_msgs::PoseStampedConstPtr& pose_msg, const sensor_msgs::PointCloud2ConstPtr& cloud_msg);
 
   void optimize();
 
@@ -83,21 +88,47 @@ public:
 
 void Backend::gnss_callback(const tf2_msgs::TFMessage& msg)
 {
-  _gnss.addPose2Graph(++_pose_id, msg, _graph);
+  // ROS_INFO("--------------------------------------------");  
+  _gnss.addPose2Graph(_pose_id, _timestamped_ids, msg, _graph);
+  // ROS_INFO_STREAM("GNSS: " << _pose_id);
+  // ROS_INFO("--------------------------------------------");  
 }
 
 
-void Backend::stereo_callback(const geometry_msgs::PoseStampedConstPtr &pose_msg, const sensor_msgs::PointCloud2ConstPtr &cloud_msg)
+void Backend::imu_callback(const sensor_msgs::ImuConstPtr& imu_msg)
 {
-  _stereo.addPose2Graph(++_pose_id, pose_msg, _graph);
-  _stereo.addCloud2Graph(_pose_id, cloud_msg, _graph);
+
 }
 
 
-// void Backend::optimize()
-// {
-//   gtsam::ISAM2Result result = isam2_.update(graph_, initialEstimate_); 
-// }
+void Backend::stereo_callback(const geometry_msgs::PoseStampedConstPtr& pose_msg, const sensor_msgs::PointCloud2ConstPtr& cloud_msg)
+{
+  // ROS_INFO("--------------------------------------------");  
+  // ROS_INFO_STREAM("POSE before: " << _pose_id);
+
+  _stereo.addPose2Graph(_pose_id, _timestamped_ids, pose_msg, _graph);
+  _stereo.addCloud2Graph(_pose_id, cloud_msg, _graph);
+  
+  // ROS_INFO_STREAM("POSE after: " << _pose_id);
+  // ROS_INFO("--------------------------------------------");
+
+}
+
+
+void Backend::optimize()
+{
+  // gtsam::ISAM2Result result = isam.update(graph, initialEstimate);
+  // int numberOfUpdates = 50;
+  // //Optimerer over resultatene 50 ganger for aa passe paa at vi finner bra resultat
+  // for (int i = 0 ; i < numberOfUpdates; ++i){
+  //   isam.update();
+  // }
+
+  // //Gir oss nytt estimate
+  // Values currentEstimate = isam.calculateBestEstimate();
+
+  // total_pose2 = currentEstimate.at<Pose3>(X(pose_counter));
+}
 
 
 void Backend::saveGraph()
