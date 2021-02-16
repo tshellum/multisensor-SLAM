@@ -29,18 +29,20 @@ public:
   };
   ~GNSSHandler() {};
 
-  void addPose2Graph(int& pose_id, std::map<double, int>& timestamped_ids,
-                     const tf2_msgs::TFMessage& msg, gtsam::NonlinearFactorGraph& graph);
+  // void addPose2Graph(int& pose_id, std::map<double, int>& timestamped_ids,
+  //                    const tf2_msgs::TFMessage& msg, gtsam::NonlinearFactorGraph& graph);
+
+  void addPose2Graph(int pose_id,
+                     const tf2_msgs::TFMessage& msg, 
+                     gtsam::NonlinearFactorGraph& graph);
 };
 
 
 
-void GNSSHandler::addPose2Graph(int& pose_id, std::map<double, int>& timestamped_ids, 
-                                const tf2_msgs::TFMessage& msg, gtsam::NonlinearFactorGraph& graph)
+void GNSSHandler::addPose2Graph(int pose_id, 
+                                const tf2_msgs::TFMessage& msg,
+                                gtsam::NonlinearFactorGraph& graph)
 {
-  double timestamp = msg.transforms[0].header.stamp.sec + (msg.transforms[0].header.stamp.nsec / 1e9);
-  timestamped_ids.insert(timestamped_ids.end(), std::pair<double,int>(timestamp, ++pose_id));
-
   _rotation = gtsam::Rot3::Quaternion(msg.transforms[0].transform.rotation.x,
                                       msg.transforms[0].transform.rotation.y,
                                       msg.transforms[0].transform.rotation.z,
@@ -54,6 +56,28 @@ void GNSSHandler::addPose2Graph(int& pose_id, std::map<double, int>& timestamped
                                                    gtsam::Pose3(_rotation, _translation), 
                                                    _NOISE));
 }
+
+
+// void GNSSHandler::addPose2Graph(int& pose_id, std::map<double, int>& timestamped_ids, 
+//                                 const tf2_msgs::TFMessage& msg, gtsam::NonlinearFactorGraph& graph)
+// {
+//   // double timestamp = msg.transforms[0].header.stamp.sec + (msg.transforms[0].header.stamp.nsec / 1e9);
+//   // timestamped_ids.insert(timestamped_ids.end(), std::pair<double,int>(timestamp, ++pose_id));
+
+//   _rotation = gtsam::Rot3::Quaternion(msg.transforms[0].transform.rotation.x,
+//                                       msg.transforms[0].transform.rotation.y,
+//                                       msg.transforms[0].transform.rotation.z,
+//                                       msg.transforms[0].transform.rotation.w);
+
+//   _translation = gtsam::Point3(msg.transforms[0].transform.translation.x,
+//                                msg.transforms[0].transform.translation.y,
+//                                msg.transforms[0].transform.translation.z);
+
+//   graph.push_back(gtsam::PriorFactor<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id), 
+//                                                    gtsam::Pose3(_rotation, _translation), 
+//                                                    _NOISE));
+// }
+
 
 
 // void GNSSHandler::addPose2Graph(const sensor_msgs::NavSat& msg, gtsam::NonlinearFactorGraph& graph)

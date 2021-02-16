@@ -44,10 +44,11 @@ private:
 
   // Graph 
   gtsam::Values _initial_estimate; 
-  gtsam::Values _current_estimate;
+  // gtsam::Values _current_estimate;
   gtsam::NonlinearFactorGraph _graph;
   
   int _pose_id;
+  int _prev_odometry_id;
   std::vector<double> _timestamps;
   std::map<double, int> _timestamped_ids;
 
@@ -60,7 +61,8 @@ public:
   Backend() 
   : _pose_id(0),
     _buffer_size(1),
-    _filename("graph.dot"), _result_path(ros::package::getPath("stereo_frontend") + "/../../results/")
+    _filename("graph.dot"), _result_path(ros::package::getPath("stereo_frontend") + "/../../results/"),
+    _imu(_initial_estimate, _graph)
   {
     _gnss_sub  = _nh.subscribe("gnss_topic", 1, &Backend::gnss_callback, this);
     
@@ -91,7 +93,8 @@ public:
 void Backend::gnss_callback(const tf2_msgs::TFMessage& msg)
 {
   // ROS_INFO("--------------------------------------------");  
-  _gnss.addPose2Graph(_pose_id, _timestamped_ids, msg, _graph);
+  _gnss.addPose2Graph(++_pose_id, msg, _graph);
+  _imu.addPreintegrated2Graph(_pose_id, _initial_estimate, _graph);
   // ROS_INFO_STREAM("GNSS: " << _pose_id);
   // ROS_INFO("--------------------------------------------");  
 }
@@ -99,7 +102,7 @@ void Backend::gnss_callback(const tf2_msgs::TFMessage& msg)
 
 void Backend::imu_callback(const sensor_msgs::ImuConstPtr& imu_msg)
 {
-
+  _imu.preintegrateMeasurement(imu_msg);
 }
 
 
@@ -107,10 +110,9 @@ void Backend::stereo_callback(const geometry_msgs::PoseStampedConstPtr& pose_msg
 {
   // ROS_INFO("--------------------------------------------");  
   // ROS_INFO_STREAM("POSE before: " << _pose_id);
-
   _stereo.addPose2Graph(_pose_id, pose_msg, _graph);
   _stereo.addCloud2Graph(_pose_id, cloud_msg, _graph);
-  
+  _prev_odometry_id = _pose_id;
   // ROS_INFO_STREAM("POSE after: " << _pose_id);
   // ROS_INFO("--------------------------------------------");
 

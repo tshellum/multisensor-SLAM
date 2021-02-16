@@ -22,7 +22,7 @@ private:
   gtsam::imuBias::ConstantBias _prev_bias;
   gtsam::PreintegratedCombinedMeasurements* _preintegrated;
 public:
-  IMUHandler() : _dt(0.01)
+  IMUHandler(gtsam::Values& initial_estimate, gtsam::NonlinearFactorGraph& graph) : _dt(0.01)
   {    
     gtsam::noiseModel::Diagonal::shared_ptr bias_sigmas = gtsam::noiseModel::Diagonal::Sigmas(
       (gtsam::Vector(6) << gtsam::Vector3(0.15, 0.15, 0.15), gtsam::Vector3(0.15, 0.15, 0.15)).finished()
@@ -52,14 +52,14 @@ public:
     gtsam::Rot3 pitch = gtsam::Rot3::Pitch(0.0);
     gtsam::Rot3 roll  = gtsam::Rot3::Roll(0.0);
 
-    // body to IMU rotation
-    gtsam::Rot3 iRb = pitch * roll;
+    // // body to IMU rotation
+    // gtsam::Rot3 iRb = pitch * roll;
 
-    // body to IMU translation (meters)
-    gtsam::Point3 iTb(0, 0, 3);
+    // // body to IMU translation (meters)
+    // gtsam::Point3 iTb(0, 0, 3);
 
-    // body in this example is the left camera
-    p->body_P_sensor = gtsam::Pose3(iRb, iTb);
+    // // body in this example is the left camera
+    // p->body_P_sensor = gtsam::Pose3(iRb, iTb);
 
     gtsam::Rot3 prior_rotation = gtsam::Rot3(gtsam::I_3x3);
     gtsam::Pose3 prior_pose(prior_rotation, gtsam::Point3(0, 0, 0));
@@ -75,17 +75,30 @@ public:
 
     _preintegrated = new gtsam::PreintegratedCombinedMeasurements(p, _prior_imu_bias);
 
+    graph.add(gtsam::PriorFactor<gtsam::imuBias::ConstantBias>(gtsam::symbol_shorthand::B(0), 
+                                                              _prior_imu_bias,
+                                                              _bias_noise_model));
+    
+    initial_estimate.insert(gtsam::symbol_shorthand::B(0), 
+                          _prior_imu_bias);
 
+    graph.add(gtsam::PriorFactor<gtsam::Vector3>(gtsam::symbol_shorthand::V(0), 
+                                                gtsam::Vector3(0, 0, 0), 
+                                                _velocity_noise_model));
+
+    initial_estimate.insert(gtsam::symbol_shorthand::V(0), 
+                            gtsam::Vector3(0, 0, 0));
   };
 
-  ~IMUHandler() {};
+  ~IMUHandler() { delete _preintegrated; };
 
-  void readMeasurement(const sensor_msgs::ImuConstPtr& imu_msg);
-  void add2graph(int& pose_id, gtsam::Values& initial_estimate, gtsam::Values& current_estimate, gtsam::NonlinearFactorGraph& graph);
+  void preintegrateMeasurement(const sensor_msgs::ImuConstPtr& imu_msg);
+  void addPreintegrated2Graph(int pose_id, gtsam::Values& initial_estimate, gtsam::NonlinearFactorGraph& graph);
 };
 
 
-void IMUHandler::readMeasurement(const sensor_msgs::ImuConstPtr& imu_msg){
+
+void IMUHandler::preintegrateMeasurement(const sensor_msgs::ImuConstPtr& imu_msg){
   gtsam::Vector3 gyr(imu_msg->angular_velocity.x, imu_msg->angular_velocity.y, imu_msg->angular_velocity.z);
   gtsam::Vector3 acc(imu_msg->linear_acceleration.x, imu_msg->linear_acceleration.y, imu_msg->linear_acceleration.z);
 
@@ -93,49 +106,29 @@ void IMUHandler::readMeasurement(const sensor_msgs::ImuConstPtr& imu_msg){
 }
 
 
-void IMUHandler::add2graph(int& pose_id, gtsam::Values& initial_estimate, gtsam::Values& current_estimate, gtsam::NonlinearFactorGraph& graph)
+
+void IMUHandler::addPreintegrated2Graph(int pose_id, gtsam::Values& initial_estimate, gtsam::NonlinearFactorGraph& graph)
 {
-  if (pose_id == 0)
-  {
-    graph.add(gtsam::PriorFactor<gtsam::imuBias::ConstantBias>(gtsam::symbol_shorthand::B(0), 
-                                                              _prior_imu_bias,
-                                                              _bias_noise_model)
-    );
-    
-    initial_estimate.insert(gtsam::symbol_shorthand::B(0), 
-                          _prior_imu_bias
-    );
-
-    graph.add(gtsam::PriorFactor<gtsam::Vector3>(gtsam::symbol_shorthand::V(0), 
-                                                gtsam::Vector3(0, 0, 0), 
-                                                _velocity_noise_model)
-    );
-
-    initial_estimate.insert(gtsam::symbol_shorthand::V(0), 
-                            gtsam::Vector3(0, 0, 0)
-    );
-  }
-
   _pred_state = _preintegrated->predict(_prev_state, _prev_bias);
 
-  //Legger inn initial estimates fordi det maa man ha
+  // Legger inn initial estimates fordi det må man ha
   initial_estimate.insert(gtsam::symbol_shorthand::X(pose_id), _pred_state.pose());
   initial_estimate.insert(gtsam::symbol_shorthand::V(pose_id), _pred_state.velocity());
   initial_estimate.insert(gtsam::symbol_shorthand::B(pose_id), _prev_bias);
 
-  //Her legger vi inn info fra imu i grafen
-  gtsam::CombinedImuFactor imuFactor(gtsam::symbol_shorthand::X(pose_id - 1), 
+  // Her legger vi inn info fra imu i grafen
+  gtsam::CombinedImuFactor imu_factor(gtsam::symbol_shorthand::X(pose_id - 1), 
                                      gtsam::symbol_shorthand::V(pose_id - 1),
                                      gtsam::symbol_shorthand::X(pose_id), 
                                      gtsam::symbol_shorthand::V(pose_id), 
                                      gtsam::symbol_shorthand::B(pose_id - 1),
                                      gtsam::symbol_shorthand::B(pose_id), 
                                      *_preintegrated);
+  graph.add(imu_factor);
 
-  //Oppdaterer states
-  _prev_state = gtsam::NavState(current_estimate.at<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id)),
-                               current_estimate.at<gtsam::Vector3>(gtsam::symbol_shorthand::V(pose_id))
-  );
-  _prev_bias = current_estimate.at<gtsam::imuBias::ConstantBias>(gtsam::symbol_shorthand::B(pose_id));
+  // Oppdaterer states
+  _prev_state = gtsam::NavState(initial_estimate.at<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id)),
+                                initial_estimate.at<gtsam::Vector3>(gtsam::symbol_shorthand::V(pose_id)));
+  _prev_bias = initial_estimate.at<gtsam::imuBias::ConstantBias>(gtsam::symbol_shorthand::B(pose_id));
   _preintegrated->resetIntegrationAndSetBias(_prev_bias);
 }
