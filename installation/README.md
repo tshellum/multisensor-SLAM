@@ -35,9 +35,9 @@ $ git config --global user.email "your_email@example.com"
     1. Pangolin are not used and therefore not neccessary to install. 
     2. The 00-install-basics script only downloads basic software that is not included with ubuntu and are more relevant for developement and testing of the software.
 
-3. Execute the "run-complete-setup" script with admin priviliges. If the scripts are not allready executable, run chmod +x. 
+3. Execute the "run-complete-setup" script. If the scripts are not allready executable, run chmod +x. 
 ```bash
-$ sudo ./run-complete-setup
+$ ./run-complete-setup
 ```
 
 The software will be downloaded to a seperate folder at ~/home/software. 

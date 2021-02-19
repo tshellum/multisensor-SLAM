@@ -1,27 +1,43 @@
 #!/usr/bin/env bash
 set -euxo pipefail
-command -v sudo > /dev/null 2>&1 || function sudo { eval $@ ; }
+
+mkdir -p ~/software
+cd ${SOFTWARE_DIR}
 
 sudo apt-get update
 sudo apt-get upgrade -y
 
-sudo apt install -y python-pip
-sudo apt install -y python3-pip
-pip install --upgrade pip
+sudo apt install -y curl
 
+# Install pip
+sudo apt install -y python3-pip
+
+if [[ "${VERSION_ID}" == "20.04" ]]; then
+  sudo add-apt-repository universe
+    sudo apt update 
+    sudo apt install -y python2
+    curl https://bootstrap.pypa.io/2.7/get-pip.py --output get-pip.py
+    chmod +x get-pip.py
+    sudo python2 get-pip.py
+else
+    sudo apt install -y python-pip
+fi
+
+pip install --upgrade pip
 
 pip install numpy
 pip install pandas
 pip install matplotlib
 pip install pillow
 pip install scipy
+pip install -U latex
 
-
+# VScode
 sudo snap install --classic code
 
-pip install -U latex
-sudo apt install texlive-fonts-recommended texlive-fonts-extra
-sudo apt install dvipng
+# Fonts for visualization 
+sudo apt install -y texlive-fonts-recommended texlive-fonts-extra
+sudo apt install -y dvipng
 
 # Install Point cloud library
 # sudo apt install libpcl-dev

@@ -6,7 +6,7 @@ tag=${GGLIB_VERSION:-1.51}
 
 command -v sudo > /dev/null 2>&1 || { apt update && apt install --no-install-recommends -y sudo; }
 
-cd ~/software
+cd ${SOFTWARE_DIR}
 
 sudo apt install -y \
   build-essential \

@@ -3,12 +3,10 @@ set -euxo pipefail
 
 command -v sudo > /dev/null 2>&1 || { apt update && apt install --no-install-recommends -y sudo; }
 
+cd ${SOFTWARE_DIR}
+
 # Install Eigen and friends
-VERSION_ID=$( grep -Po '(?<=VERSION_ID=")[\d.]+' /etc/os-release )
-
-cd ~/software
-
-if [[ "${VERSION_ID}" == "18.04" ]]; then
+if [[ "${VERSION_ID}" == "18.04" ] || [ "${VERSION_ID}" == "20.04" ]]; then
   sudo apt update && sudo apt install -y \
   libblas-dev \
   liblapack-dev \

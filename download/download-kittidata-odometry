@@ -4,12 +4,12 @@ set -euxo pipefail
 
 cd ~/Downloads/
 wget https://s3.eu-central-1.amazonaws.com/avg-kitti/data_odometry_gray.zip
-# wget https://s3.eu-central-1.amazonaws.com/avg-kitti/data_odometry_color.zip
-# wget https://s3.eu-central-1.amazonaws.com/avg-kitti/data_odometry_velodyne.zip
+wget https://s3.eu-central-1.amazonaws.com/avg-kitti/data_odometry_color.zip
+wget https://s3.eu-central-1.amazonaws.com/avg-kitti/data_odometry_velodyne.zip
 wget https://s3.eu-central-1.amazonaws.com/avg-kitti/data_odometry_poses.zip
 wget https://s3.eu-central-1.amazonaws.com/avg-kitti/data_odometry_calib.zip
 unzip data_odometry_gray.zip -d ~/Videos/
-# unzip data_odometry_color.zip -d ~/Videos/
-# unzip data_odometry_velodyne.zip -d ~/Videos/
+unzip data_odometry_color.zip -d ~/Videos/
+unzip data_odometry_velodyne.zip -d ~/Videos/
 unzip data_odometry_poses.zip -d ~/Videos/
 unzip -o data_odometry_calib.zip -d ~/Videos/
