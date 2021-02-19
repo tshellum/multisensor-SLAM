@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euxo pipefail
 
-export OpenCV_VERSION=4.0.1
+export OpenCV_VERSION=4.2.0
 export GGLIB_VERSION=1.51
 export VERSION_ID=$( grep -Po '(?<=VERSION_ID=")[\d.]+' /etc/os-release )
 export SOFTWARE_DIR="/home/$USER/software"
@@ -15,7 +15,7 @@ command -v sudo > /dev/null 2>&1 || { apt update && apt install --no-install-rec
 ./03-install-sophus        && \
 ./04-build-opencv          && \
 ./05-install-geographiclib && \
-./06-install-gtsam
+./06-install-gtsam         && \
 ./07-install-ros             && \
 # ./08-install-kitti2bag
 

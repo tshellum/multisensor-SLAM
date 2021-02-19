@@ -4,6 +4,27 @@ project(stereo_frontend)
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
 
+set(ROS_FOUND FALSE)
+if(DEFINED ENV{ROS_DISTRO})
+  set(FOUND_ROS_DISTRO $ENV{ROS_DISTRO})
+  set(ROS_FOUND TRUE)
+else()
+  message("ROS distro variable not set. Trying to figure it out...")
+  set(AVAILABLE_ROS_VERSIONS "noetic;melodic;lunar;kinetic;jade;indigo")
+  set(ROS_FOUND FALSE)
+  foreach(version ${AVAILABLE_ROS_VERSIONS})
+    if(NOT ROS_FOUND)
+      find_path(ROS_H ros.h PATHS /opt/ros/${version}/include/ros)
+      if(ROS_H)
+        message("Found ros version ${version}")
+        set(FOUND_ROS_DISTRO ${version})
+        set(ROS_FOUND TRUE)
+      endif()
+    endif()
+  endforeach()
+endif()
+
+
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -20,13 +41,28 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 ## System dependencies are found with CMake's conventions
-# find_package(Boost REQUIRED COMPONENTS system)
-find_package(OpenCV 3.2 REQUIRED)
+if(ROS_FOUND)
+  if($ENV{ROS_DISTRO} STREQUAL "noetic")
+    message("Using ROS Noetic")
+    find_package(OpenCV 4.2 REQUIRED)
+  elseif($ENV{ROS_DISTRO} STREQUAL "melodic")
+    message("Using ROS Melodic")
+    find_package(OpenCV 3.2 REQUIRED)
+  else()
+    message("Unknown ROS distro:")
+    message($ENV{ROS_DISTRO})
+  endif()
+else()
+  find_package(OpenCV REQUIRED)
+endif()
+
 find_package(Eigen3 3.3 REQUIRED)
+find_package(GTSAM REQUIRED)
+
+# find_package(Boost REQUIRED COMPONENTS system)
 # find_package(opengv REQUIRED) 
 # find_package(Sophus REQUIRED)
 # find_package(GTSAMCMakeTools)
-find_package(GTSAM REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed

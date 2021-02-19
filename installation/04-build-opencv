@@ -2,7 +2,7 @@
 set -euxo pipefail
 
 topdir=$(pwd)
-tag=${OpenCV_VERSION:-4.0.1}
+tag=${OpenCV_VERSION:-4.2.0}
 
 command -v sudo > /dev/null 2>&1 || { apt -qq update && apt install --no-install-recommends -y sudo; }
 
@@ -86,6 +86,10 @@ fuzzy,hdf,hfs,img_hash,line_descriptor,matlab,optflow,ovis,phase_unwrapping,plot
 structured_light,superres,surface_matching,text,tracking,videostab}=OFF \
 -DBUILD_opencv_cuda{bgsegm,codec,filters,legacy,objdetect,stereo}=OFF \
 -DBUILD_opencv_cudev=OFF 
+# -DENABLE_PRECOMPILED_HEADERS=OFF \
+# -DWITH_FFMPEG=0 \
+# -DPYTHON3_INCLUDE_DIR=$(python3 -c "from distutils.sysconfig import get_python_inc; print(get_python_inc())") \
+# -DPYTHON3_PACKAGES_PATH=$(python3 -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())") ..
 
 cmake --build . --config release -- -j $(nproc) -Wno-cpp
 

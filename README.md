@@ -6,21 +6,29 @@ Software dependencies and installation procedure are specified in the "Setup"-fo
 
 ## Download KITTI odometry data
 
+Download either only the 00 sequence of the kitti dataset, or the entire odometry dataset with all sequences.
 ```bash
-$ cd ~/Downloads/
-$ wget https://s3.eu-central-1.amazonaws.com/avg-kitti/raw_data/2011_10_03_drive_0027/2011_10_03_drive_0027_sync.zip
-$ wget https://s3.eu-central-1.amazonaws.com/avg-kitti/raw_data/2011_10_03_calib.zip
-$ unzip 2011_10_03_drive_0027_sync.zip -d ~/Videos/
-$ unzip 2011_10_03_calib.zip -d ~/Videos/
+$ cd download
+$ ./download-kittidata-00-full
+or
+$ ./download-kittidata-odometry
 ```
 
 
 ### Create rosbag from KITTI data
 
 ```bash
-$ cd ~/Videos/dataset
-$ kitti2bag -t 2011_09_26 -r 0002 raw_synced .
+$ cd ~/Videos
+$ kitti2bag -t 2011_10_03 -r 0027 raw_sync .
 ```
+
+or 
+
+```bash
+$ cd ~/Videos/dataset
+$ sudo kitti2bag odom -s 00
+```
+
 
 ## Setup
 
@@ -39,6 +47,8 @@ Modify the config files to fit the dataset that is to be used.
 $ roscore
 $ catkin build
 $ roslaunch stereo_frontend kitti.launch
+$ roslaunch backend kitti.launch
+$ roslaunch cloud_viewer viz.launch
 $ rosbag play /path/to/rosbag
 ```
 

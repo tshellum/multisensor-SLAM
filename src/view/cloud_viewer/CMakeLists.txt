@@ -21,7 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
-find_package(OpenCV 3.2 REQUIRED)
+# find_package(OpenCV REQUIRED)
 find_package(Eigen3 3.3 REQUIRED)
 find_package(PCL REQUIRED)
 
@@ -126,7 +126,7 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
-  ${OpenCV_INCLUDE_DIRS}
+  # ${OpenCV_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
 )
 
@@ -158,7 +158,7 @@ add_executable(${PROJECT_NAME}_node src/cloud_viewer_node.cpp)
 ## Specify libraries to link a library or executable target against
 target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
-  ${OpenCV_LIBRARIES}
+  # ${OpenCV_LIBRARIES}
   ${PCL_LIBRARIES}
 )
 
