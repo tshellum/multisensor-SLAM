@@ -24,7 +24,9 @@ private:
   // Nodes
   int _buffer_size;
   ros::NodeHandle _nh;
+  ros::Subscriber _pulled_image_sub;
   ros::Subscriber _gnss_sub;
+  ros::Subscriber _imu_sub;
   message_filters::Subscriber<geometry_msgs::PoseStamped> _pose_sub;
   message_filters::Subscriber<sensor_msgs::PointCloud2> _cloud_sub;
 
@@ -48,7 +50,9 @@ private:
   gtsam::NonlinearFactorGraph _graph;
   
   int _pose_id;
-  int _prev_odometry_id;
+  // int _prev_odometry_id;
+  // int _cur_odometry_id;
+
   std::vector<double> _timestamps;
   std::map<double, int> _timestamped_ids;
 
@@ -64,8 +68,9 @@ public:
     _filename("graph.dot"), _result_path(ros::package::getPath("stereo_frontend") + "/../../results/"),
     _imu(_initial_estimate, _graph)
   {
-    _gnss_sub  = _nh.subscribe("gnss_topic", 1, &Backend::gnss_callback, this);
-    
+    _gnss_sub         = _nh.subscribe("gnss_topic", 1, &Backend::gnss_callback, this);
+    _imu_sub          = _nh.subscribe("imu_topic", 1, &Backend::imu_callback, this);
+    _pulled_image_sub = _nh.subscribe("pulled_image_flag_topic", 1, &Backend::preintegrated_imu_callback, this);
     _pose_sub.subscribe(_nh, "stereo_pose_relative_topic", 1);
     _cloud_sub.subscribe(_nh, "stereo_cloud_topic", 1);
     _sync.reset(new Sync(SyncPolicy(10), _pose_sub, _cloud_sub));
@@ -81,6 +86,7 @@ public:
 
   void gnss_callback(const tf2_msgs::TFMessage& msg);
   void imu_callback(const sensor_msgs::ImuConstPtr& imu_msg);
+  void preintegrated_imu_callback(const std_msgs::HeaderPtr& pulled_image_flag);
   void stereo_callback(const geometry_msgs::PoseStampedConstPtr& pose_msg, const sensor_msgs::PointCloud2ConstPtr& cloud_msg);
 
   void optimize();
@@ -92,30 +98,29 @@ public:
 
 void Backend::gnss_callback(const tf2_msgs::TFMessage& msg)
 {
-  // ROS_INFO("--------------------------------------------");  
   _gnss.addPose2Graph(++_pose_id, msg, _graph);
   _imu.addPreintegrated2Graph(_pose_id, _initial_estimate, _graph);
-  // ROS_INFO_STREAM("GNSS: " << _pose_id);
-  // ROS_INFO("--------------------------------------------");  
 }
 
 
 void Backend::imu_callback(const sensor_msgs::ImuConstPtr& imu_msg)
 {
   _imu.preintegrateMeasurement(imu_msg);
+
+}
+
+
+void Backend::preintegrated_imu_callback(const std_msgs::HeaderPtr& pulled_image_flag)
+{
+  _imu.addPreintegrated2Graph(++_pose_id, _initial_estimate, _graph);
+  _stereo.setCurrentPoseID(_pose_id);
 }
 
 
 void Backend::stereo_callback(const geometry_msgs::PoseStampedConstPtr& pose_msg, const sensor_msgs::PointCloud2ConstPtr& cloud_msg)
 {
-  // ROS_INFO("--------------------------------------------");  
-  // ROS_INFO_STREAM("POSE before: " << _pose_id);
-  _stereo.addPose2Graph(_pose_id, pose_msg, _graph);
+  _stereo.addPose2Graph(pose_msg, _graph);
   _stereo.addCloud2Graph(_pose_id, cloud_msg, _graph);
-  _prev_odometry_id = _pose_id;
-  // ROS_INFO_STREAM("POSE after: " << _pose_id);
-  // ROS_INFO("--------------------------------------------");
-
 }
 
 

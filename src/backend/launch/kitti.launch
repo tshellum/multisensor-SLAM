@@ -5,12 +5,17 @@
     <arg name = "stereo_cloud_topic" default = "/frontend/point_cloud"/>
     <arg name = "gnss_topic" default = "/tf"/>
     <arg name = "imu_topic" default = "/kitti/oxts/imu"/>
+    <arg name = "pulled_image_flag_topic" default = "/frontend/pulled_image_flag"/>
 
     <node 
         name   = "backend"
         pkg    = "backend"
         type   = "backend_node"
-        args   = "$(arg stereo_pose_relative_topic) $(arg stereo_cloud_topic) $(arg gnss_topic) $(arg imu_topic)"
+        args   = "$(arg stereo_pose_relative_topic) 
+                  $(arg stereo_cloud_topic) 
+                  $(arg gnss_topic) 
+                  $(arg imu_topic) 
+                  $(arg pulled_image_flag_topic)"
         output = "screen"
     >
     
@@ -18,6 +23,7 @@
     <remap from = "stereo_cloud_topic"  to = "$(arg stereo_cloud_topic)"/>
     <remap from = "gnss_topic"  to = "$(arg gnss_topic)"/>
     <remap from = "imu_topic" to = "$(arg imu_topic)"/>
+    <remap from = "pulled_image_flag_topic" to = "$(arg pulled_image_flag_topic)"/>
     </node>
 
 </launch>

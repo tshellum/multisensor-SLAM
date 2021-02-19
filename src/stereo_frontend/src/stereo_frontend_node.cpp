@@ -9,6 +9,8 @@
 #include <tf2_ros/transform_listener.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseStamped.h>
+// #include <std_msgs/Bool.h>
+#include <std_msgs/Header.h>
 
 /*** OpenCV packages ***/
 #include "opencv2/core.hpp"
@@ -47,6 +49,7 @@ class StereoFrontend
 	  ros::Publisher  _cloud_pub; 
     ros::Publisher  _pose_relative_pub;
     ros::Publisher  _pose_world_pub;
+	  ros::Publisher  _pull_flag; 
 
     // Classes
     StereoCameras        _stereo;
@@ -77,10 +80,11 @@ class StereoFrontend
       _sync.reset(new Sync(MySyncPolicy(10), _sub_cam_left, _sub_cam_right));
       _sync->registerCallback(boost::bind(&StereoFrontend::callback, this, _1, _2));
 
- 			_gnss_sub  = _nh.subscribe("/tf", 1, &StereoFrontend::readTf, this);
-      _cloud_pub = _nh.advertise<sensor_msgs::PointCloud2>("/frontend/point_cloud", 1000);
-		  _pose_relative_pub  = _nh.advertise<geometry_msgs::PoseStamped>("/frontend/pose_relative", 1000);
-		  _pose_world_pub     = _nh.advertise<geometry_msgs::PoseStamped>("/frontend/pose_world", 1000);
+ 			_gnss_sub          = _nh.subscribe("/tf", 1, &StereoFrontend::readTf, this);
+      _cloud_pub         = _nh.advertise<sensor_msgs::PointCloud2>("/frontend/point_cloud", 1000);
+		  _pose_relative_pub = _nh.advertise<geometry_msgs::PoseStamped>("/frontend/pose_relative", 1000);
+		  _pose_world_pub    = _nh.advertise<geometry_msgs::PoseStamped>("/frontend/pose_world", 1000);
+		  _pull_flag         = _nh.advertise<std_msgs::Header>("/frontend/pulled_image_flag", 1000);
     }
 
     ~StereoFrontend()
@@ -115,9 +119,14 @@ class StereoFrontend
 
     void callback(const sensor_msgs::ImageConstPtr &cam_left, const sensor_msgs::ImageConstPtr &cam_right)
     {
-      /***** Initialize *****/     
       _tic = cv::getTickCount();
+      
+      // Tell backend that frontend has pulled image, so that a preintegrated imu may be added.
+      std_msgs::Header flag_header = cam_left->header;
+      flag_header.frame_id = "pulled_image_flag";
+      _pull_flag.publish(flag_header);
 
+      /***** Initialize *****/     
       _pose.readTimestamp(ros::Time::now().toSec()); 
       _pose.estimateScaleFromGNSS(_ground_truth.getWorldTranslation(), _ground_truth_kf.getWorldTranslation());
 
