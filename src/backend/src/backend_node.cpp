@@ -22,59 +22,56 @@ class Backend
 {
 private:
   // Nodes
-  int _buffer_size;
-  ros::NodeHandle _nh;
-  ros::Subscriber _pulled_image_sub;
-  ros::Subscriber _gnss_sub;
-  ros::Subscriber _imu_sub;
-  message_filters::Subscriber<geometry_msgs::PoseStamped> _pose_sub;
-  message_filters::Subscriber<sensor_msgs::PointCloud2> _cloud_sub;
+  int buffer_size_;
+  ros::NodeHandle nh_;
+  ros::Subscriber pulled_image_sub_;
+  ros::Subscriber gnss_sub_;
+  ros::Subscriber imu_sub_;
+  message_filters::Subscriber<geometry_msgs::PoseStamped> pose_sub_;
+  message_filters::Subscriber<sensor_msgs::PointCloud2> cloud_sub_;
 
   typedef message_filters::sync_policies::ApproximateTime<geometry_msgs::PoseStamped, sensor_msgs::PointCloud2> SyncPolicy;
   typedef message_filters::Synchronizer<SyncPolicy> Sync;
-  boost::shared_ptr<Sync> _sync;
+  boost::shared_ptr<Sync> sync_;
 
 
   // File
-  std::string _result_path;
-  std::string _filename;
+  std::string result_path_;
+  std::string filename_;
 
 
   // ISAM2
-  gtsam::ISAM2 _isam2; 
-  gtsam::ISAM2Params _isam2_params; 
+  gtsam::ISAM2 isam2_; 
+  gtsam::ISAM2Params isam2_params_; 
 
   // Graph 
-  gtsam::Values _initial_estimate; 
-  // gtsam::Values _current_estimate;
-  gtsam::NonlinearFactorGraph _graph;
+  gtsam::Values new_values_; 
+  gtsam::NonlinearFactorGraph new_factors_;
   
-  int _pose_id;
-  // int _prev_odometry_id;
-  // int _cur_odometry_id;
+  int pose_id_;
 
-  std::vector<double> _timestamps;
-  std::map<double, int> _timestamped_ids;
+  // Current state
+  gtsam::Pose3 pose_;
 
   // Classes
-  GNSSHandler   _gnss;
-  IMUHandler    _imu;
-  StereoHandler _stereo;
+  GNSSHandler   gnss_;
+  IMUHandler    imu_;
+  StereoHandler vo_;
 
 public:
   Backend() 
-  : _pose_id(0),
-    _buffer_size(1),
-    _filename("graph.dot"), _result_path(ros::package::getPath("stereo_frontend") + "/../../results/"),
-    _imu(_initial_estimate, _graph)
+  : pose_id_(0),
+    buffer_size_(1),
+    filename_("graph.dot"), result_path_(ros::package::getPath("stereo_frontend") + "/../../results/"),
+    imu_(pose_id_, new_values_, new_factors_)
   {
-    _gnss_sub         = _nh.subscribe("gnss_topic", 1, &Backend::gnss_callback, this);
-    _imu_sub          = _nh.subscribe("imu_topic", 1, &Backend::imu_callback, this);
-    _pulled_image_sub = _nh.subscribe("pulled_image_flag_topic", 1, &Backend::preintegrated_imu_callback, this);
-    _pose_sub.subscribe(_nh, "stereo_pose_relative_topic", 1);
-    _cloud_sub.subscribe(_nh, "stereo_cloud_topic", 1);
-    _sync.reset(new Sync(SyncPolicy(10), _pose_sub, _cloud_sub));
-    _sync->registerCallback(boost::bind(&Backend::stereo_callback, this, _1, _2));
+    gnss_sub_         = nh_.subscribe("gnss_topic", 1, &Backend::gnss_callback, this);
+    imu_sub_          = nh_.subscribe("imu_topic", 1, &Backend::imu_callback, this);
+    pulled_image_sub_ = nh_.subscribe("pulled_image_flag_topic", 1, &Backend::preintegrated_imu_callback, this);
+    pose_sub_.subscribe(nh_, "stereo_pose_relative_topic", 1);
+    cloud_sub_.subscribe(nh_, "stereo_cloud_topic", 1);
+    sync_.reset(new Sync(SyncPolicy(10), pose_sub_, cloud_sub_));
+    sync_->registerCallback(boost::bind(&Backend::stereo_callback, this, _1, _2));
 
   };
 
@@ -89,63 +86,71 @@ public:
   void preintegrated_imu_callback(const std_msgs::HeaderPtr& pulled_image_flag);
   void stereo_callback(const geometry_msgs::PoseStampedConstPtr& pose_msg, const sensor_msgs::PointCloud2ConstPtr& cloud_msg);
 
+  void addNewFactors2Graph();
   void optimize();
 
   void saveGraph();
 };
 
 
-
 void Backend::gnss_callback(const tf2_msgs::TFMessage& msg)
 {
-  _gnss.addPose2Graph(++_pose_id, msg, _graph);
-  _imu.addPreintegrated2Graph(_pose_id, _initial_estimate, _graph);
+  pose_id_++;
+  imu_.addPreintegrated2Graph(pose_id_, new_values_, new_factors_);
+  gnss_.addPose2Graph(pose_id_, msg, new_values_, new_factors_);
 }
 
 
 void Backend::imu_callback(const sensor_msgs::ImuConstPtr& imu_msg)
 {
-  _imu.preintegrateMeasurement(imu_msg);
+  imu_.preintegrateMeasurement(imu_msg);
 
 }
 
 
 void Backend::preintegrated_imu_callback(const std_msgs::HeaderPtr& pulled_image_flag)
 {
-  _imu.addPreintegrated2Graph(++_pose_id, _initial_estimate, _graph);
-  _stereo.setCurrentPoseID(_pose_id);
+  pose_id_++;
+  imu_.addPreintegrated2Graph(pose_id_, new_values_, new_factors_);
+  vo_.updateCurrentPoseID(pose_id_);
 }
 
 
 void Backend::stereo_callback(const geometry_msgs::PoseStampedConstPtr& pose_msg, const sensor_msgs::PointCloud2ConstPtr& cloud_msg)
 {
-  _stereo.addPose2Graph(pose_msg, _graph);
-  _stereo.addCloud2Graph(_pose_id, cloud_msg, _graph);
+  vo_.addPose2Graph(pose_msg, new_values_, new_factors_);
+  // vo_.addCloud2Graph(cloud_msg, new_factors_);
+  vo_.updatePreviousPoseID();
+
+  addNewFactors2Graph();
+  optimize();
+  vo_.updateWorldRotation(pose_.rotation());
+}
+
+
+void Backend::addNewFactors2Graph()
+{  
+  // new_values_.print();
+
+  isam2_.update(new_factors_, new_values_);
+
+  new_factors_.resize(0);
+  new_values_.clear();
 }
 
 
 void Backend::optimize()
-{
-  // gtsam::ISAM2Result result = isam.update(graph, initialEstimate);
-  // int numberOfUpdates = 50;
-  // //Optimerer over resultatene 50 ganger for aa passe paa at vi finner bra resultat
-  // for (int i = 0 ; i < numberOfUpdates; ++i){
-  //   isam.update();
-  // }
+{  
+  gtsam::Values current_estimate = isam2_.calculateBestEstimate();
+  pose_ = current_estimate.at<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id_));
 
-  // //Gir oss nytt estimate
-  // Values currentEstimate = isam.calculateBestEstimate();
-
-  // total_pose2 = currentEstimate.at<Pose3>(X(pose_counter));
+  pose_.print();
 }
 
 
 void Backend::saveGraph()
 {
-  // graph.print(": "); 
-  // graph.printErrors(result); 
-  std::ofstream f(_result_path + _filename); 
-  _graph.saveGraph(f);
+  isam2_.saveGraph(result_path_ + filename_);
 }
 
 

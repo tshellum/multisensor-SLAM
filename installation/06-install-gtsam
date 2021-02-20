@@ -21,10 +21,12 @@ then
 fi
 
 cd gtsam/build
-cmake .. \
-  -DGTSAM_BUILD_EXAMPLES_ALWAYS=OFF \
-  -DGTSAM_BUILD_TESTS=OFF \
-  -DGTSAM_WITH_EIGEN_MKL=OFF
+cmake ..
+# cmake .. \
+#   -DGTSAM_BUILD_EXAMPLES_ALWAYS=OFF \
+#   -DGTSAM_BUILD_TESTS=OFF \
+#   -DGTSAM_USE_SYSTEM_EIGEN=ON \
+#   -DGTSAM_WITH_EIGEN_MKL=OFF 
 cmake --build . -- -j$(nproc)
 sudo cmake --build . --target install
 cd ../..

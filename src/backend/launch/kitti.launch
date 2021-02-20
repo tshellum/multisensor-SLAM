@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <launch>
-    <arg name = "stereo_pose_relative_topic"  default = "/frontend/pose_world"/>
+    <arg name = "stereo_pose_relative_topic"  default = "/frontend/pose_relative"/>
     <arg name = "stereo_cloud_topic" default = "/frontend/point_cloud"/>
     <arg name = "gnss_topic" default = "/tf"/>
     <arg name = "imu_topic" default = "/kitti/oxts/imu"/>

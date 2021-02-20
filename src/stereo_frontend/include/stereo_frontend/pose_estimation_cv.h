@@ -79,10 +79,18 @@ public:
                                            0, 0, -1, 0,
                                            0, 0,  0, 1);
 
-        _T_bc = (cv::Mat_<double>(4,4) << 1, 0, 0, 0,
+        // y in headed direction, x right
+        // _T_bc = (cv::Mat_<double>(4,4) << 1, 0, 0, 0,
+        //                                   0, 0, 1, 0,
+        //                                   0, 1, 0, 0,
+        //                                   0, 0, 0, 1);
+
+        // x in headed direction, y right, z down
+        _T_cb = (cv::Mat_<double>(4,4) << 0, 1, 0, 0,
                                           0, 0, 1, 0,
-                                          0, 1, 0, 0,
+                                          1, 0, 0, 0,
                                           0, 0, 0, 1);
+
         // _T_bc << 1,  0,  0, 0,
         //          0,  0, -1, 0,
         //          0, -1,  0, 0,
@@ -93,7 +101,7 @@ public:
         //          0, 1, 0, 0,
         //          0, 0, 0, 1;
 
-        _T_cb = _T_bc.t();
+        _T_bc = _T_cb.t();
 
         std::string frame[3] = {"x", "y", "z"};
         nh.getParam("/GNSS_frame/surge", frame[0]);
