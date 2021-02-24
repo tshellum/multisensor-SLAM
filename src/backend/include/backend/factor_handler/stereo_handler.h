@@ -37,16 +37,16 @@ public:
   void updatePreviousPoseID()                  {from_id_ = to_id_;};
   void updateWorldRotation(gtsam::Rot3 rot) {world_rotation_ = rot;};
 
-  void addPose2Graph(const geometry_msgs::PoseStampedConstPtr &pose_msg, 
+  void addPoseFactor(const geometry_msgs::PoseStampedConstPtr &pose_msg, 
                      gtsam::Values& initial_estimate, 
                      gtsam::NonlinearFactorGraph& graph);
 
-  void addCloud2Graph(const sensor_msgs::PointCloud2ConstPtr &cloud_msg, 
+  void addCloudFactor(const sensor_msgs::PointCloud2ConstPtr &cloud_msg, 
                       gtsam::NonlinearFactorGraph& graph);
 };
 
 
-void StereoHandler::addPose2Graph(const geometry_msgs::PoseStampedConstPtr &msg, 
+void StereoHandler::addPoseFactor(const geometry_msgs::PoseStampedConstPtr &msg, 
                                   gtsam::Values& initial_estimate,
                                   gtsam::NonlinearFactorGraph& graph)
 {
@@ -72,7 +72,7 @@ void StereoHandler::addPose2Graph(const geometry_msgs::PoseStampedConstPtr &msg,
 }
 
 
-void StereoHandler::addCloud2Graph(const sensor_msgs::PointCloud2ConstPtr &cloud_msg, 
+void StereoHandler::addCloudFactor(const sensor_msgs::PointCloud2ConstPtr &cloud_msg, 
                                    gtsam::NonlinearFactorGraph& graph)
 {
   NotImplementedError(__func__, __FILE__);
