@@ -28,7 +28,7 @@ private:
 
 public:
   IMUHandler(int pose_id, gtsam::Values& initial_estimate, gtsam::NonlinearFactorGraph& graph) 
-  : dt_(0.01), 
+  : dt_(1 / 100.0), 
     imu_measurement_id_(0), from_imu_id_(0)
   {    
     gtsam::noiseModel::Diagonal::shared_ptr bias_sigmas = gtsam::noiseModel::Diagonal::Sigmas(
@@ -85,7 +85,7 @@ public:
   ~IMUHandler() { delete preintegrated_; };
 
   void preintegrateMeasurement(const sensor_msgs::ImuConstPtr& imu_msg);
-  void addPreintegrated2Graph(int pose_id, gtsam::Values& initial_estimate, gtsam::NonlinearFactorGraph& graph);
+  void addPoseFactor(int pose_id, gtsam::Values& initial_estimate, gtsam::NonlinearFactorGraph& graph);
 };
 
 
@@ -98,7 +98,7 @@ void IMUHandler::preintegrateMeasurement(const sensor_msgs::ImuConstPtr& imu_msg
 }
 
 
-void IMUHandler::addPreintegrated2Graph(int pose_id, gtsam::Values& initial_estimate, gtsam::NonlinearFactorGraph& graph)
+void IMUHandler::addPoseFactor(int pose_id, gtsam::Values& initial_estimate, gtsam::NonlinearFactorGraph& graph)
 {
   if (imu_measurement_id_ > 0)
   {

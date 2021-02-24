@@ -25,6 +25,7 @@ private:
   int buffer_size_;
   ros::NodeHandle nh_;
   ros::Subscriber pulled_image_sub_;
+  ros::Subscriber tf_sub_;
   ros::Subscriber gnss_sub_;
   ros::Subscriber imu_sub_;
   message_filters::Subscriber<geometry_msgs::PoseStamped> pose_sub_;
@@ -65,6 +66,7 @@ public:
     filename_("graph.dot"), result_path_(ros::package::getPath("stereo_frontend") + "/../../results/"),
     imu_(pose_id_, new_values_, new_factors_)
   {
+    tf_sub_         = nh_.subscribe("tf_topic", 1, &Backend::tf_callback, this);
     gnss_sub_         = nh_.subscribe("gnss_topic", 1, &Backend::gnss_callback, this);
     imu_sub_          = nh_.subscribe("imu_topic", 1, &Backend::imu_callback, this);
     pulled_image_sub_ = nh_.subscribe("pulled_image_flag_topic", 1, &Backend::preintegrated_imu_callback, this);
@@ -81,7 +83,8 @@ public:
   };
 
 
-  void gnss_callback(const tf2_msgs::TFMessage& msg);
+  void tf_callback(const tf2_msgs::TFMessage& msg);
+  void gnss_callback(const sensor_msgs::NavSatFix& msg);
   void imu_callback(const sensor_msgs::ImuConstPtr& imu_msg);
   void preintegrated_imu_callback(const std_msgs::HeaderPtr& pulled_image_flag);
   void stereo_callback(const geometry_msgs::PoseStampedConstPtr& pose_msg, const sensor_msgs::PointCloud2ConstPtr& cloud_msg);
@@ -93,12 +96,26 @@ public:
 };
 
 
-void Backend::gnss_callback(const tf2_msgs::TFMessage& msg)
+void Backend::tf_callback(const tf2_msgs::TFMessage& msg)
 {
   pose_id_++;
-  imu_.addPreintegrated2Graph(pose_id_, new_values_, new_factors_);
-  gnss_.addPose2Graph(pose_id_, msg, new_values_, new_factors_);
+  imu_.addPoseFactor(pose_id_, new_values_, new_factors_);
+  gnss_.addPoseFactor(pose_id_, msg, new_values_, new_factors_);
+
+  // addNewFactors2Graph();
+  // optimize();
 }
+
+void Backend::gnss_callback(const sensor_msgs::NavSatFix& msg)
+{
+  pose_id_++;
+  imu_.addPoseFactor(pose_id_, new_values_, new_factors_);
+  gnss_.addGNSSFactor(pose_id_, msg, new_values_, new_factors_);
+
+  addNewFactors2Graph();
+  optimize();
+}
+
 
 
 void Backend::imu_callback(const sensor_msgs::ImuConstPtr& imu_msg)
@@ -111,15 +128,15 @@ void Backend::imu_callback(const sensor_msgs::ImuConstPtr& imu_msg)
 void Backend::preintegrated_imu_callback(const std_msgs::HeaderPtr& pulled_image_flag)
 {
   pose_id_++;
-  imu_.addPreintegrated2Graph(pose_id_, new_values_, new_factors_);
+  imu_.addPoseFactor(pose_id_, new_values_, new_factors_);
   vo_.updateCurrentPoseID(pose_id_);
 }
 
 
 void Backend::stereo_callback(const geometry_msgs::PoseStampedConstPtr& pose_msg, const sensor_msgs::PointCloud2ConstPtr& cloud_msg)
 {
-  vo_.addPose2Graph(pose_msg, new_values_, new_factors_);
-  // vo_.addCloud2Graph(cloud_msg, new_factors_);
+  vo_.addPoseFactor(pose_msg, new_values_, new_factors_);
+  // vo_.addCloudFactor(cloud_msg, new_factors_);
   vo_.updatePreviousPoseID();
 
   addNewFactors2Graph();

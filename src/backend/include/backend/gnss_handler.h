@@ -11,6 +11,7 @@
 #include <gtsam/geometry/Rot3.h> 
 #include <gtsam/geometry/Pose3.h> 
 #include <gtsam/inference/Symbol.h> 
+#include <gtsam/navigation/GPSFactor.h>
 
 
 class GNSSHandler
@@ -27,14 +28,19 @@ public:
   };
   ~GNSSHandler() {};
 
-  void addPose2Graph(int pose_id,
+  void addPoseFactor(int pose_id,
                      const tf2_msgs::TFMessage& msg, 
+                     gtsam::Values& initial_estimate,
+                     gtsam::NonlinearFactorGraph& graph);
+  
+  void addGNSSFactor(int pose_id,
+                     const sensor_msgs::NavSatFix& msg, 
                      gtsam::Values& initial_estimate,
                      gtsam::NonlinearFactorGraph& graph);
 };
 
 
-void GNSSHandler::addPose2Graph(int pose_id, 
+void GNSSHandler::addPoseFactor(int pose_id, 
                                 const tf2_msgs::TFMessage& msg,
                                 gtsam::Values& initial_estimate,
                                 gtsam::NonlinearFactorGraph& graph)
@@ -56,4 +62,23 @@ void GNSSHandler::addPose2Graph(int pose_id,
   graph.add(gtsam::PriorFactor<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id), 
                                              pose, 
                                              NOISE_));
+}
+
+
+void GNSSHandler::addGNSSFactor(int pose_id, 
+                                const sensor_msgs::NavSatFix& msg,
+                                gtsam::Values& initial_estimate,
+                                gtsam::NonlinearFactorGraph& graph)
+{
+  gtsam::Point3 position = gtsam::Point3(msg.latitude,   // N,
+                                         msg.longitude,  // E,
+                                         msg.altitude);  // D,
+  
+  if (! initial_estimate.exists(gtsam::symbol_shorthand::X(pose_id)))
+    initial_estimate.insert(gtsam::symbol_shorthand::X(pose_id), position);
+
+  gtsam::GPSFactor gps_factor(gtsam::symbol_shorthand::X(pose_id),
+                              position,
+                              NOISE_);
+  graph.add(gps_factor);
 }
