@@ -3,8 +3,8 @@
 /*** ROS packages ***/
 #include <ros/ros.h> 
 #include <tf2_ros/transform_listener.h>
-#include <sensor_msgs/NavSatFix.h>
 #include <tf2_eigen/tf2_eigen.h>
+#include <sensor_msgs/NavSatFix.h>
 
 #include <Eigen/Dense>
 
@@ -52,6 +52,16 @@ public:
   {
     Eigen::Isometry3d T_w = tf2::transformToEigen(msg.transforms[0].transform); 
     gtsam::Pose3 pose(T_w.matrix()); 
+
+    gtsam::Key poseKey = gtsam::symbol_shorthand::X(backend_->getPoseID()); 
+    if (backend_->getValues().exists(poseKey))
+      backend_->getValues().insert(poseKey, pose); 
+    
+    backend_->getGraph().add(
+      gtsam::PriorFactor<gtsam::Pose3>(
+        poseKey, pose, noise_
+      )
+    ); 
   }
 
   void addPoseFactor() 
@@ -59,7 +69,14 @@ public:
 
   }
 };
+/**
+ * 
+  if (! initial_estimate.exists(gtsam::symbol_shorthand::X(pose_id)))
+    initial_estimate.insert(gtsam::symbol_shorthand::X(pose_id), pose);
 
+  graph.add(gtsam::PriorFactor<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id), 
+    
+ * */
 
 } // namespace factor_handler
 

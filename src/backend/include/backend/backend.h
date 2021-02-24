@@ -64,7 +64,11 @@ public:
   ~Backend() 
   {
     isam2_.saveGraph(result_path_ + graph_filename_);
-  };
+  }
+
+  gtsam::Values& getValues() { return new_values_;  }
+  gtsam::NonlinearFactorGraph& getGraph() { return new_factors_; }
+  int getPoseID() const { return pose_id_; }
 
   geometry_msgs::PoseStamped generateMsg();
   void callback();
