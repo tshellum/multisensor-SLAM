@@ -15,7 +15,6 @@ int main(int argc, char **argv)
 
 	ros::NodeHandle nh; 
 
-	// backend::Backend backend;
 	std::shared_ptr<backend::Backend> backend = std::make_shared<backend::Backend>(); 
 
 	backend::factor_handler::GNSSHandler gnss(

@@ -35,8 +35,7 @@ public:
   
   ~FactorHandler() = default; 
 
-  virtual void callback(Types... args) = 0;
-  virtual void addPoseFactor() = 0; 
+  virtual void callback(Types... args) = 0; 
 };
 
 } // namespace factor_handler

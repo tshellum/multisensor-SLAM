@@ -12,12 +12,22 @@
 #include <gtsam/inference/Symbol.h> 
 
 
+
 class IMUHandler
 {
 private:
   double dt_;
   int imu_measurement_id_;
   int from_imu_id_;
+
+  int from_id_vo;
+  int from_id_lidar;
+  int from_id_gnss;
+  int from_id_apriltag;
+
+
+
+  std::map<ros::Time, gtsam::NavState> measurements_;
 
   gtsam::noiseModel::Robust::shared_ptr velocity_noise_model_;
   gtsam::noiseModel::Robust::shared_ptr bias_noise_model_;
@@ -94,8 +104,10 @@ void IMUHandler::preintegrateMeasurement(const sensor_msgs::ImuConstPtr& imu_msg
   gtsam::Vector3 acc(imu_msg->linear_acceleration.x, imu_msg->linear_acceleration.y, imu_msg->linear_acceleration.z);
 
   preintegrated_->integrateMeasurement(acc, gyr, dt_);
+  measurements_[imu_msg->header.stamp] = preintegrated_->predict(prev_state_, prev_bias_);
   imu_measurement_id_++;
 }
+
 
 
 void IMUHandler::addPoseFactor(int pose_id, gtsam::Values& initial_estimate, gtsam::NonlinearFactorGraph& graph)
