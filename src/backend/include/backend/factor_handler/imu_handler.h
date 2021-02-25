@@ -20,13 +20,6 @@ private:
   int imu_measurement_id_;
   int from_imu_id_;
 
-  int from_id_vo;
-  int from_id_lidar;
-  int from_id_gnss;
-  int from_id_apriltag;
-
-
-
   std::map<ros::Time, gtsam::NavState> measurements_;
 
   gtsam::noiseModel::Robust::shared_ptr velocity_noise_model_;
