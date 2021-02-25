@@ -45,6 +45,7 @@ private:
   
   // Current state
   int pose_id_;
+  std::map<ros::Time, int> stamped_pose_ids_;
   gtsam::Pose3 pose_;
 
 public:
@@ -52,7 +53,7 @@ public:
   : pose_id_(0),
     pose_(gtsam::Pose3::identity()),
     buffer_size_(1000),
-    optimize_timer_(nh_.createTimer(ros::Duration(10), &Backend::callback, this)), 
+    optimize_timer_(nh_.createTimer(ros::Duration(1), &Backend::callback, this)), 
     updated_(true),
     graph_filename_("graph.dot"), result_path_(ros::package::getPath("backend") + "/../../results/")
   {
@@ -64,23 +65,26 @@ public:
     isam2_.saveGraph(result_path_ + graph_filename_);
   }
 
-  // int getPoseID() const                   { return pose_id_; }
+  int getPoseID() const                   { return pose_id_; }
   gtsam::Values& getValues()              { return new_values_;  }
   gtsam::NonlinearFactorGraph& getGraph() { return new_factors_; }
 
   int incrementPoseID() { return ++pose_id_; }
+  int registerStampedPose(ros::Time stamp, int id) { stamped_pose_ids_[stamp] = id; }
   void isUpdated() { updated_ = true; }
 
   geometry_msgs::PoseStamped generateMsg();
   void callback(const ros::TimerEvent& event);
+
+  int searchAssociatedPose(ros::Time pose_stamp);
 };
 
 
 void Backend::callback(const ros::TimerEvent& event)
 {
-  if (updated_)
+  if (updated_ && new_values_.size())
   {
-    updated_ = false;
+    // updated_ = false;
     // new_values_.print();
 
     isam2_.update(new_factors_, new_values_);
@@ -90,7 +94,7 @@ void Backend::callback(const ros::TimerEvent& event)
     gtsam::Values current_estimate = isam2_.calculateBestEstimate();
     pose_ = current_estimate.at<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id_));
 
-    pose_.print();
+    // pose_.print();
 
     new_factors_.resize(0);
     new_values_.clear();
@@ -111,6 +115,35 @@ geometry_msgs::PoseStamped Backend::generateMsg()
 
   return stamped_pose_msg;
 }
+
+
+int Backend::searchAssociatedPose(ros::Time pose_stamp)
+{    
+  std::map<ros::Time, int>::iterator stamped_pose_id = stamped_pose_ids_.begin();
+  while (stamped_pose_id != stamped_pose_ids_.end())
+  {
+    if (pose_stamp < stamped_pose_id->first)
+    {
+      stamped_pose_id++;
+      continue;
+    }
+    else
+    {
+      // ROS_INFO_STREAM("stamped_pose_id->first: " << stamped_pose_id->first);
+      // ROS_INFO_STREAM("pose_stamp: " << pose_stamp);
+
+      break;
+    }
+
+  }
+
+  // if (stamped_pose_id == stamped_pose_ids_.end())
+  // {
+  //   stamped_pose_ids_[pose_stamp] = ++pose_id_;
+  //   return pose_id_;
+  // }
+}
+
 
 
 } // namespace backend

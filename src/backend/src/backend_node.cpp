@@ -5,6 +5,7 @@
 #include "backend/factor_handler/factor_handler.h"
 #include "backend/backend.h"
 #include "backend/factor_handler/gnss_handler.h"
+#include "backend/factor_handler/vo_handler.h"
 
 #include <memory> 
 
@@ -22,8 +23,12 @@ int main(int argc, char **argv)
 		backend
 	);
 
+	backend::factor_handler::VOHandler vo(
+		nh, "vo_topic", 1, 
+		backend
+	);
+
 	// backend::factor_handler::IMUHandler imu;
-	// backend::factor_handler::VOHandler vo;
 	// backend::factor_handler::ApriltagHandler tag;
 
 	ros::spin();

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <launch>
-    <arg name = "stereo_pose_relative_topic"  default = "/frontend/pose_relative"/>
+    <!-- <arg name = "stereo_pose_relative_topic"  default = "/frontend/pose_relative"/> -->
+    <arg name = "vo_topic"  default = "/frontend/pose_relative"/>
     <arg name = "stereo_cloud_topic" default = "/frontend/point_cloud"/>
     <!-- <arg name = "tf_topic" default = "/tf"/> -->
     <!-- <arg name = "gnss_topic" default = "/kitti/oxts/gps/fix"/> -->
@@ -13,7 +14,7 @@
         name   = "backend"
         pkg    = "backend"
         type   = "backend_node"
-        args   = "$(arg stereo_pose_relative_topic) 
+        args   = "$(arg vo_topic) 
                   $(arg stereo_cloud_topic) 
                   $(arg gnss_topic) 
                   $(arg imu_topic) 
@@ -21,7 +22,7 @@
         output = "screen"
     >
     
-    <remap from = "stereo_pose_relative_topic"  to = "$(arg stereo_pose_relative_topic)"/>
+    <remap from = "vo_topic"  to = "$(arg vo_topic)"/>
     <remap from = "stereo_cloud_topic"  to = "$(arg stereo_cloud_topic)"/>
     <remap from = "gnss_topic"  to = "$(arg gnss_topic)"/>
     <remap from = "imu_topic" to = "$(arg imu_topic)"/>
