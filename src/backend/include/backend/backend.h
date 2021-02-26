@@ -53,7 +53,7 @@ public:
   : pose_id_(0),
     pose_(gtsam::Pose3::identity()),
     buffer_size_(1000),
-    optimize_timer_(nh_.createTimer(ros::Duration(1), &Backend::callback, this)), 
+    optimize_timer_(nh_.createTimer(ros::Duration(5), &Backend::callback, this)), 
     updated_(true),
     graph_filename_("graph.dot"), result_path_(ros::package::getPath("backend") + "/../../results/")
   {
@@ -70,7 +70,7 @@ public:
   gtsam::NonlinearFactorGraph& getGraph() { return new_factors_; }
 
   int incrementPoseID() { return ++pose_id_; }
-  int registerStampedPose(ros::Time stamp, int id) { stamped_pose_ids_[stamp] = id; }
+  void registerStampedPose(ros::Time stamp, int id) { stamped_pose_ids_[stamp] = id; }
   void isUpdated() { updated_ = true; }
 
   geometry_msgs::PoseStamped generateMsg();
@@ -82,9 +82,8 @@ public:
 
 void Backend::callback(const ros::TimerEvent& event)
 {
-  if (updated_ && new_values_.size())
+  if (new_values_.size())
   {
-    // updated_ = false;
     // new_values_.print();
 
     isam2_.update(new_factors_, new_values_);
@@ -120,28 +119,34 @@ geometry_msgs::PoseStamped Backend::generateMsg()
 int Backend::searchAssociatedPose(ros::Time pose_stamp)
 {    
   std::map<ros::Time, int>::iterator stamped_pose_id = stamped_pose_ids_.begin();
+  std::map<ros::Time, int>::iterator prev = stamped_pose_ids_.begin();
+
   while (stamped_pose_id != stamped_pose_ids_.end())
   {
     if (pose_stamp < stamped_pose_id->first)
-    {
-      stamped_pose_id++;
-      continue;
-    }
-    else
-    {
-      // ROS_INFO_STREAM("stamped_pose_id->first: " << stamped_pose_id->first);
-      // ROS_INFO_STREAM("pose_stamp: " << pose_stamp);
-
       break;
-    }
 
+    prev = stamped_pose_id++;;
   }
 
-  // if (stamped_pose_id == stamped_pose_ids_.end())
-  // {
-  //   stamped_pose_ids_[pose_stamp] = ++pose_id_;
-  //   return pose_id_;
-  // }
+  double prev_diff = std::abs((pose_stamp - prev->first).toSec());
+  double diff = std::abs((pose_stamp - stamped_pose_id->first).toSec());
+
+  if ( (prev_diff < 0.01) || (diff < 0.01) ) // is associated
+  {
+    if (diff < prev_diff)
+      return stamped_pose_id->second;
+    else
+      return prev->second;
+  }
+
+  if (stamped_pose_id != stamped_pose_ids_.end())
+    return stamped_pose_id->second;
+  else
+  {
+    stamped_pose_ids_[pose_stamp] = ++pose_id_;
+    return pose_id_;
+  }
 }
 
 

@@ -57,7 +57,7 @@ public:
     tf2::fromMsg(msg->pose, T_b1b2);
     gtsam::Pose3 pose(T_b1b2.matrix()); 
 
-    backend_->searchAssociatedPose(msg->header.stamp);
+    to_id_ = backend_->searchAssociatedPose(msg->header.stamp);
 
     // Values - update(): https://gtsam.org/doxygen/4.0.0/a03871.html#a47bf2a64ee131889b02049b242640226
     // Graph - rekey(): http://www.borg.cc.gatech.edu/sites/edu.borg/html/a00181.html

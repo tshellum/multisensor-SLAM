@@ -227,6 +227,9 @@ class StereoFrontend
         /***** Publish *****/
         if (_valid_estimate)
         {
+          ros::Duration(1.0).sleep();
+          
+
           _pcm.setPointCloudHeader(cam_left->header);
           _cloud_pub.publish(_pcm.toPointCloud2Msg(cam_left->header));
           _pose_relative_pub.publish(_pose.toPoseStamped(cam_left->header, _pose.getRelativeTransformation()));  
