@@ -3,6 +3,7 @@
 #include <ros/ros.h> 
 
 #include <memory> 
+#include <string> 
 
 #include "backend/backend.h"
 

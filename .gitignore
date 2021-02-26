@@ -3,3 +3,5 @@ devel/
 logs/
 .catkin_tools/
 .vscode/
+videos/
+download/*.zip
