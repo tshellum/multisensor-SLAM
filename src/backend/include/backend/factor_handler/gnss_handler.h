@@ -53,12 +53,11 @@ public:
     Eigen::Isometry3d T_w = tf2::transformToEigen(msg.transforms[0].transform); 
     gtsam::Pose3 pose(T_w.matrix()); 
 
-    gtsam::Key pose_key = gtsam::symbol_shorthand::X(backend_->incrementPoseID()); 
-    backend_->registerStampedPose(msg.transforms[0].header.stamp, backend_->getPoseID());
+    std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg.transforms[0].header.stamp);
+    gtsam::Key pose_key = gtsam::symbol_shorthand::X(associated_id.first); 
 
-    if (! backend_->getValues().exists(pose_key))
-      backend_->getValues().insert(pose_key, pose); 
-    
+    backend_->insertValue(pose_key, pose);
+
     backend_->getGraph().add(
       gtsam::PriorFactor<gtsam::Pose3>(
         pose_key, pose, noise_

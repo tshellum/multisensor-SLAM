@@ -6,6 +6,7 @@
 #include "backend/backend.h"
 #include "backend/factor_handler/gnss_handler.h"
 #include "backend/factor_handler/vo_handler.h"
+#include "backend/factor_handler/imu_handler.h"
 
 #include <memory> 
 
@@ -28,7 +29,11 @@ int main(int argc, char **argv)
 		backend
 	);
 
-	// backend::factor_handler::IMUHandler imu;
+	backend::factor_handler::IMUHandler imu(
+		nh, "imu_topic", 1, 
+		backend
+	);
+
 	// backend::factor_handler::ApriltagHandler tag;
 
 	ros::spin();

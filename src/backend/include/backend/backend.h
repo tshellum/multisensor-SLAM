@@ -14,6 +14,7 @@
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam/inference/Symbol.h>
+#include <gtsam/navigation/CombinedImuFactor.h>
 
 /*** Standard library ***/ 
 #include <fstream>
@@ -45,12 +46,14 @@ private:
   
   // Current state
   int pose_id_;
+  double association_threshold_; // in seconds
   std::map<ros::Time, int> stamped_pose_ids_;
   gtsam::Pose3 pose_;
 
 public:
   Backend() 
   : pose_id_(0),
+    association_threshold_(0.01),
     pose_(gtsam::Pose3::identity()),
     buffer_size_(1000),
     optimize_timer_(nh_.createTimer(ros::Duration(5), &Backend::callback, this)), 
@@ -76,7 +79,10 @@ public:
   geometry_msgs::PoseStamped generateMsg();
   void callback(const ros::TimerEvent& event);
 
-  int searchAssociatedPose(ros::Time pose_stamp);
+  template <typename Value>
+  void insertValue(gtsam::Key pose_key, Value value);
+  
+  std::pair<int, bool> searchAssociatedPose(ros::Time pose_stamp, ros::Time prev_pose_stamp);
 };
 
 
@@ -84,7 +90,7 @@ void Backend::callback(const ros::TimerEvent& event)
 {
   if (new_values_.size())
   {
-    // new_values_.print();
+    new_values_.print();
 
     isam2_.update(new_factors_, new_values_);
     // for (int i = 0; i < optNum; ++i)
@@ -116,7 +122,15 @@ geometry_msgs::PoseStamped Backend::generateMsg()
 }
 
 
-int Backend::searchAssociatedPose(ros::Time pose_stamp)
+template <typename Value>
+void Backend::insertValue(gtsam::Key pose_key, Value value)
+{
+  if (! new_values_.exists(pose_key))
+    new_values_.insert(pose_key, value); 
+}
+
+
+std::pair<int, bool> Backend::searchAssociatedPose(ros::Time pose_stamp, ros::Time prev_pose_stamp = ros::Time(0.0))
 {    
   std::map<ros::Time, int>::iterator stamped_pose_id = stamped_pose_ids_.begin();
   std::map<ros::Time, int>::iterator prev = stamped_pose_ids_.begin();
@@ -132,20 +146,22 @@ int Backend::searchAssociatedPose(ros::Time pose_stamp)
   double prev_diff = std::abs((pose_stamp - prev->first).toSec());
   double diff = std::abs((pose_stamp - stamped_pose_id->first).toSec());
 
-  if ( (prev_diff < 0.01) || (diff < 0.01) ) // is associated
+  if ( (prev_diff < association_threshold_) 
+    || (diff < association_threshold_) ) 
   {
     if (diff < prev_diff)
-      return stamped_pose_id->second;
-    else
-      return prev->second;
+      return std::make_pair(stamped_pose_id->second, true); // Next is associated
+    
+    if ( (diff > prev_diff) && (prev->first != prev_pose_stamp)) // Ensure that previous association isn't the actual previous pose 
+      return std::make_pair(prev->second, true);            // Prev is associated
   }
 
-  if (stamped_pose_id != stamped_pose_ids_.end())
-    return stamped_pose_id->second;
+  if (stamped_pose_id != stamped_pose_ids_.end()) 
+    return std::make_pair(stamped_pose_id->second, false);  // Returns id of next pose
   else
   {
-    stamped_pose_ids_[pose_stamp] = ++pose_id_;
-    return pose_id_;
+    stamped_pose_ids_[pose_stamp] = ++pose_id_; 
+    return std::make_pair(pose_id_, false);;                // New pose
   }
 }
 

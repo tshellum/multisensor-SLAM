@@ -29,8 +29,8 @@ class VOHandler : public FactorHandler<const geometry_msgs::PoseStampedConstPtr&
 private:
   const gtsam::noiseModel::Diagonal::shared_ptr noise_; 
 
-  int from_id_;
-  int to_id_;
+  int       from_id_;
+  ros::Time from_time_;
 public:
   VOHandler(
     ros::NodeHandle nh, 
@@ -46,8 +46,10 @@ public:
           ).finished() 
         ) 
       ),
-      from_id_(0), to_id_(0)    
-  {}
+      from_id_(0), from_time_(0.0)    
+  {
+    
+  }
   ~VOHandler() = default; 
 
 
@@ -57,14 +59,15 @@ public:
     tf2::fromMsg(msg->pose, T_b1b2);
     gtsam::Pose3 pose(T_b1b2.matrix()); 
 
-    to_id_ = backend_->searchAssociatedPose(msg->header.stamp);
-
+    std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg->header.stamp, from_time_);
+    gtsam::Key pose_key = gtsam::symbol_shorthand::X(associated_id.first); 
+    
     // Values - update(): https://gtsam.org/doxygen/4.0.0/a03871.html#a47bf2a64ee131889b02049b242640226
     // Graph - rekey(): http://www.borg.cc.gatech.edu/sites/edu.borg/html/a00181.html
 
     gtsam::Key pose_key_from = gtsam::symbol_shorthand::X(from_id_); 
-    gtsam::Key pose_key_to   = gtsam::symbol_shorthand::X(to_id_); 
-    
+    gtsam::Key pose_key_to   = gtsam::symbol_shorthand::X(associated_id.first); 
+
     // if (! backend_->getValues().exists(pose_key_to))
     //   backend_->getValues().insert(pose_key_to, pose); 
 
@@ -74,7 +77,8 @@ public:
     //   )
     // ); 
 
-    from_id_ = to_id_;
+    from_id_ = associated_id.first;
+    from_time_ = msg->header.stamp;
   }
 
 };
