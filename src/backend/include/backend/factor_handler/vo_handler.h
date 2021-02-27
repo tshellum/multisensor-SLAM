@@ -38,12 +38,9 @@ public:
     uint32_t queue_size, 
     std::shared_ptr<Backend> backend
   ) : FactorHandler(nh, topic, queue_size, backend), 
-      noise_( 
+      noise_(  
         gtsam::noiseModel::Diagonal::Sigmas( 
-          ( gtsam::Vector6() 
-            << gtsam::Vector3(1.0, 1.0, 1.0), // TODO: Tune
-            gtsam::Vector3(1.0, 1.0, 1.0) 
-          ).finished() 
+          (gtsam::Vector(6) << 1.0, 1.0, 1.0, 1.0, 1.0, 1.0).finished()  // rad/deg?, rad/deg?, rad/deg?, m, m, m 
         ) 
       ),
       from_id_(0), from_time_(0.0)    
@@ -57,25 +54,20 @@ public:
   {
     Eigen::Isometry3d T_b1b2;
     tf2::fromMsg(msg->pose, T_b1b2);
-    gtsam::Pose3 pose(T_b1b2.matrix()); 
+    gtsam::Pose3 pose_relative(T_b1b2.matrix()); 
 
     std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg->header.stamp, from_time_);
     gtsam::Key pose_key = gtsam::symbol_shorthand::X(associated_id.first); 
     
-    // Values - update(): https://gtsam.org/doxygen/4.0.0/a03871.html#a47bf2a64ee131889b02049b242640226
-    // Graph - rekey(): http://www.borg.cc.gatech.edu/sites/edu.borg/html/a00181.html
-
     gtsam::Key pose_key_from = gtsam::symbol_shorthand::X(from_id_); 
     gtsam::Key pose_key_to   = gtsam::symbol_shorthand::X(associated_id.first); 
 
-    // if (! backend_->getValues().exists(pose_key_to))
-    //   backend_->getValues().insert(pose_key_to, pose); 
-
-    // backend_->getGraph().add(
-    //   gtsam::BetweenFactor<gtsam::Pose3>(
-    //     pose_key_from, pose_key_to, pose, noise_
-    //   )
-    // ); 
+    backend_->tryInsertValue(pose_key_to, pose_relative);
+    backend_->insertBetweenFactor(from_id_, 
+                                  associated_id.first, 
+                                  associated_id.second, 
+                                  pose_relative, 
+                                  noise_);
 
     from_id_ = associated_id.first;
     from_time_ = msg->header.stamp;

@@ -14,7 +14,7 @@
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam/inference/Symbol.h>
-#include <gtsam/navigation/CombinedImuFactor.h>
+#include <gtsam/slam/BetweenFactor.h>
 
 /*** Standard library ***/ 
 #include <fstream>
@@ -50,18 +50,21 @@ private:
   std::map<ros::Time, int> stamped_pose_ids_;
   gtsam::Pose3 pose_;
 
+  // Sensor relevant variables
+    int pose_id_prev_relative_;
+
+
 public:
   Backend() 
-  : pose_id_(0),
+  : pose_id_(0), pose_id_prev_relative_(0),
     association_threshold_(0.01),
     pose_(gtsam::Pose3::identity()),
-    buffer_size_(1000),
-    optimize_timer_(nh_.createTimer(ros::Duration(5), &Backend::callback, this)), 
     updated_(true),
-    graph_filename_("graph.dot"), result_path_(ros::package::getPath("backend") + "/../../results/")
-  {
-    world_pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/backend/pose_world", buffer_size_);
-  };
+    graph_filename_("graph.dot"), result_path_(ros::package::getPath("backend") + "/../../results/"),
+    buffer_size_(1000),
+    optimize_timer_(nh_.createTimer(ros::Duration(5), &Backend::callback, this)),
+    world_pose_pub_(nh_.advertise<geometry_msgs::PoseStamped>("/backend/pose_world", buffer_size_)) 
+  {};
 
   ~Backend() 
   {
@@ -80,9 +83,10 @@ public:
   void callback(const ros::TimerEvent& event);
 
   template <typename Value>
-  void insertValue(gtsam::Key pose_key, Value value);
+  bool tryInsertValue(gtsam::Key pose_key, Value value, bool is_associated = false);
   
-  std::pair<int, bool> searchAssociatedPose(ros::Time pose_stamp, ros::Time prev_pose_stamp);
+  std::pair<int, bool> searchAssociatedPose(ros::Time pose_stamp, ros::Time prev_pose_stamp = ros::Time(0.0));
+  void insertBetweenFactor(int from_id, int to_id, bool is_associated, gtsam::Pose3 pose_relative, gtsam::noiseModel::Diagonal::shared_ptr noise);
 };
 
 
@@ -90,7 +94,13 @@ void Backend::callback(const ros::TimerEvent& event)
 {
   if (new_values_.size())
   {
-    new_values_.print();
+    // Preintegrate all measurements
+    // for (stamped_id = stamped_pose_ids_.begin(); stamped_id != stamped_pose_ids_.end(); stamped_id++)
+    // {
+      
+    // }
+
+    // new_values_.print();
 
     isam2_.update(new_factors_, new_values_);
     // for (int i = 0; i < optNum; ++i)
@@ -99,7 +109,7 @@ void Backend::callback(const ros::TimerEvent& event)
     gtsam::Values current_estimate = isam2_.calculateBestEstimate();
     pose_ = current_estimate.at<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id_));
 
-    // pose_.print();
+    pose_.print();
 
     new_factors_.resize(0);
     new_values_.clear();
@@ -122,15 +132,40 @@ geometry_msgs::PoseStamped Backend::generateMsg()
 }
 
 
+// template <typename Value>
+// bool Backend::tryInsertValue(gtsam::Key pose_key, Value value, bool is_assosiated = false)
+// {
+//   if (! new_values_.exists(pose_key))
+//   {
+//     new_values_.insert(pose_key, value); 
+//     return true;
+//   }
+//   else
+//     return false;
+// }
+
+
+
 template <typename Value>
-void Backend::insertValue(gtsam::Key pose_key, Value value)
+bool Backend::tryInsertValue(gtsam::Key pose_key, Value value, bool is_associated)
 {
-  if (! new_values_.exists(pose_key))
+  if (! new_values_.exists(pose_key)) // Value doesn't exist, thus is inserted
+  {
     new_values_.insert(pose_key, value); 
+    return true;
+  }
+
+  if (is_associated)                  // Value exist and is associated, thus not inserted
+    return false;
+  else                                // Value exist and is not associated. This is a more complicated scenario. Insert at end to be swapped. Should only happend for poses                             
+  {
+    new_values_.insert(gtsam::symbol_shorthand::X(++pose_id_), value); 
+    return true;
+  }  
 }
 
 
-std::pair<int, bool> Backend::searchAssociatedPose(ros::Time pose_stamp, ros::Time prev_pose_stamp = ros::Time(0.0))
+std::pair<int, bool> Backend::searchAssociatedPose(ros::Time pose_stamp, ros::Time prev_pose_stamp)
 {    
   std::map<ros::Time, int>::iterator stamped_pose_id = stamped_pose_ids_.begin();
   std::map<ros::Time, int>::iterator prev = stamped_pose_ids_.begin();
@@ -164,6 +199,57 @@ std::pair<int, bool> Backend::searchAssociatedPose(ros::Time pose_stamp, ros::Ti
     return std::make_pair(pose_id_, false);;                // New pose
   }
 }
+
+
+void Backend::insertBetweenFactor(int from_id, int to_id, bool is_associated, gtsam::Pose3 pose_relative, gtsam::noiseModel::Diagonal::shared_ptr noise)
+{
+  pose_id_prev_relative_ = to_id;
+
+  gtsam::Key pose_key_from = gtsam::symbol_shorthand::X(from_id); 
+  gtsam::Key pose_key_to   = gtsam::symbol_shorthand::X(to_id); 
+
+  if ( (! isam2_.valueExists(gtsam::symbol_shorthand::X(0))) 
+    && (! new_values_.exists(gtsam::symbol_shorthand::X(0))) ) // Insert a prior for the entire graph 
+  {
+    gtsam::Pose3 initial = gtsam::Pose3::identity(); // TODO: GNSS should initialize this
+    new_factors_.add(gtsam::PriorFactor<gtsam::Pose3>(gtsam::symbol_shorthand::X(0), initial, noise));
+    tryInsertValue(gtsam::symbol_shorthand::X(0), initial);
+  }
+
+
+  if (is_associated || (to_id == pose_id_)) // Either connect to existing poses, or new pose
+    new_factors_.add(
+      gtsam::BetweenFactor<gtsam::Pose3>(
+        pose_key_from, pose_key_to, pose_relative, noise
+      )
+    );
+  else
+  {
+    std::map<gtsam::Key, gtsam::Key> rekey_mapping;
+    
+    for (gtsam::Values::reverse_iterator value = new_values_.rbegin(); value != new_values_.rend();) 
+    {
+      // gtsam::Key prev_key = value->key;
+
+      // value++;
+
+      // value->value.print();
+      // ROS_INFO_STREAM("value->key" << value->key);
+
+      // rekey_mapping[prev_key] = value->key;
+    }
+
+
+    // new_factors_ = new_factors_.rekey(rekey_mapping); 
+  }
+
+
+  // Values - update(): https://gtsam.org/doxygen/4.0.0/a03871.html#a47bf2a64ee131889b02049b242640226
+  // Graph - rekey(): http://www.borg.cc.gatech.edu/sites/edu.borg/html/a00181.html
+
+
+}
+
 
 
 

@@ -56,7 +56,7 @@ public:
     std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg.transforms[0].header.stamp);
     gtsam::Key pose_key = gtsam::symbol_shorthand::X(associated_id.first); 
 
-    backend_->insertValue(pose_key, pose);
+    backend_->tryInsertValue(pose_key, pose);
 
     backend_->getGraph().add(
       gtsam::PriorFactor<gtsam::Pose3>(
