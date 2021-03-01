@@ -30,6 +30,8 @@ class GNSSHandler : public FactorHandler<const tf2_msgs::TFMessage&>
 {
 private:
   const gtsam::noiseModel::Diagonal::shared_ptr noise_; 
+  int pose_id_;
+
 public:
   GNSSHandler(
     ros::NodeHandle nh, 
@@ -44,7 +46,7 @@ public:
             gtsam::Vector3(0.15, 0.15, 0.1) 
           ).finished() 
         ) 
-      )
+      ), pose_id_(0)
   {}
   ~GNSSHandler() = default; 
 
@@ -53,16 +55,29 @@ public:
     Eigen::Isometry3d T_w = tf2::transformToEigen(msg.transforms[0].transform); 
     gtsam::Pose3 pose(T_w.matrix()); 
 
-    std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg.transforms[0].header.stamp);
-    gtsam::Key pose_key = gtsam::symbol_shorthand::X(associated_id.first); 
+    if (backend_->checkNavStatus() == false)
+    {
+      backend_->updateNavStatus(true);
+      pose_id_ = backend_->getPoseID();       
+    }
+    else
+    {
+      std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg.transforms[0].header.stamp);
+      pose_id_ = associated_id.first;       
+    }
+
+    // ROS_INFO_STREAM("gnss - id: " << pose_id_);
+
+    gtsam::Key pose_key = gtsam::symbol_shorthand::X(pose_id_);       
 
     backend_->tryInsertValue(pose_key, pose);
-
-    backend_->getGraph().add(
+    backend_->addFactor(
       gtsam::PriorFactor<gtsam::Pose3>(
         pose_key, pose, noise_
       )
-    ); 
+    );
+
+    backend_->isUpdated();
   }
 
 };

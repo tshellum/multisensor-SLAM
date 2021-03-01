@@ -227,7 +227,7 @@ class StereoFrontend
         /***** Publish *****/
         if (_valid_estimate)
         {
-          ros::Duration(1.0).sleep();
+          // ros::Duration(1.0).sleep();
           
 
           _pcm.setPointCloudHeader(cam_left->header);

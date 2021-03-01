@@ -4,8 +4,8 @@
     <arg name = "vo_topic"  default = "/frontend/pose_relative"/>
     <arg name = "stereo_cloud_topic" default = "/frontend/point_cloud"/>
     <!-- <arg name = "gnss_topic" default = "/kitti/oxts/gps/fix"/> -->
-    <arg name = "gnss_topic" default = "/tf1"/>
-    <arg name = "imu_topic" default = "/kitti/oxts/imu1"/>
+    <arg name = "gnss_topic" default = "/tf"/>
+    <arg name = "imu_topic" default = "/kitti/oxts/imu"/>
 
     <node 
         name   = "backend"
