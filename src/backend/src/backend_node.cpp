@@ -2,8 +2,8 @@
 #include <ros/ros.h> 
 
 // Local
-#include "backend/factor_handler/factor_handler.h"
 #include "backend/backend.h"
+#include "backend/factor_handler/factor_handler.h"
 #include "backend/factor_handler/gnss_handler.h"
 #include "backend/factor_handler/vo_handler.h"
 

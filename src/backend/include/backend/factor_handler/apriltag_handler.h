@@ -46,7 +46,7 @@ public:
 
   void callback(const apriltag_map::ApriltagDetections& detections) override 
   {
-    K_ = new gtsam::Cal3_S2(info.K.at(0), info.K.at(4), 0.0, info.K.at(2), info.K.at(5)); 
+    K_ = new gtsam::Cal3_S2(detections.info.K.at(0), detections.info.K.at(4), 0.0, detections.info.K.at(2), detections.info.K.at(5)); 
 
     std::for_each(detections.detections.begin(), detections.detections.end(),
       [this](const auto& el { this->addApriltagDetectionToGraph(el); })
