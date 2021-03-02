@@ -1,3 +1,5 @@
+#pragma once
+
 /*** ROS packages ***/
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseStamped.h>

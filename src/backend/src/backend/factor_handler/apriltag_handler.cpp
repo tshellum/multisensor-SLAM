@@ -56,7 +56,8 @@ gtsam::Symbol ApriltagMultipleGTHandler::getApriltagSymbol(int id, std::size_t c
   return gtsam::symbol_shorthand::A(4 * id + static_cast<int>(cornerIndex)); 
 }
 
-void ApriltagMultipleGTHandler::addApriltagGTInfoToGraph(int id, const apriltag_map::ApriltagGTInfo& info) 
+void ApriltagMultipleGTHandler::addApriltagGTInfoToGraph(
+  int id, const apriltag_map::ApriltagGTInfo& info) 
 {
   const std::array<gtsam::Point3, 4>& points = info.getPoints(); 
 
@@ -76,7 +77,8 @@ void ApriltagMultipleGTHandler::addApriltagGTInfoToGraph(int id, const apriltag_
   }
 }
 
-void ApriltagMultipleGTHandler::addApriltagDetectionToGraph(const apriltag_map::ApriltagDetection& detection)
+void ApriltagMultipleGTHandler::addApriltagDetectionToGraph(
+  const apriltag_map::ApriltagDetection& detection)
 {
   for (std::size_t i{0}; i < detection.detectedPoints.size(); ++i)
   {

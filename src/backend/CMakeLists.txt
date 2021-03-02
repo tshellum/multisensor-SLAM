@@ -142,6 +142,7 @@ include_directories(
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(${PROJECT_NAME}_node 
   src/${PROJECT_NAME}_node.cpp
+  src/${PROJECT_NAME}/backend.cpp
   src/${PROJECT_NAME}/factor_handler/apriltag_handler.cpp
 )
 
