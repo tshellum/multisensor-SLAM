@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <launch>
-    <!-- <arg name = "stereo_pose_relative_topic"  default = "/frontend/pose_relative"/> -->
     <arg name = "vo_topic"  default = "/frontend/pose_relative"/>
     <arg name = "vo_queue_size"  default = "10"/>
     

@@ -29,8 +29,10 @@ class VOHandler : public FactorHandler<const geometry_msgs::PoseStampedConstPtr&
 private:
   const gtsam::noiseModel::Diagonal::shared_ptr noise_; 
 
-  int from_id_;
-  int to_id_;
+  int       from_id_;
+  ros::Time from_time_;
+  int       num_rec_meas_;
+
 public:
   VOHandler(
     ros::NodeHandle nh, 
@@ -38,43 +40,56 @@ public:
     uint32_t queue_size, 
     std::shared_ptr<Backend> backend
   ) : FactorHandler(nh, topic, queue_size, backend), 
-      noise_( 
+      noise_(  
         gtsam::noiseModel::Diagonal::Sigmas( 
-          ( gtsam::Vector6() 
-            << gtsam::Vector3(1.0, 1.0, 1.0), // TODO: Tune
-            gtsam::Vector3(1.0, 1.0, 1.0) 
-          ).finished() 
+          (gtsam::Vector(6) << 1.0, 1.0, 1.0, 1.0, 1.0, 1.0).finished()  // rad/deg?, rad/deg?, rad/deg?, m, m, m 
         ) 
       ),
-      from_id_(0), to_id_(0)    
-  {}
+      from_id_(0), from_time_(0.0), num_rec_meas_(0)
+  {
+    
+  }
   ~VOHandler() = default; 
 
 
   void callback(const geometry_msgs::PoseStampedConstPtr& msg)
   {
+    if (backend_->checkNavStatus() == false)
+    {
+      if (++num_rec_meas_ < 5)
+        return;
+      
+      if (num_rec_meas_ == 5)
+      {
+        backend_->tryInsertValue(gtsam::symbol_shorthand::X(backend_->getPoseID()), gtsam::Pose3::identity());
+        backend_->addFactor(gtsam::PriorFactor<gtsam::Pose3>(gtsam::symbol_shorthand::X(backend_->getPoseID()), gtsam::Pose3::identity(), noise_));
+      }
+    }
+      
     Eigen::Isometry3d T_b1b2;
     tf2::fromMsg(msg->pose, T_b1b2);
-    gtsam::Pose3 pose(T_b1b2.matrix()); 
+    gtsam::Pose3 pose_relative(T_b1b2.matrix()); 
 
-    to_id_ = backend_->searchAssociatedPose(msg->header.stamp);
-
-    // Values - update(): https://gtsam.org/doxygen/4.0.0/a03871.html#a47bf2a64ee131889b02049b242640226
-    // Graph - rekey(): http://www.borg.cc.gatech.edu/sites/edu.borg/html/a00181.html
+    std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg->header.stamp, from_time_);
+    int to_id = associated_id.first;
 
     gtsam::Key pose_key_from = gtsam::symbol_shorthand::X(from_id_); 
-    gtsam::Key pose_key_to   = gtsam::symbol_shorthand::X(to_id_); 
-    
-    // if (! backend_->getValues().exists(pose_key_to))
-    //   backend_->getValues().insert(pose_key_to, pose); 
+    gtsam::Key pose_key_to   = gtsam::symbol_shorthand::X(to_id); 
 
-    // backend_->getGraph().add(
-    //   gtsam::BetweenFactor<gtsam::Pose3>(
-    //     pose_key_from, pose_key_to, pose, noise_
-    //   )
-    // ); 
+    ROS_INFO_STREAM("vo - id: " << to_id);
 
-    from_id_ = to_id_;
+    backend_->tryInsertValue(pose_key_to, pose_relative);  
+    backend_->addFactor(
+      gtsam::BetweenFactor<gtsam::Pose3>(
+        pose_key_from, pose_key_to, pose_relative, noise_
+      )
+    );
+
+    backend_->updatedPreviousRelativeTimeStamp(msg->header.stamp);
+    from_id_ = to_id;
+    from_time_ = msg->header.stamp;
+
+    backend_->isUpdated();
   }
 
 };

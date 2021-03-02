@@ -5,10 +5,9 @@
 
 // Local
 #include "backend/backend.h"
-#include "backend/factor_handler/factor_handler.h"
-// #include "backend/factor_handler/gnss_handler.h"
-// #include "backend/factor_handler/vo_handler.h"
-#include "backend/factor_handler/apriltag_handler.h"
+#include "backend/factor_handler/gnss_handler.h"
+#include "backend/factor_handler/vo_handler.h"
+#include "backend/factor_handler/imu_handler.h"
 
 #include <memory> 
 
@@ -54,7 +53,16 @@ int main(int argc, char **argv)
 	// 	backend
 	// );
 
+	std::string imu_topic; 
+	int32_t imu_queue_size; 
+	pnh.getParam("imu_topic", imu_topic); 
+  pnh.getParam("imu_queue_size", imu_queue_size); 
 	// backend::factor_handler::IMUHandler imu;
+	backend::factor_handler::IMUHandler imu(
+		nh, imu_topic, imu_queue_size, 
+		backend
+	);
+
 	// backend::factor_handler::ApriltagHandler tag;
 
 	ros::spin();
