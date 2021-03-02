@@ -19,6 +19,9 @@
 
     <arg name="apriltag_map_dir"  default="$(find apriltag_map)/config" />
     <arg name="apriltag_map_file" default="tags.json" />
+
+    <arg name="frames_dir"       default="$(find apriltag_map)/frames" />
+    <arg name="frames_filenames" default="[$(arg frames_dir)/milliampere_camera_frames.yaml, $(arg frames_dir)/milliampere_frames.yaml]" />
     
     <arg name="filtered_detections_topic" default="/apriltag_frontend/apriltag_frontend_node/detections/filtered" /> 
     <arg name="filtered_detections_queue_size" default="10" /> 
@@ -48,6 +51,7 @@
         <param name="detections_queue_size" value="$(arg filtered_detections_queue_size)"/>
         
         <param name="apriltag_map_filename" value="$(arg apriltag_map_dir)/$(arg apriltag_map_file)" />
+        <param name="frames_filenames" subst_value="True">$(arg frames_filenames)</rosparam>
 
         <!-- <remap from = "vo_topic"  to = "$(arg vo_topic)"/>
         <remap from = "stereo_cloud_topic"  to = "$(arg stereo_cloud_topic)"/>

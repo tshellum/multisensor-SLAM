@@ -21,6 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(Eigen3 REQUIRED) 
 # find_package(GTSAMCMakeTools)
+find_package( yaml-cpp REQUIRED )
 find_package(GTSAM REQUIRED) # Uses installed package
 
 ## Uncomment this if the package has a setup.py. This macro ensures

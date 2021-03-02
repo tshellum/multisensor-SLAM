@@ -59,7 +59,6 @@ public:
   Backend(); 
   ~Backend(); 
 
-
   int getPoseID() const                   { return pose_id_; }
   gtsam::Values& getValues()              { return new_values_;  }
   gtsam::NonlinearFactorGraph& getGraph() { return new_factors_; }

@@ -8,6 +8,7 @@
 #include "backend/factor_handler/gnss_handler.h"
 #include "backend/factor_handler/vo_handler.h"
 #include "backend/factor_handler/imu_handler.h"
+#include "backend/factor_handler/apriltag_handler.h"
 
 #include <memory> 
 
@@ -27,12 +28,15 @@ int main(int argc, char **argv)
 
 	std::string apriltag_map_filename; 
   pnh.getParam("apriltag_map_filename", apriltag_map_filename); 
+	std::vector<std::string> frames_filenames; 
+	pnh.getParam("frames_filenames", frames_filenames); 
 
 	backend::factor_handler::ApriltagMultipleGTHandler apriltag(
 		pnh, 
 		detections_topic, detections_queue_size, 
 		backend, 
-		apriltag_map_filename
+		apriltag_map_filename, 
+		frames_filenames
 	);
 
 	std::string gnss_topic; 
@@ -40,7 +44,7 @@ int main(int argc, char **argv)
 	pnh.getParam("gnss_topic", gnss_topic); 
   pnh.getParam("gnss_queue_size", gnss_queue_size); 
 	// backend::factor_handler::GNSSHandler gnss(
-	// 	nh, gnss_topic, gnss_queue_size, 
+	// 	pnh, gnss_topic, gnss_queue_size, 
 	// 	backend
 	// );
 
@@ -49,7 +53,7 @@ int main(int argc, char **argv)
 	pnh.getParam("vo_topic", vo_topic); 
   pnh.getParam("vo_queue_size", vo_queue_size); 
 	// backend::factor_handler::VOHandler vo(
-	// 	nh, vo_topic, vo_queue_size, 
+	// 	pnh, vo_topic, vo_queue_size, 
 	// 	backend
 	// );
 
@@ -59,7 +63,7 @@ int main(int argc, char **argv)
   pnh.getParam("imu_queue_size", imu_queue_size); 
 	// backend::factor_handler::IMUHandler imu;
 	backend::factor_handler::IMUHandler imu(
-		nh, imu_topic, imu_queue_size, 
+		pnh, imu_topic, imu_queue_size, 
 		backend
 	);
 

@@ -11,12 +11,14 @@ namespace factor_handler
 ApriltagHandler::ApriltagHandler(ros::NodeHandle nh, 
   const std::string& apriltag_detections_topic, uint32_t apriltag_detections_queue_size, 
   std::shared_ptr<Backend> backend, 
-  const std::string& apriltag_map_filename
+  const std::string& apriltag_map_filename, 
+  const std::vector<std::string>& frames_filenames
 ) : FactorHandler(nh, 
     apriltag_detections_topic, apriltag_detections_queue_size, 
     backend
   ), 
-  map_(apriltag_map_filename) 
+  map_(apriltag_map_filename), 
+  frames_(frames_filenames)
 { }
 
 void ApriltagHandler::callback(const apriltag_map::ApriltagDetections& detections) 
@@ -47,12 +49,14 @@ ApriltagMultipleGTHandler::ApriltagMultipleGTHandler(
   ros::NodeHandle nh, 
   const std::string& apriltag_detections_topic, uint32_t apriltag_detections_queue_size, 
   std::shared_ptr<Backend> backend, 
-  const std::string& apriltag_map_filename
+  const std::string& apriltag_map_filename, 
+  const std::vector<std::string>& frames_filenames
 ) : ApriltagHandler(nh, 
-  apriltag_detections_topic, apriltag_detections_queue_size, 
-  backend, 
-  apriltag_map_filename
-)
+    apriltag_detections_topic, apriltag_detections_queue_size, 
+    backend, 
+    apriltag_map_filename, 
+    frames_filenames
+  )
 {
   addApriltagMapToGraph(); 
 }

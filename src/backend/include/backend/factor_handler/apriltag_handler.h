@@ -7,8 +7,10 @@
 
 #include <array> 
 #include <string> 
+#include <vector> 
 #include <algorithm> 
 
+#include "apriltag_map/frames.h"
 #include "apriltag_map/apriltag_map.h"
 #include "apriltag_map/ApriltagDetections.h"
 
@@ -26,6 +28,7 @@ class ApriltagHandler : public FactorHandler<const apriltag_map::ApriltagDetecti
 protected: 
   gtsam::Cal3_S2::shared_ptr K_; 
   apriltag_map::ApriltagMap map_; 
+  apriltag_map::Frames frames_; 
 
   virtual void addApriltagGTInfoToGraph(int id, const apriltag_map::ApriltagGTInfo& info) = 0; 
   virtual void addApriltagDetectionToGraph(const apriltag_map::ApriltagDetection& detection) = 0; 
@@ -35,7 +38,8 @@ public:
   ApriltagHandler(ros::NodeHandle nh, 
     const std::string& apriltag_detections_topic, uint32_t apriltag_detections_queue_size, 
     std::shared_ptr<Backend> backend, 
-    const std::string& apriltag_map_filename
+    const std::string& apriltag_map_filename, 
+    const std::vector<std::string>& frames_filenames
   ); 
   ~ApriltagHandler() = default; 
 
@@ -58,14 +62,10 @@ public:
     ros::NodeHandle nh, 
     const std::string& apriltag_detections_topic, uint32_t apriltag_detections_queue_size, 
     std::shared_ptr<Backend> backend, 
-    const std::string& apriltag_map_filename
+    const std::string& apriltag_map_filename,
+    const std::vector<std::string>& frames_filenames
   );
   ~ApriltagMultipleGTHandler() = default; 
-
-  // void callback(const apriltag_map::ApriltagDetections& detections)
-  // {
-  //   ApriltagHandler::callback(detections); 
-  // }
 }; 
 
 
