@@ -29,6 +29,8 @@ protected:
 
   virtual void addApriltagGTInfoToGraph(int id, const apriltag_map::ApriltagGTInfo& info) = 0; 
   virtual void addApriltagDetectionToGraph(const apriltag_map::ApriltagDetection& detection) = 0; 
+
+  void addApriltagMapToGraph(); 
 public: 
   ApriltagHandler(ros::NodeHandle nh, 
     const std::string& apriltag_detections_topic, uint32_t apriltag_detections_queue_size, 
@@ -44,7 +46,7 @@ using GTProjectionFactor = gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::P
 
 class ApriltagMultipleGTHandler : public ApriltagHandler
 {
-private:
+protected:
   gtsam::noiseModel::Isotropic::shared_ptr measurementNoise_ = gtsam::noiseModel::Isotropic::Sigma(2, 1.0); 
 
   gtsam::Symbol getApriltagSymbol(int id, std::size_t cornerIndex) const; 

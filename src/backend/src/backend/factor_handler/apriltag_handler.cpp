@@ -1,5 +1,6 @@
 #include "backend/factor_handler/apriltag_handler.h"
 
+#include <ros/ros.h>
 
 namespace backend
 {
@@ -16,12 +17,7 @@ ApriltagHandler::ApriltagHandler(ros::NodeHandle nh,
     backend
   ), 
   map_(apriltag_map_filename) 
-{
-  std::for_each(map_.begin(), map_.end(),
-    [this](const apriltag_map::ApriltagMapElement& el) 
-    { this->addApriltagGTInfoToGraph(el.first, el.second); }
-  ); 
-}
+{ }
 
 void ApriltagHandler::callback(const apriltag_map::ApriltagDetections& detections) 
 {
@@ -38,6 +34,14 @@ void ApriltagHandler::callback(const apriltag_map::ApriltagDetections& detection
   ); 
 } 
 
+void ApriltagHandler::addApriltagMapToGraph()
+{
+  std::for_each(map_.begin(), map_.end(),
+    [this](const apriltag_map::ApriltagMapElement& el) 
+    { addApriltagGTInfoToGraph(el.first, el.second); }
+  ); 
+}
+
 
 ApriltagMultipleGTHandler::ApriltagMultipleGTHandler(
   ros::NodeHandle nh, 
@@ -49,7 +53,9 @@ ApriltagMultipleGTHandler::ApriltagMultipleGTHandler(
   backend, 
   apriltag_map_filename
 )
-{}
+{
+  addApriltagMapToGraph(); 
+}
 
 gtsam::Symbol ApriltagMultipleGTHandler::getApriltagSymbol(int id, std::size_t cornerIndex) const 
 {

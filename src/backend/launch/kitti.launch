@@ -3,30 +3,58 @@
 <launch>
     <!-- <arg name = "stereo_pose_relative_topic"  default = "/frontend/pose_relative"/> -->
     <arg name = "vo_topic"  default = "/frontend/pose_relative"/>
+    <arg name = "vo_queue_size"  default = "10"/>
+    
     <arg name = "stereo_cloud_topic" default = "/frontend/point_cloud"/>
+    <arg name = "stereo_cloud_queue_size" default = "10"/>
     <!-- <arg name = "tf_topic" default = "/tf"/> -->
     <!-- <arg name = "gnss_topic" default = "/kitti/oxts/gps/fix"/> -->
     <arg name = "gnss_topic" default = "/tf"/>
+    <arg name = "gnss_queue_size" default = "10"/>
+
     <arg name = "imu_topic" default = "/kitti/oxts/imu"/>
+    <arg name = "imu_queue_size" default = "10"/>
+
     <arg name = "pulled_image_flag_topic" default = "/frontend/pulled_image_flag"/>
+    <arg name = "pulled_image_flag_queue_size" default = "10"/>
+
+    <arg name="apriltag_map_dir"  default="$(find apriltag_map)/config" />
+    <arg name="apriltag_map_file" default="tags.json" />
+    
+    <arg name="filtered_detections_topic" default="/apriltag_frontend/apriltag_frontend_node/detections/filtered" /> 
+    <arg name="filtered_detections_queue_size" default="10" /> 
 
     <node 
         name   = "backend"
         pkg    = "backend"
         type   = "backend_node"
-        args   = "$(arg vo_topic) 
-                  $(arg stereo_cloud_topic) 
-                  $(arg gnss_topic) 
-                  $(arg imu_topic) 
-                  $(arg pulled_image_flag_topic)"
         output = "screen"
     >
-    
-    <remap from = "vo_topic"  to = "$(arg vo_topic)"/>
-    <remap from = "stereo_cloud_topic"  to = "$(arg stereo_cloud_topic)"/>
-    <remap from = "gnss_topic"  to = "$(arg gnss_topic)"/>
-    <remap from = "imu_topic" to = "$(arg imu_topic)"/>
-    <remap from = "pulled_image_flag_topic" to = "$(arg pulled_image_flag_topic)"/>
+        <param name="vo_topic" value="$(arg vo_topic)" />
+        <param name="vo_queue_size" value="$(arg vo_queue_size)" />
+
+        <param name="stereo_cloud_topic" value="$(arg stereo_cloud_topic)" />
+        <param name="stereo_cloud_queue_size" value="$(arg stereo_cloud_queue_size)" />
+
+        <param name="gnss_topic" value="$(arg gnss_topic)" /> 
+        <param name="gnss_queue_size" value="$(arg gnss_queue_size)" /> 
+
+        <param name="imu_topic" value="$(arg imu_topic)" />
+        <param name="imu_queue_size" value="$(arg imu_queue_size)" />
+
+        <param name="pulled_image_flag_topic" value="$(arg pulled_image_flag_topic)" />
+        <param name="pulled_image_flag_queue_size" value="$(arg pulled_image_flag_queue_size)" />
+
+        <param name="detections_topic" value="$(arg filtered_detections_topic)" />
+        <param name="detections_queue_size" value="$(arg filtered_detections_queue_size)"/>
+        
+        <param name="apriltag_map_filename" value="$(arg apriltag_map_dir)/$(arg apriltag_map_file)" />
+
+        <!-- <remap from = "vo_topic"  to = "$(arg vo_topic)"/>
+        <remap from = "stereo_cloud_topic"  to = "$(arg stereo_cloud_topic)"/>
+        <remap from = "gnss_topic"  to = "$(arg gnss_topic)"/>
+        <remap from = "imu_topic" to = "$(arg imu_topic)"/>
+        <remap from = "pulled_image_flag_topic" to = "$(arg pulled_image_flag_topic)"/> -->
     </node>
 
 </launch>
