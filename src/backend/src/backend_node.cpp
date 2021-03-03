@@ -35,8 +35,7 @@ int main(int argc, char **argv)
 		pnh, 
 		detections_topic, detections_queue_size, 
 		backend, 
-		apriltag_map_filename, 
-		frames_filenames
+		apriltag_map_filename
 	);
 
 	std::string gnss_topic; 
