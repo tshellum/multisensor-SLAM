@@ -57,7 +57,6 @@ public:
       gtsam::noiseModel::Isotropic::shared_ptr gaussian = gtsam::noiseModel::Isotropic::Sigma(3, 0.3);
       velocity_noise_model_ = gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::Huber::Create(1.345), gaussian);
     }
-
     // Create preintegrated instance that follows the NED frame
     boost::shared_ptr<gtsam::PreintegratedCombinedMeasurements::Params> params = gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedD(9.81); // NED
     params->accelerometerCovariance = gtsam::I_3x3 * 0.004;  // acc white noise in continuous

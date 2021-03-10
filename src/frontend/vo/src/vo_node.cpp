@@ -40,7 +40,7 @@ class VO
     // Classes
     StereoCameras stereo_;
     Detector      detector_;
-    // PosePredictor pose_predictor_;
+    PosePredictor pose_predictor_;
 
     // Parameters
     int tic_, toc_;
@@ -52,8 +52,8 @@ class VO
   public:
     VO() 
     : stereo_(nh_, 10),
-      detector_(nh_)
-      // pose_predictor_(nh_, "imu_topic", 1000)
+      detector_(nh_),
+      pose_predictor_(nh_, "imu_topic", 1000)
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       sub_cam_left_.subscribe(nh_, "cam_left", 1);
