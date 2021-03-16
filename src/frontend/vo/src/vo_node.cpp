@@ -43,6 +43,8 @@ class VO
     PosePredictor pose_predictor_;
 
     // Parameters
+    bool initialized_;
+    ros::Time stamp_img_k_;
     int tic_, toc_;
 
     cv::Mat prev_img_;
@@ -51,7 +53,8 @@ class VO
 
   public:
     VO() 
-    : stereo_(nh_, 10),
+    : initialized_(false),
+      stereo_(nh_, 10),
       detector_(nh_),
       pose_predictor_(nh_, "imu_topic", 1000)
     {
@@ -85,6 +88,12 @@ class VO
         return;
       }
 
+      if (initialized_)
+      {
+        double dt = ( cam_left->header.stamp - stamp_img_k_ ).toSec();
+        pose_predictor_.predict(dt);
+      }
+
       stereo_.prepareImages(cv_ptr_left->image, cv_ptr_right->image);
       
 
@@ -95,8 +104,10 @@ class VO
       displayWindowFeatures(cv_ptr_left->image, features_, cv_ptr_left->image, tracked_features_); 
 
 
+      initialized_ = true;
       prev_img_ = cv_ptr_left->image;
-      
+      stamp_img_k_ = cam_left->header.stamp;
+
       toc_ = cv::getTickCount();
       ROS_INFO_STREAM("Time per iteration: " <<  (toc_ - tic_)/ cv::getTickFrequency() << "\n");
     }

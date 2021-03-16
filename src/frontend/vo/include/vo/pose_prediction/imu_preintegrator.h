@@ -17,8 +17,8 @@
 #include <gtsam/inference/Symbol.h> 
 
 /*** Eigen packages ***/
-// #include <Eigen/Geometry> 
-// #include <Eigen/Dense>
+#include <Eigen/Geometry> 
+#include <Eigen/Dense>
 
 
 class IMUPosePredictor
@@ -37,6 +37,11 @@ private:
   gtsam::PreintegratedCombinedMeasurements* preintegrated_;
 
   Eigen::Matrix4d T_bc_, T_cb_;   // Transformation between body and camera 
+
+  // Prev update
+  Eigen::Vector3d vel_prev_;
+  Eigen::Vector3d acc_prev_;
+  Eigen::Vector3d ang_rate_prev_;
 
 public:
   IMUPosePredictor(
@@ -96,6 +101,11 @@ public:
 
 
   bool isUpdated() {return is_updated_;}
+  
+  Eigen::Vector3d getVelocity()     {return vel_prev_;}
+  Eigen::Vector3d getAcceleration() {return acc_prev_;}
+  Eigen::Vector3d getAngularRate()  {return ang_rate_prev_;}
+
   void callback(const sensor_msgs::ImuConstPtr& msg);
   Eigen::Affine3d predict();
 };
@@ -108,6 +118,8 @@ void IMUPosePredictor::callback(const sensor_msgs::ImuConstPtr& msg)
   tf2::fromMsg(msg->linear_acceleration, acc);
   
   preintegrated_->integrateMeasurement(acc, gyr, dt_);
+  acc_prev_ = acc;
+  ang_rate_prev_ = gyr;
   is_updated_ = true;
 }
 
@@ -116,7 +128,8 @@ void IMUPosePredictor::callback(const sensor_msgs::ImuConstPtr& msg)
 Eigen::Affine3d IMUPosePredictor::predict()
 {
   pred_state_ = preintegrated_->predict(prev_state_, prev_bias_);
-
+  vel_prev_ = Eigen::Vector3d{prev_state_.velocity()};
+  
   prev_state_ = gtsam::NavState(pred_state_.pose(), pred_state_.velocity());
   preintegrated_->resetIntegrationAndSetBias(prev_bias_);
 
