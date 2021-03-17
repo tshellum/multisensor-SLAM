@@ -1,0 +1,24 @@
+{
+	"camera" : {
+		"0" : {
+			"resolution" : [1241, 376],
+			"resolutionUncropped" : [1241, 376],
+			"resolutionOffset" : [0, 0],
+			"distortionCoefficients" : [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+			"extrinsicParameters" : [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+			"intrinsicParameters" :  [718.8560, 607.1928, 185.2157],
+			"intrinsicParametersPriorMean" : [718.8560, 607.1928, 185.2157],
+			"intrinsicParametersPriorVariance" : [9.0, 9.0, 9.0]
+		},
+		"1" : {
+			"resolution" : [1241, 376],
+			"resolutionUncropped" : [1241, 376],
+			"resolutionOffset" : [0, 0],
+			"distortionCoefficients" : [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+			"extrinsicParameters" : [0.0, 0.0, 0.0, 5.37165719e-01, 0, 3.141592],
+			"intrinsicParameters" :  [718.8560, 607.1928, 185.2157],
+			"intrinsicParametersPriorMean" : [718.8560, 607.1928, 185.2157],
+			"intrinsicParametersPriorVariance" : [9.0, 9.0, 9.0]
+		}
+    }
+}

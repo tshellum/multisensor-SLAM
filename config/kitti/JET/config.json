@@ -1,0 +1,15 @@
+{
+	"debug" : {
+		"spomDebugLevel" : 0,
+		"spomVisualizationTime" : -1
+	},
+	"spom" : {
+		"patchSize" : 5,
+		"polarID" : 0,
+		"optimizationPattern" : [0, 0, 0, 1, 1, 1, 0, 1, 1, 1],
+		"conditioningNumbers" : [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+		"maxIterations" : 20,
+		"pyramidLevels" : 2,
+		"depthParameterization" : -1
+	}
+}

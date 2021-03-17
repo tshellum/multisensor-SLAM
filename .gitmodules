@@ -4,3 +4,9 @@
 [submodule "src/evaluation/catkin_simple"]
 	path = src/evaluation/catkin_simple
 	url = https://github.com/catkin/catkin_simple.git
+[submodule "src/frontend/vo/include/JET"]
+	path = src/frontend/vo/include/JET
+	url = https://github.com/tshellum/JET.git
+[submodule "src/frontend/vo/include/PYR"]
+	path = src/frontend/vo/include/PYR
+	url = https://github.com/tshellum/PYR.git

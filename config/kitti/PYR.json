@@ -1,0 +1,22 @@
+{
+	"phase_correlation" : {
+		"center_windows_x"      : 613,
+		"center_windows_y"      : 154,
+		"number_windows"        : 5,
+		"wind_width"            : 256,
+		"wind_height"           : 128,
+		"wind_spacing"          : 128,
+		"tukey_r"               : 0.5,
+		"thresh_structure"      : 2,
+		"delta_array_threshold" : 0.5,
+		"thresh_distance"       : 7,
+		"use_calibration"       : 1
+	},
+  "drawing_parameters" : {
+    "motion_magnification" : 4,
+    "gray_img_gain"        : 0.5,
+    "gray_img_offset"      : 128
+  }
+
+}
+

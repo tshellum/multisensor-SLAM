@@ -1,10 +1,13 @@
 #pragma once
 
 #include <string>
-#include <ros/ros.h>
-#include <Eigen/Dense> 
-#include "opencv2/core/eigen.hpp"
 
+#include <ros/ros.h>
+#include <sensor_msgs/Image.h>
+
+#include <Eigen/Dense> 
+
+#include "opencv2/core/eigen.hpp"
 #include <opencv2/calib3d.hpp>
 
 
@@ -12,6 +15,9 @@ class PinholeModel
 {
 private:    
     std::string name_;
+
+	cv::Mat previous_image_;
+	cv::Mat current_image_;
 
     // Projection parameters
     double _fx, _fy, _cx, _cy;
@@ -25,11 +31,11 @@ private:
     cv::Mat _K_cv;
    	Eigen::Matrix3d _K_eig; 	
 
-    // Extrinsic parameters
-    // cv::Mat _R_clcr, _t_clcr;
-
 public:
-    PinholeModel(ros::NodeHandle nh, const std::string name) : name_(name), _k3(0.0)
+    PinholeModel(ros::NodeHandle nh, const std::string name) 
+	: name_(name), 
+	  _k3(0.0),
+	  previous_image_(cv::Mat()), current_image_(cv::Mat())
     {
         nh.getParam("/"+name_+"/image_width", _width);
         nh.getParam("/"+name_+"/image_height", _height);
@@ -60,10 +66,33 @@ public:
 
     int getWidth()  {return _width;};
     int getHeight() {return _height;};
+    cv::Mat getPreviousImage() {return previous_image_;};
+    cv::Mat getCurrentImage()  {return current_image_;};
 
+	cv::Mat storeGray(const sensor_msgs::ImageConstPtr &img_msg);
     void rectify(cv::Mat& img, cv::Mat K_undist);
     void crop(cv::Mat& img, int x1, int x2, int y1, int y2);
 };
+
+
+cv::Mat PinholeModel::storeGray(const sensor_msgs::ImageConstPtr &img_msg)
+{
+	cv_bridge::CvImagePtr cv_ptr;
+
+	try
+	{
+		cv_ptr  = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
+	}
+	catch (cv_bridge::Exception& e)
+	{
+		ROS_ERROR("cv_bridge exception: %s", e.what());
+	}
+
+	if (! current_image_.empty())
+		previous_image_ = current_image_;
+	current_image_ = cv_ptr->image;
+	return current_image_;
+}
 
 
 void PinholeModel::rectify(cv::Mat& img, cv::Mat K_undist = cv::Mat())
@@ -155,12 +184,24 @@ public:
 	cv::Mat rightProjMat() {return _P_cr;};
 	Eigen::Affine3d getStereoTransformation() {return _T_clcr;};
 	Eigen::Affine3d getInverseStereoTransformation() {return _T_crcl;};
+	std::pair<cv::Mat, cv::Mat> getStereoImagePair() {return std::make_pair(_camera_left.getCurrentImage(), _camera_right.getCurrentImage());};
+	std::pair<cv::Mat, cv::Mat> getStereoImagePairPrevious() {return std::make_pair(_camera_left.getPreviousImage(), _camera_right.getPreviousImage());};
 
+	std::pair<cv::Mat, cv::Mat> storeImagePairGray(const sensor_msgs::ImageConstPtr &cam_left, const sensor_msgs::ImageConstPtr &cam_right);
 	void prepareImages(cv::Mat& img_left, cv::Mat& img_right);
 	cv::Mat createProjectionMatrix(Eigen::Affine3d T,
                                    Eigen::Matrix3d K);
 
 };
+
+
+std::pair<cv::Mat, cv::Mat> StereoCameras::storeImagePairGray(const sensor_msgs::ImageConstPtr &img_left_msg, 
+															  const sensor_msgs::ImageConstPtr &img_right_msg)
+{
+	cv::Mat img_left  = _camera_left.storeGray(img_left_msg);
+	cv::Mat img_right = _camera_right.storeGray(img_right_msg);
+	return std::make_pair(img_left, img_right);
+}
 
 
 void StereoCameras::prepareImages(cv::Mat& img_left, cv::Mat& img_right)

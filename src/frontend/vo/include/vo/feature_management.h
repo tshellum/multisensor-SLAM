@@ -158,6 +158,7 @@ void Detector::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint
 {
   if (prev_img.empty() || features.empty())
     return;
+  ROS_INFO_STREAM("Valid image - prev: " << prev_img.size() << ", cur: " << cur_img.size());
 
   // Point vectors
   std::size_t n_pts = features.size(); 
