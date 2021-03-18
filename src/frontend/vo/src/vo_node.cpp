@@ -109,13 +109,21 @@ class VO
                                                                                                                    sequencer_.current.kpts_l, 
                                                                                                                    sequencer_.current.kpts_r);
 
+      ROS_INFO_STREAM("matched - match_left.size(): " << stereo_features.first.size() << ", match_left.size(): " << stereo_features.second.size());
+
+      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud = detector_.triangulate(stereo_features.first, 
+                                                                        stereo_features.second, 
+                                                                        stereo_.leftProjMat(), 
+                                                                        stereo_.rightProjMat());
+
+
       // Predict pose
       // pose_predictor_.estimatePoseFromFeatures(points_prev, points_cur, K);
 
       // pyr_.Estimate(prev_img, img_left);
       // cv::Mat img_current_disp2 = pyr_.Draw(img_left);		
       // imshow("results", img_current_disp2);
- 
+
 
       displayWindowFeatures(sequencer_.current.img_l, 
                             stereo_features.first,

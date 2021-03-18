@@ -10,6 +10,10 @@
 #include "support.h"
 
 
+/*** PCL packages ***/
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+
 
 class FeatureManager
 {
@@ -80,10 +84,31 @@ public:
 
   ~FeatureManager() {}
 
-  void bucketedFeatureDetection(cv::Mat image, std::vector<cv::KeyPoint>& features);
-  void track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>& prev_kps, std::vector<cv::KeyPoint>& cur_kps);
-  std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> circularMatching(cv::Mat left_cur_img, cv::Mat right_cur_img, cv::Mat left_prev_img, cv::Mat right_prev_img, 
-                                                                                   std::vector<cv::KeyPoint> features_left_cur, std::vector<cv::KeyPoint> features_right_cur);
+  void bucketedFeatureDetection(cv::Mat image, 
+                                std::vector<cv::KeyPoint>& features);
+  
+  void track(cv::Mat prev_img, 
+             cv::Mat cur_img, 
+             std::vector<cv::KeyPoint>& prev_kps, 
+             std::vector<cv::KeyPoint>& cur_kps);
+
+  std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> circularMatching(cv::Mat left_cur_img, 
+                                                                                   cv::Mat right_cur_img, 
+                                                                                   cv::Mat left_prev_img, 
+                                                                                   cv::Mat right_prev_img, 
+                                                                                   std::vector<cv::KeyPoint> features_left_cur, 
+                                                                                   std::vector<cv::KeyPoint> features_right_cur);
+
+  cv::Mat DLT(cv::Point2f pt_l, 
+                  cv::Point2f pt_r,
+                  cv::Mat P_l,
+                  cv::Mat P_r);
+
+  pcl::PointCloud<pcl::PointXYZ>::Ptr triangulate(std::vector<cv::KeyPoint> match_left, 
+                                                  std::vector<cv::KeyPoint> match_right,
+                                                  cv::Mat P_cl,
+                                                  cv::Mat P_cr);
+
 };
 
 
@@ -266,3 +291,96 @@ std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> FeatureManager::
   return std::make_pair(matched_left, matched_right);
 }
 
+
+
+// https://github.com/UZ-SLAMLab/ORB_SLAM3/blob/master/src/CameraModels/KannalaBrandt8.cpp
+cv::Mat FeatureManager::DLT(cv::Point2f pt_l, 
+                            cv::Point2f pt_r,
+                            cv::Mat P_l,
+                            cv::Mat P_r)
+{
+  /*********************************************************************
+  Compute the 3D position of a single point from 2D correspondences.
+
+    Args:
+        uv1:    2D projection of point in image 1.
+        uv2:    2D projection of point in image 2.
+        P1:     Projection matrix with shape 3 x 4 for image 1.
+        P2:     Projection matrix with shape 3 x 4 for image 2.
+
+    Returns:
+        X:      3D coordinates of point in the camera frame of image 1.
+                (not homogeneous!)
+
+    See HZ Ch. 12.2: Linear triangulation methods (p312)
+  *********************************************************************/
+
+  cv::Mat A(4,4,CV_64F);
+  A.row(0) = pt_l.x*P_l.row(2)-P_l.row(0);
+  A.row(1) = pt_l.y*P_l.row(2)-P_l.row(1);
+  A.row(2) = pt_r.x*P_r.row(2)-P_r.row(0);
+  A.row(3) = pt_r.y*P_r.row(2)-P_r.row(1);
+
+  cv::Mat u,w,vt;
+  cv::SVD::compute(A,w,u,vt,cv::SVD::MODIFY_A| cv::SVD::FULL_UV);
+  cv::Mat pt3D = vt.row(3).t();  
+  return pt3D.rowRange(0,3)/pt3D.at<double>(3); // / Homogenous to cartesian
+}
+
+
+
+pcl::PointCloud<pcl::PointXYZ>::Ptr FeatureManager::triangulate(std::vector<cv::KeyPoint> match_left, 
+                                                                std::vector<cv::KeyPoint> match_right,
+                                                                cv::Mat P_l,
+                                                                cv::Mat P_r)
+{
+  ROS_INFO_STREAM("begin - match_left.size(): " << match_right.size() << ", match_left.size(): " << match_right.size());
+
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
+  if (match_left.empty())
+    return cloud;
+        
+  std::vector<cv::Point2f> point2D_left, point2D_right;
+  cv::KeyPoint::convert(match_left, point2D_left);
+  cv::KeyPoint::convert(match_right, point2D_right);
+
+  // cv::Mat point3D_homogenous(4, point2D_left.size(), CV_64FC1);                                                 // https://stackoverflow.com/questions/16295551/how-to-correctly-use-cvtriangulatepoints
+  // cv::triangulatePoints(P_cl, P_cr, point2D_left, point2D_right, point3D_homogenous); // https://gist.github.com/cashiwamochi/8ac3f8bab9bf00e247a01f63075fedeb
+
+  int n_err = 0;
+  for(int i = 0; i < point2D_left.size(); i++)
+  {
+    ROS_INFO("convert: ");
+
+    // cv::convertPointsFromHomogeneous(point3D_homogenous.col(i).t(), pt3D);
+    cv::Mat pt3D = DLT(point2D_left[i], point2D_right[i], P_l, P_r);
+
+    // cv::Mat pt3Dh = point3D_homogenous.col(i); 
+    // cv::Mat pt3Dc = pt3Dh.rowRange(0,3)/pt3Dh.at<float>(3); // / Homogenous to cartesian
+    // cv::Mat pt3D; 
+    // pt3Dc.convertTo(pt3D, CV_64FC1);
+
+    if (pt3D.at<double>(2) > 0)
+    {
+      ROS_INFO("pcl::PointXYZ pt: ");
+
+      pcl::PointXYZ pt;
+      pt.x = pt3D.at<double>(0);
+      pt.y = pt3D.at<double>(1);
+      pt.z = pt3D.at<double>(2);
+
+      ROS_INFO_STREAM("pt: " << pt);
+
+      cloud->points.push_back(pt);
+    }
+    else
+    {
+      n_err++;
+    }
+  }
+  ROS_INFO("rosinfo ");
+
+  ROS_INFO_STREAM("triangulation() - Correct: " << cloud->points.size() << ", Erronous: " << n_err);
+
+  return cloud;
+}
