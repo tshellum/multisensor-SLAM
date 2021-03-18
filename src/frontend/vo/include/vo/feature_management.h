@@ -11,7 +11,7 @@
 
 
 
-class Detector
+class FeatureManager
 {
 private:
   // Detector
@@ -30,7 +30,7 @@ private:
   int n_id_;
 
 public:
-  Detector(ros::NodeHandle nh) 
+  FeatureManager(ros::NodeHandle nh) 
   : n_id_(0)
   {
     // Detector parameters
@@ -78,14 +78,16 @@ public:
     n_buckets_ = grid_size_*grid_size_;
   }
 
-  ~Detector() {}
+  ~FeatureManager() {}
 
   void bucketedFeatureDetection(cv::Mat image, std::vector<cv::KeyPoint>& features);
-  void track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>& features);
+  void track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>& prev_kps, std::vector<cv::KeyPoint>& cur_kps);
+  std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> circularMatching(cv::Mat left_cur_img, cv::Mat right_cur_img, cv::Mat left_prev_img, cv::Mat right_prev_img, 
+                                                                                   std::vector<cv::KeyPoint> features_left_cur, std::vector<cv::KeyPoint> features_right_cur);
 };
 
 
-void Detector::bucketedFeatureDetection(cv::Mat image, std::vector<cv::KeyPoint>& features)
+void FeatureManager::bucketedFeatureDetection(cv::Mat image, std::vector<cv::KeyPoint>& features)
 {
   // Place tracked features from previous frame in buckets
   std::vector<cv::KeyPoint> feature_buckets[n_buckets_];
@@ -154,19 +156,17 @@ void Detector::bucketedFeatureDetection(cv::Mat image, std::vector<cv::KeyPoint>
 
 
 
-void Detector::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>& features)
+void FeatureManager::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>& prev_kps, std::vector<cv::KeyPoint>& cur_kps)
 {
-  if (prev_img.empty() || features.empty())
+  if (prev_img.empty() || prev_kps.empty())
     return;
-  ROS_INFO_STREAM("Valid image - prev: " << prev_img.size() << ", cur: " << cur_img.size());
-
+  
   // Point vectors
-  std::size_t n_pts = features.size(); 
-  std::vector<cv::Point2f> prev_features(n_pts), cur_features(n_pts);
+  std::size_t n_pts = prev_kps.size(); 
+  std::vector<cv::Point2f> prev_pts(n_pts), cur_pts(n_pts);
 
-  // Convert to Point2f
   for (std::size_t i = 0; i < n_pts; ++i)
-    prev_features[i] = features[i].pt; 
+    prev_pts[i] = prev_kps[i].pt; 
 
   std::vector<uchar> status; 
   std::vector<float> error; 
@@ -175,36 +175,94 @@ void Detector::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint
   cv::calcOpticalFlowPyrLK(
     prev_img, 
     cur_img, 
-    prev_features, 
-    cur_features, 
+    prev_pts, 
+    cur_pts, 
     status, 
     error
   );
 
-
-  std::vector<cv::KeyPoint> tracked_kpts;
+  std::vector<cv::KeyPoint> tracked_kpts_prev, tracked_kpts_cur;
   for(uint i = 0; i < n_pts; ++i)
   {
-    // Select good points
+    // Select good points - Status variable not enough..
     if (
       (status[i] == 1) 
-      && (cur_features[i].x > 0) && (cur_features[i].y > 0)
-      && (cur_features[i].x < prev_img.cols) && (cur_features[i].y < prev_img.rows)
+      && (cur_pts[i].x > 0) && (cur_pts[i].y > 0)
+      && (cur_pts[i].x < prev_img.cols) && (cur_pts[i].y < prev_img.rows)
     ) 
     {
-      tracked_kpts.push_back(
+      tracked_kpts_prev.push_back(
         cv::KeyPoint
         (
-          cur_features[i], 
-          features[i].size, 
-          features[i].angle, 
-          features[i].response, 
-          features[i].octave, 
-          features[i].class_id
+          prev_pts[i], 
+          prev_kps[i].size, 
+          prev_kps[i].angle, 
+          prev_kps[i].response, 
+          prev_kps[i].octave, 
+          prev_kps[i].class_id
+        )
+      );
+      
+      tracked_kpts_cur.push_back(
+        cv::KeyPoint
+        (
+          cur_pts[i], 
+          prev_kps[i].size, 
+          prev_kps[i].angle, 
+          prev_kps[i].response, 
+          prev_kps[i].octave, 
+          prev_kps[i].class_id
         )
       );
     }
   }
-
-  features = tracked_kpts;
+  prev_kps = tracked_kpts_prev;
+  cur_kps = tracked_kpts_cur;
 }
+
+
+
+std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> FeatureManager::circularMatching(cv::Mat left_cur_img, 
+                                                                                                 cv::Mat right_cur_img, 
+                                                                                                 cv::Mat left_prev_img, 
+                                                                                                 cv::Mat right_prev_img, 
+                                                                                                 std::vector<cv::KeyPoint> features_left_cur, 
+                                                                                                 std::vector<cv::KeyPoint> features_right_cur)
+{
+  std::vector<cv::KeyPoint> matched_left, matched_right;
+  std::vector<cv::KeyPoint> original_left = features_left_cur;
+
+  if (! left_prev_img.empty())
+  {
+    std::vector<cv::KeyPoint> features_left_prev, features_right_prev;
+
+    // Track in circle
+    track(left_cur_img, left_prev_img, features_left_cur, features_left_prev);
+    track(left_prev_img, right_prev_img, features_left_prev, features_right_prev);        
+    track(right_prev_img, right_cur_img, features_right_prev, features_right_cur);
+    track(right_cur_img, left_cur_img, features_right_cur, features_left_cur);
+
+    // Ensure that feature hasn't moved
+    int match_nr = 1;
+    for(unsigned int i = 0; i < features_left_cur.size(); i++)
+    {
+      for (cv::KeyPoint& original_feature : original_left)
+      {
+        if (features_left_cur[i].class_id != original_feature.class_id)
+          continue;
+
+        if ( pow((features_left_cur[i].pt.x - original_feature.pt.x), 2) 
+           + pow((features_left_cur[i].pt.y - original_feature.pt.y), 2) < pow(1, 2) )
+        {
+          matched_left.push_back(features_left_cur[i]);
+          matched_right.push_back(features_right_cur[i]);
+
+          break;
+        }
+      }
+      match_nr++;
+    }
+  }
+  return std::make_pair(matched_left, matched_right);
+}
+

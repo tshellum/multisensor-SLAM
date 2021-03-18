@@ -24,6 +24,7 @@
 #include "vo/pinhole_model.h"
 #include "vo/pose_prediction/pose_predictor.h"
 #include "vo/feature_management.h"
+#include "vo/sequencer.h"
 #include "PYR/PYR.h"
 // #include "JET/jet.h"
 
@@ -41,10 +42,11 @@ class VO
     boost::shared_ptr<Sync> sync_;
 
     // Classes
-    StereoCameras stereo_;
-    Detector      detector_;
-    // PosePredictor pose_predictor_;
-    PYR           pyr_;
+    Sequencer      sequencer_;
+    StereoCameras  stereo_;
+    FeatureManager detector_;
+    PosePredictor  pose_predictor_;
+    // PYR           pyr_;
     // JET jet;
 
     // Parameters
@@ -52,7 +54,6 @@ class VO
     ros::Time stamp_img_k_;
     int tic_, toc_;
 
-    cv::Mat prev_img;
     std::vector<cv::KeyPoint> features_;
     std::vector<cv::KeyPoint> tracked_features_;
 
@@ -63,8 +64,8 @@ class VO
     : config_path_(ros::package::getPath("vo") + "/../../../config/kitti/"),
       initialized_(false),
       stereo_(nh_, 10),
-      detector_(nh_)
-      // pose_predictor_(nh_, "imu_topic", 1000)
+      detector_(nh_),
+      pose_predictor_(nh_, "imu_topic", 1000)
       // pyr_(readConfigFromJsonFile( config_path_ + "PYR.json" ), stereo_.left().K_cv() )
       // jet(config_path_)
     {
@@ -87,26 +88,44 @@ class VO
         double dt = ( cam_left->header.stamp - stamp_img_k_ ).toSec();
         // pose_predictor_.predict(dt);
       }
-      std::pair<cv::Mat, cv::Mat> images = stereo_.storeImagePairGray(cam_left, cam_right);
-      cv::Mat img_left  = images.first;
-      cv::Mat img_right = images.second;
-      stereo_.prepareImages(img_left, img_right);
-      
 
-      detector_.track(prev_img, img_left, features_);
-      // detector_.track(stereo_.left().getPreviousImage(), img_left, features_);
-      tracked_features_ = features_;
-      detector_.bucketedFeatureDetection(img_left, features_);
+      // Preprocess and store image
+      std::pair<cv::Mat, cv::Mat> images = stereo_.preprocessImages(cam_left, cam_right);
+      sequencer_.storeImagePair(images.first, images.second);
       
+      // Feature management
+      detector_.track(sequencer_.previous.img_l, 
+                      sequencer_.current.img_l, 
+                      sequencer_.previous.kpts_l,
+                      sequencer_.current.kpts_l);
+
+      detector_.bucketedFeatureDetection(sequencer_.current.img_l, 
+                                         sequencer_.current.kpts_l);
+      
+      std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> stereo_features = detector_.circularMatching(sequencer_.current.img_l,
+                                                                                                                   sequencer_.current.img_r,
+                                                                                                                   sequencer_.previous.img_l,
+                                                                                                                   sequencer_.previous.img_r, 
+                                                                                                                   sequencer_.current.kpts_l, 
+                                                                                                                   sequencer_.current.kpts_r);
+
+      // Predict pose
+      // pose_predictor_.estimatePoseFromFeatures(points_prev, points_cur, K);
+
       // pyr_.Estimate(prev_img, img_left);
       // cv::Mat img_current_disp2 = pyr_.Draw(img_left);		
       // imshow("results", img_current_disp2);
+ 
 
-      // displayWindowFeatures(img_left, features_, img_left, tracked_features_); 
+      displayWindowFeatures(sequencer_.current.img_l, 
+                            stereo_features.first,
+                            sequencer_.current.img_r,
+                            stereo_features.second); 
 
 
+
+      sequencer_.updatePreviousFeatures(sequencer_.current.kpts_l, sequencer_.current.kpts_r);  
       initialized_ = true;
-      cv::Mat prev_img = img_left;
       stamp_img_k_ = cam_left->header.stamp;
 
       toc_ = cv::getTickCount();

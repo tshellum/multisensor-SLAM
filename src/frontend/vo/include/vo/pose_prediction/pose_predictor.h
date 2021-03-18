@@ -9,12 +9,14 @@
 
 #include "vo/pose_prediction/imu_preintegrator.h"
 #include "vo/pose_prediction/motion_model.h"
+#include "vo/pose_prediction/feature_based_pose_estimator.h"
 
 class PosePredictor
 {
 private:
-  MotionModel      model_;
-  IMUPosePredictor imu_; 
+  MotionModel            model_;
+  IMUPosePredictor       imu_; 
+  PosePredictionFeatures feature_estimator_; 
 
   Eigen::Vector3d pos_k_;
   Eigen::Vector3d vel_k_;
@@ -37,9 +39,13 @@ public:
 
   ~PosePredictor() {};
 
+  Eigen::Affine3d getPoseRelative() {return T_r_pred_;};
+
   void approximateDerivative(double dt, Eigen::Affine3d T_r);
 
   Eigen::Affine3d predict(double dt);
+
+  Eigen::Affine3d estimatePoseFromFeatures(std::vector<cv::Point2f>& points_prev, std::vector<cv::Point2f>& points_cur, cv::Mat K);
 };
 
 
@@ -73,5 +79,16 @@ Eigen::Affine3d PosePredictor::predict(double dt)
   // ROS_INFO_STREAM("Angles: \n" << T_r_pred_.linear().eulerAngles(0,1,2);
   // ROS_INFO_STREAM("Translation: \n" << T_r_pred_.translation();
 
+  return T_r_pred_;
+}
+
+
+
+
+
+
+Eigen::Affine3d PosePredictor::estimatePoseFromFeatures(std::vector<cv::Point2f>& points_prev, std::vector<cv::Point2f>& points_cur, cv::Mat K)
+{
+  T_r_pred_ = feature_estimator_.estimatePoseFromFeatures(points_prev, points_cur, K);
   return T_r_pred_;
 }
