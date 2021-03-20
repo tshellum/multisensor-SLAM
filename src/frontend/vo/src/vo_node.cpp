@@ -25,7 +25,8 @@
 #include "vo/pose_prediction/pose_predictor.h"
 #include "vo/feature_management.h"
 #include "vo/sequencer.h"
-#include "PYR/PYR.h"
+#include "vo/structure-only_BA.h"
+// #include "PYR/PYR.h"
 // #include "JET/jet.h"
 
 class VO
@@ -42,10 +43,11 @@ class VO
     boost::shared_ptr<Sync> sync_;
 
     // Classes
-    Sequencer      sequencer_;
-    StereoCameras  stereo_;
-    FeatureManager detector_;
-    PosePredictor  pose_predictor_;
+    Sequencer       sequencer_;
+    StereoCameras   stereo_;
+    FeatureManager  fm_;
+    PosePredictor   pose_predictor_;
+    StructureOnlyBA structure_only_BA_;
     // PYR           pyr_;
     // JET jet;
 
@@ -64,8 +66,9 @@ class VO
     : config_path_(ros::package::getPath("vo") + "/../../../config/kitti/"),
       initialized_(false),
       stereo_(nh_, 10),
-      detector_(nh_),
-      pose_predictor_(nh_, "imu_topic", 1000)
+      fm_(nh_),
+      pose_predictor_(nh_, "imu_topic", 1000),
+      structure_only_BA_(stereo_.left().K_eig(), stereo_.right().K_eig(), stereo_.getStereoTransformation())
       // pyr_(readConfigFromJsonFile( config_path_ + "PYR.json" ), stereo_.left().K_cv() )
       // jet(config_path_)
     {
@@ -94,28 +97,27 @@ class VO
       sequencer_.storeImagePair(images.first, images.second);
       
       // Feature management
-      detector_.track(sequencer_.previous.img_l, 
-                      sequencer_.current.img_l, 
-                      sequencer_.previous.kpts_l,
-                      sequencer_.current.kpts_l);
+      fm_.track(sequencer_.previous.img_l, 
+                sequencer_.current.img_l, 
+                sequencer_.previous.kpts_l,
+                sequencer_.current.kpts_l);
 
-      detector_.bucketedFeatureDetection(sequencer_.current.img_l, 
-                                         sequencer_.current.kpts_l);
+      fm_.bucketedFeatureDetection(sequencer_.current.img_l, 
+                                   sequencer_.current.kpts_l);
       
-      std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> stereo_features = detector_.circularMatching(sequencer_.current.img_l,
-                                                                                                                   sequencer_.current.img_r,
-                                                                                                                   sequencer_.previous.img_l,
-                                                                                                                   sequencer_.previous.img_r, 
-                                                                                                                   sequencer_.current.kpts_l, 
-                                                                                                                   sequencer_.current.kpts_r);
+      std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> stereo_features = fm_.circularMatching(sequencer_.current.img_l,
+                                                                                                             sequencer_.current.img_r,
+                                                                                                             sequencer_.previous.img_l,
+                                                                                                             sequencer_.previous.img_r, 
+                                                                                                             sequencer_.current.kpts_l, 
+                                                                                                             sequencer_.current.kpts_r);
 
-      ROS_INFO_STREAM("matched - match_left.size(): " << stereo_features.first.size() << ", match_left.size(): " << stereo_features.second.size());
+      ROS_INFO_STREAM("matched - match_left.size(): " << stereo_features.first.size() << ", match_right.size(): " << stereo_features.second.size());
 
-      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud = detector_.triangulate(stereo_features.first, 
-                                                                        stereo_features.second, 
-                                                                        stereo_.leftProjMat(), 
-                                                                        stereo_.rightProjMat());
-
+      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud = fm_.triangulate(stereo_features.first, 
+                                                                  stereo_features.second, 
+                                                                  stereo_.leftProjMat(), 
+                                                                  stereo_.rightProjMat());
 
       // Predict pose
       // pose_predictor_.estimatePoseFromFeatures(points_prev, points_cur, K);

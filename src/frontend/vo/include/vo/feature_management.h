@@ -8,6 +8,7 @@
 #include "opencv2/features2d.hpp"
 
 #include "support.h"
+#include "datatypes.h"
 
 
 /*** PCL packages ***/
@@ -33,9 +34,13 @@ private:
   // Point parameters    
   int n_id_;
 
+  // Reprojection error
+  double reproj_err;
+
 public:
   FeatureManager(ros::NodeHandle nh) 
-  : n_id_(0)
+  : n_id_(0), 
+    reproj_err(0.5)
   {
     // Detector parameters
     int threshold;
@@ -104,8 +109,11 @@ public:
                   cv::Mat P_l,
                   cv::Mat P_r);
 
-  pcl::PointCloud<pcl::PointXYZ>::Ptr triangulate(std::vector<cv::KeyPoint> match_left, 
-                                                  std::vector<cv::KeyPoint> match_right,
+  cv::Point2f project(cv::Mat pt3D, 
+                      cv::Mat P);
+
+  pcl::PointCloud<pcl::PointXYZ>::Ptr triangulate(std::vector<cv::KeyPoint>& match_left, 
+                                                  std::vector<cv::KeyPoint>& match_right,
                                                   cv::Mat P_cl,
                                                   cv::Mat P_cr);
 
@@ -267,7 +275,12 @@ std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> FeatureManager::
     track(right_prev_img, right_cur_img, features_right_prev, features_right_cur);
     track(right_cur_img, left_cur_img, features_right_cur, features_left_cur);
 
-    // Ensure that feature hasn't moved
+    // track(left_cur_img, right_cur_img, features_left_cur, features_right_cur);
+    // track(right_cur_img, right_prev_img, features_right_cur, features_right_prev);        
+    // track(right_prev_img, left_prev_img, features_right_prev, features_left_prev);
+    // track(left_prev_img, left_cur_img, features_left_prev, features_left_cur);
+
+    // Ensure that features hasn't moved
     int match_nr = 1;
     for(unsigned int i = 0; i < features_left_cur.size(); i++)
     {
@@ -277,7 +290,7 @@ std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> FeatureManager::
           continue;
 
         if ( pow((features_left_cur[i].pt.x - original_feature.pt.x), 2) 
-           + pow((features_left_cur[i].pt.y - original_feature.pt.y), 2) < pow(1, 2) )
+           + pow((features_left_cur[i].pt.y - original_feature.pt.y), 2) < pow(reproj_err, 2) )
         {
           matched_left.push_back(features_left_cur[i]);
           matched_right.push_back(features_right_cur[i]);
@@ -328,59 +341,91 @@ cv::Mat FeatureManager::DLT(cv::Point2f pt_l,
 }
 
 
+cv::Point2f FeatureManager::project(cv::Mat pt3D, cv::Mat P)
+{
+  cv::Mat x_homogenous = cv::Mat::ones(4, 1, pt3D.type());
+  pt3D.copyTo(x_homogenous(cv::Rect(0, 0, 1, 3)));
 
-pcl::PointCloud<pcl::PointXYZ>::Ptr FeatureManager::triangulate(std::vector<cv::KeyPoint> match_left, 
-                                                                std::vector<cv::KeyPoint> match_right,
+  cv::Mat pt_proj = P * x_homogenous;
+  return cv::Point2d(pt_proj.at<double>(0) / pt_proj.at<double>(2),
+                     pt_proj.at<double>(1) / pt_proj.at<double>(2));
+}
+
+
+pcl::PointCloud<pcl::PointXYZ>::Ptr FeatureManager::triangulate(std::vector<cv::KeyPoint>& match_left, 
+                                                                std::vector<cv::KeyPoint>& match_right,
                                                                 cv::Mat P_l,
                                                                 cv::Mat P_r)
-{
-  ROS_INFO_STREAM("begin - match_left.size(): " << match_right.size() << ", match_left.size(): " << match_right.size());
+{  
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
 
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
-  if (match_left.empty())
+  if (match_left.empty() || match_right.empty())
     return cloud;
-        
-  std::vector<cv::Point2f> point2D_left, point2D_right;
-  cv::KeyPoint::convert(match_left, point2D_left);
-  cv::KeyPoint::convert(match_right, point2D_right);
-
-  // cv::Mat point3D_homogenous(4, point2D_left.size(), CV_64FC1);                                                 // https://stackoverflow.com/questions/16295551/how-to-correctly-use-cvtriangulatepoints
-  // cv::triangulatePoints(P_cl, P_cr, point2D_left, point2D_right, point3D_homogenous); // https://gist.github.com/cashiwamochi/8ac3f8bab9bf00e247a01f63075fedeb
 
   int n_err = 0;
-  for(int i = 0; i < point2D_left.size(); i++)
+  int num_features = match_left.size();
+  for(int i = 0; i < num_features; i++)
   {
-    ROS_INFO("convert: ");
-
+    int pt_it = i - n_err;
     // cv::convertPointsFromHomogeneous(point3D_homogenous.col(i).t(), pt3D);
-    cv::Mat pt3D = DLT(point2D_left[i], point2D_right[i], P_l, P_r);
+    cv::Mat pt3D = DLT(match_left[pt_it].pt, match_right[pt_it].pt, P_l, P_r);
 
-    // cv::Mat pt3Dh = point3D_homogenous.col(i); 
-    // cv::Mat pt3Dc = pt3Dh.rowRange(0,3)/pt3Dh.at<float>(3); // / Homogenous to cartesian
-    // cv::Mat pt3D; 
-    // pt3Dc.convertTo(pt3D, CV_64FC1);
+    cv::Point2f proj_l = project(pt3D, P_l);
+    cv::Point2f proj_r = project(pt3D, P_r);
 
-    if (pt3D.at<double>(2) > 0)
+    if ( (pt3D.at<double>(2) < 0)                              // Point is not in front of camera
+      // || (match_left[i].class_id != match_right[i].class_id)   // Not same point based on LK tracking
+      || ( pow((match_left[pt_it].pt.x - proj_l.x), 2)  + pow((match_left[pt_it].pt.y - proj_l.y), 2)  > reproj_err )
+      || ( pow((match_right[pt_it].pt.x - proj_r.x), 2) + pow((match_right[pt_it].pt.y - proj_r.y), 2) > reproj_err )
+    )
     {
-      ROS_INFO("pcl::PointXYZ pt: ");
-
-      pcl::PointXYZ pt;
-      pt.x = pt3D.at<double>(0);
-      pt.y = pt3D.at<double>(1);
-      pt.z = pt3D.at<double>(2);
-
-      ROS_INFO_STREAM("pt: " << pt);
-
-      cloud->points.push_back(pt);
-    }
-    else
-    {
+      match_left.erase(match_left.begin() + pt_it);
+      match_right.erase(match_right.begin() + pt_it);
       n_err++;
+      continue;
     }
-  }
-  ROS_INFO("rosinfo ");
 
-  ROS_INFO_STREAM("triangulation() - Correct: " << cloud->points.size() << ", Erronous: " << n_err);
+    pcl::PointXYZ pt;
+    pt.x = pt3D.at<double>(0);
+    pt.y = pt3D.at<double>(1);
+    pt.z = pt3D.at<double>(2);
+    pt.data[0] = static_cast<float>(match_left[pt_it].class_id); // Keep ID
+
+    cloud->points.push_back(pt);
+    
+  }
+  ROS_INFO_STREAM("triangulation() - Correct: " << cloud->points.size() << ", Erronous: " << n_err << "\n");
+
 
   return cloud;
 }
+
+
+
+// pcl::PointCloud<pcl::PointXYZ>::Ptr FeatureManager::cvPointToPoinXYZ(cv::Mat OpencVPointCloud)
+// {
+//   /*
+//   *  Function: Get from a Mat to pcl pointcloud datatype
+//   *  In: cv::Mat
+//   *  Out: pcl::PointCloud
+//   */
+
+//   pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud_ptr(new pcl::PointCloud<pcl::PointXYZ>);
+
+//   for(int i=0;i<OpencVPointCloud.cols;i++)
+//   {
+//     //std::cout<<i<<endl;
+
+//     pcl::PointXYZ point;
+//     point.x = OpencVPointCloud.at<float>(0,i);
+//     point.y = OpencVPointCloud.at<float>(1,i);
+//     point.z = OpencVPointCloud.at<float>(2,i);
+
+//     point_cloud_ptr -> points.push_back(point);
+//   }
+//   point_cloud_ptr->width = (int)point_cloud_ptr->points.size();
+//   point_cloud_ptr->height = 1;
+
+//   return point_cloud_ptr;
+
+// }
