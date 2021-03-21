@@ -1,0 +1,14 @@
+{
+	"detector" : {
+		"extractor_type"      	 : "FAST",
+		"descriptor_type"      	 : "ORB",
+		"feature_threshold"      : 25,
+		"grid_size"            	 : 10,
+		"max_number_of_features" : 2,
+		"nms_distance"           : 10
+	},
+  	"matcher" : {
+		"match_error" 		 : 0.5,
+		"reprojection_error" : 0.5
+	}
+}

@@ -44,6 +44,8 @@ private:
   Eigen::Vector3d ang_rate_prev_;
 
 public:
+  IMUPosePredictor(){}
+  
   IMUPosePredictor(
     ros::NodeHandle nh, 
     const std::string& topic, 

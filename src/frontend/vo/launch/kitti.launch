@@ -6,7 +6,7 @@
     <arg name = "imu_topic" default = "/kitti/oxts/imu"/>
 
     <rosparam file = "$(find vo)/../../../config/kitti/camera.yaml" />
-    <rosparam file = "$(find vo)/../../../config/kitti/detector.yaml" />
+    <!-- <rosparam file = "$(find vo)/../../../config/kitti/detector.yaml" /> -->
 
     <node 
         name   = "vo"

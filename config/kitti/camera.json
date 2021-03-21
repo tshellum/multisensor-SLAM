@@ -1,0 +1,49 @@
+{
+	"camera_left" : {
+		"image_width"      	 	: 1241,
+		"image_height"      	: 376,
+		"distortion_parameters" : {
+			"k1" : 0,
+			"k2" : 0,
+			"p1" : 0,
+			"p2" : 0
+		},
+		"projection_parameters" : {
+			"fx" : 718.8560,
+			"fy" : 718.8560,
+			"cx" : 607.1928,
+			"cy" : 185.2157
+
+		},
+		"rotation" : [[1, 0, 0],
+					  [0, 1, 0],
+					  [0, 0, 1]],
+		"translation" : [[0],
+						 [0],
+						 [0]]
+	},
+	
+	"camera_right" : {
+		"image_width"      	 	: 1241,
+		"image_height"      	: 376,
+		"distortion_parameters" : {
+			"k1" : 0,
+			"k2" : 0,
+			"p1" : 0,
+			"p2" : 0
+		},
+		"projection_parameters" : {
+			"fx" : 718.8560,
+			"fy" : 718.8560,
+			"cx" : 607.1928,
+			"cy" : 185.2157
+
+		},
+		"rotation" : [[ 9.993440e-01, 1.814887e-02, -3.134011e-02],
+					  [-1.842595e-02, 9.997935e-01, -8.575221e-03],
+					  [ 3.117801e-02, 9.147067e-03,  9.994720e-01]],
+		"translation" : [[-5.370000e-01],
+						 [5.964270e-03],
+						 [-1.274584e-02]]
+	}
+}

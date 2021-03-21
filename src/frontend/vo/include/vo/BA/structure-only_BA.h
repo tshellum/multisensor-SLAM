@@ -53,6 +53,8 @@ private:
     const gtsam::SharedNoiseModel pose_noise_;    // Set static
 
 public:
+    StructureOnlyBA(){}
+    
     StructureOnlyBA(const Eigen::Matrix3d K_l,        // Camera matrix for left camera
                     const Eigen::Matrix3d K_r,        // Camera matrix for right camera
                     const Eigen::Affine3d T_r,        // Relative transformation from left to right camera

@@ -29,8 +29,7 @@ class PosePredictionFeatures
 private:
 
 public:
-    PosePredictionFeatures()
-    {};
+    PosePredictionFeatures(){};
 
     ~PosePredictionFeatures() {};
 

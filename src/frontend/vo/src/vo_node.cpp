@@ -23,9 +23,10 @@
 #include "support.h"
 #include "vo/pinhole_model.h"
 #include "vo/pose_prediction/pose_predictor.h"
-#include "vo/feature_management.h"
+#include "vo/feature_management/detector.h"
+#include "vo/feature_management/matcher.h"
 #include "vo/sequencer.h"
-#include "vo/structure-only_BA.h"
+#include "vo/BA/structure-only_BA.h"
 // #include "PYR/PYR.h"
 // #include "JET/jet.h"
 
@@ -45,7 +46,8 @@ class VO
     // Classes
     Sequencer       sequencer_;
     StereoCameras   stereo_;
-    FeatureManager  fm_;
+    Detector        detector_;
+    Matcher         matcher_;
     PosePredictor   pose_predictor_;
     StructureOnlyBA structure_only_BA_;
     // PYR           pyr_;
@@ -59,24 +61,31 @@ class VO
     std::vector<cv::KeyPoint> features_;
     std::vector<cv::KeyPoint> tracked_features_;
 
-    std::string config_path_;
+    const std::string config_path_;
+    const boost::property_tree::ptree camera_config;
+    const boost::property_tree::ptree detector_config;
 
   public:
     VO() 
-    : config_path_(ros::package::getPath("vo") + "/../../../config/kitti/"),
-      initialized_(false),
+    : initialized_(false),
       stereo_(nh_, 10),
-      fm_(nh_),
       pose_predictor_(nh_, "imu_topic", 1000),
       structure_only_BA_(stereo_.left().K_eig(), stereo_.right().K_eig(), stereo_.getStereoTransformation())
-      // pyr_(readConfigFromJsonFile( config_path_ + "PYR.json" ), stereo_.left().K_cv() )
-      // jet(config_path_)
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       sub_cam_left_.subscribe(nh_, "cam_left", 1);
       sub_cam_right_.subscribe(nh_, "cam_right", 1);
       sync_.reset(new Sync(MySyncPolicy(10), sub_cam_left_, sub_cam_right_));
       sync_->registerCallback(boost::bind(&VO::callback, this, _1, _2));
+
+      const std::string config_path_ = ros::package::getPath("vo") + "/../../../config/kitti/";
+
+      detector_ = Detector( readConfigFromJsonFile( config_path_ + "feature_management.json" ),
+                            readConfigFromJsonFile( config_path_ + "camera.json" ) );
+      matcher_  = Matcher( readConfigFromJsonFile( config_path_ + "feature_management.json" ) );
+      // pyr_ = PYR( readConfigFromJsonFile( config_path_ + "PYR.json" ), stereo_.left().K_cv() );
+      // jet_ = JET( readConfigFromJsonFile( config_path_ + "JET.json" ) );
+
     }
 
     ~VO() {}
@@ -97,27 +106,27 @@ class VO
       sequencer_.storeImagePair(images.first, images.second);
       
       // Feature management
-      fm_.track(sequencer_.previous.img_l, 
-                sequencer_.current.img_l, 
-                sequencer_.previous.kpts_l,
-                sequencer_.current.kpts_l);
+      matcher_.track(sequencer_.previous.img_l, 
+                     sequencer_.current.img_l, 
+                     sequencer_.previous.kpts_l,
+                     sequencer_.current.kpts_l);
 
-      fm_.bucketedFeatureDetection(sequencer_.current.img_l, 
-                                   sequencer_.current.kpts_l);
+      detector_.bucketedFeatureDetection(sequencer_.current.img_l, 
+                                         sequencer_.current.kpts_l);
       
-      std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> stereo_features = fm_.circularMatching(sequencer_.current.img_l,
-                                                                                                             sequencer_.current.img_r,
-                                                                                                             sequencer_.previous.img_l,
-                                                                                                             sequencer_.previous.img_r, 
-                                                                                                             sequencer_.current.kpts_l, 
-                                                                                                             sequencer_.current.kpts_r);
+      std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> stereo_features = matcher_.circularMatching(sequencer_.current.img_l,
+                                                                                                                  sequencer_.current.img_r,
+                                                                                                                  sequencer_.previous.img_l,
+                                                                                                                  sequencer_.previous.img_r, 
+                                                                                                                  sequencer_.current.kpts_l, 
+                                                                                                                  sequencer_.current.kpts_r);
 
       ROS_INFO_STREAM("matched - match_left.size(): " << stereo_features.first.size() << ", match_right.size(): " << stereo_features.second.size());
 
-      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud = fm_.triangulate(stereo_features.first, 
-                                                                  stereo_features.second, 
-                                                                  stereo_.leftProjMat(), 
-                                                                  stereo_.rightProjMat());
+      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud = matcher_.triangulate(stereo_features.first, 
+                                                                       stereo_features.second, 
+                                                                       stereo_.leftProjMat(), 
+                                                                       stereo_.rightProjMat());
 
       // Predict pose
       // pose_predictor_.estimatePoseFromFeatures(points_prev, points_cur, K);
@@ -125,7 +134,6 @@ class VO
       // pyr_.Estimate(prev_img, img_left);
       // cv::Mat img_current_disp2 = pyr_.Draw(img_left);		
       // imshow("results", img_current_disp2);
-
 
       displayWindowFeatures(sequencer_.current.img_l, 
                             stereo_features.first,

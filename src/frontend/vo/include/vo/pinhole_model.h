@@ -30,6 +30,8 @@ private:
    	Eigen::Matrix3d _K_eig; 	
 
 public:
+	PinholeModel(){}
+	
     PinholeModel(ros::NodeHandle nh, const std::string name) 
 	: name_(name), 
 	  _k3(0.0)
@@ -101,6 +103,8 @@ private:
     Eigen::Affine3d _T_crcl;
 
 public:
+	StereoCameras(){} // Default 
+
 	StereoCameras(ros::NodeHandle nh, int grid_size) 
 	: _camera_left(nh, "camera_left"), _camera_right(nh, "camera_right") 
 	{

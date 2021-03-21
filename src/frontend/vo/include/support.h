@@ -20,7 +20,8 @@ void NotImplementedError(std::string function_name, std::string filename) // cal
 }
 
 
-boost::property_tree::ptree readConfigFromJsonFile(const std::string& filename) {
+boost::property_tree::ptree readConfigFromJsonFile(const std::string& filename) 
+{
 	boost::property_tree::ptree pt;
 
 	try {

@@ -28,6 +28,8 @@ private:
   Eigen::Affine3d T_r_pred_;
 
 public:
+  PosePredictor(){}
+  
   PosePredictor(
     ros::NodeHandle nh, 
     const std::string& topic, 

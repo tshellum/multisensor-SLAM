@@ -19,8 +19,8 @@ camera_left:
       cy: 185.2157
 
 camera_right: 
-   image_width: 1382
-   image_height: 512
+   image_width: 1241
+   image_height: 376
    distortion_parameters:
       k1: 0
       k2: 0
