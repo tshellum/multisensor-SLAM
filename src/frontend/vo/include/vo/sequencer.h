@@ -1,5 +1,11 @@
 #pragma once
 
+#include <Eigen/Geometry> 
+#include <Eigen/Dense>
+
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+
 
 struct Frame
 {
@@ -11,9 +17,10 @@ struct Frame
   cv::Mat descriptor_l; 
   cv::Mat descriptor_r; 
 
-  
-  // Eigen::Affine3d T_r_;
-  // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
+  Eigen::Affine3d T_r_;
+
+  std::vector<cv::Point3f> world_points;
+  pcl::PointCloud<pcl::PointXYZ> cloud;
 };
 
 
@@ -22,9 +29,9 @@ struct Sequencer
   Frame current;
   Frame previous;
 
-
   void storeImagePair(cv::Mat img_left, cv::Mat img_right);
   void updatePreviousFeatures(std::vector<cv::KeyPoint> kpts_left, std::vector<cv::KeyPoint> kpts_right);
+  void storeCloud(pcl::PointCloud<pcl::PointXYZ> cloud);
 };
 
 
@@ -49,4 +56,13 @@ void Sequencer::updatePreviousFeatures(std::vector<cv::KeyPoint> kpts_left, std:
 
   current.kpts_l.clear();
   current.kpts_r.clear();
+}
+
+
+void Sequencer::storeCloud(pcl::PointCloud<pcl::PointXYZ> cloud)
+{
+  if (! current.cloud.empty())
+    previous.cloud = current.cloud;
+  
+  current.cloud = cloud;
 }

@@ -10,90 +10,10 @@
 #include "opencv2/features2d.hpp"
 
 #include "support.h"
-#include "datatypes.h"
 
 /*** PCL packages ***/
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-
-
-
-// class Detector
-// {
-// private:
-//   // Detector
-//   cv::Ptr<cv::Feature2D> extractor_;
-//   cv::Ptr<cv::Feature2D> descriptor_; 
-
-//   // Function parameters
-//   int grid_size_;
-//   int width_, height_;
-//   int patch_w_, patch_h_;
-//   int n_buckets_;
-//   int max_features_;
-//   int nms_distance_;
-
-//   // Point parameters    
-//   int n_id_;
-
-// public:
-//   Detector(const boost::property_tree::ptree detector_config,
-//            const boost::property_tree::ptree camera_config) 
-//   : n_id_(0)
-//   {
-
-//     ROS_INFO("before read");
-//     // Detector parameters
-//     int threshold = detector_config.get< int >("detector.feature_threshold");
-//     max_features_ = detector_config.get< int >("detector.max_number_of_features");
-//     grid_size_    = detector_config.get< int >("detector.grid_size");
-//     nms_distance_ = detector_config.get< int >("detector.nms_distance");
-
-//     std::string extractor_type  = detector_config.get< std::string >("detector.extractor_type");
-//     std::string descriptor_type = detector_config.get< std::string >("detector.descriptor_type");
-
-//     int img_width_full  = camera_config.get< int >("camera_left.image_width");
-//     int img_height_full = camera_config.get< int >("camera_left.image_height");	
-//     ROS_INFO("after read");
-
-
-//     // Extractor
-//     if (extractor_type == "GFFT")
-//       extractor_ = cv::GFTTDetector::create(max_features_, // maximum number of features
-//                                             0.01,         // quality level
-//                                             10);          // minimum allowed distance
-//     else if (extractor_type == "FAST")
-//       extractor_ = cv::FastFeatureDetector::create(threshold, // threshold
-//                                                      true);      // NMS
-//     else if (extractor_type == "ORB")
-//       extractor_ = cv::ORB::create();
-//     else
-//       extractor_ = cv::FastFeatureDetector::create();
-                      
-
-//     // Descriptor                          
-//     if (descriptor_type == "ORB")
-//       descriptor_ = cv::ORB::create(max_features_);
-//     else 
-//       descriptor_ = cv::ORB::create();
-  
-
-//     width_ = img_width_full - (img_width_full % grid_size_);
-//     height_ = img_height_full - (img_height_full % grid_size_);
-
-//     patch_w_ = width_ / grid_size_;
-//     patch_h_ = height_ / grid_size_;
-
-//     n_buckets_ = grid_size_*grid_size_;
-//   }
-
-//   ~Detector() {}
-
-//   void bucketedFeatureDetection(cv::Mat image, 
-//                                 std::vector<cv::KeyPoint>& features);
-  
-// };
-
 
 
 

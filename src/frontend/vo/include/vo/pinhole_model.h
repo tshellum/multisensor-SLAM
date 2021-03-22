@@ -76,11 +76,13 @@ void PinholeModel::rectify(cv::Mat& img, cv::Mat K_undist = cv::Mat())
 {
 	cv::Mat undist_img;
     cv::undistort(img, undist_img, _K_cv, _distortion, K_undist);
+	img = undist_img;
 }
 
 void PinholeModel::crop(cv::Mat& img, int x, int y, int patch_width, int patch_height)
 {   
-    cv::Mat temp = img(cv::Rect(x, y, patch_width, patch_height)).clone(); img = temp;
+    cv::Mat temp = img(cv::Rect(x, y, patch_width, patch_height)).clone(); 
+	img = temp;
 }
 
 
@@ -139,12 +141,16 @@ public:
 		_P_cr = _camera_right.K_cv() * _P_cr;
 
 
-		_T_clcr.linear() << r11, r12, r13,
-							r21, r22, r23,
-							r31, r32, r33;
+		// _T_clcr.linear() << r11, r12, r13,
+		// 					r21, r22, r23,
+		// 					r31, r32, r33;
+		// _T_clcr.translation() << x, 
+		// 						 y, 
+		// 						 z;
+
 		_T_clcr.translation() << x, 
-								 y, 
-								 z;
+								 0, 
+								 0;
 
 		_T_crcl.linear() << r11, r21, r31,
 							r12, r22, r32,
@@ -164,34 +170,18 @@ public:
 	Eigen::Affine3d getStereoTransformation() {return _T_clcr;};
 	Eigen::Affine3d getInverseStereoTransformation() {return _T_crcl;};
 
-	std::pair<cv::Mat, cv::Mat> preprocessImages(const sensor_msgs::ImageConstPtr img_left_msg, 
-												 const sensor_msgs::ImageConstPtr img_right_msg);
+	std::pair<cv::Mat, cv::Mat> preprocessImages(cv::Mat img_left, 
+											 	 cv::Mat img_right);
+
 	cv::Mat createProjectionMatrix(Eigen::Affine3d T,
                                    Eigen::Matrix3d K);
 
 };
 
 
-
-std::pair<cv::Mat, cv::Mat> StereoCameras::preprocessImages(const sensor_msgs::ImageConstPtr img_left_msg, 
-															const sensor_msgs::ImageConstPtr img_right_msg)
+std::pair<cv::Mat, cv::Mat> StereoCameras::preprocessImages(cv::Mat img_left, 
+															cv::Mat img_right)
 {
-	//Frames
-	cv_bridge::CvImagePtr cv_ptr_left;
-	cv_bridge::CvImagePtr cv_ptr_right;
-	try
-	{
-		cv_ptr_left  = cv_bridge::toCvCopy(img_left_msg, sensor_msgs::image_encodings::MONO8);
-		cv_ptr_right = cv_bridge::toCvCopy(img_right_msg, sensor_msgs::image_encodings::MONO8);
-	}
-	catch (cv_bridge::Exception& e)
-	{
-		ROS_ERROR("cv_bridge exception: %s", e.what());
-	}
-
-	cv::Mat img_left  = cv_ptr_left->image;
-	cv::Mat img_right = cv_ptr_right->image;
-
 	_camera_left.rectify(img_left);
 	_camera_right.rectify(img_right);
 

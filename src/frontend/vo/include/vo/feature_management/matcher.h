@@ -10,8 +10,6 @@
 #include "opencv2/features2d.hpp"
 
 #include "support.h"
-#include "datatypes.h"
-
 
 /*** PCL packages ***/
 #include <pcl/point_cloud.h>
@@ -58,10 +56,15 @@ public:
   cv::Point2f project(cv::Mat pt3D, 
                       cv::Mat P);
 
-  pcl::PointCloud<pcl::PointXYZ>::Ptr triangulate(std::vector<cv::KeyPoint>& match_left, 
-                                                  std::vector<cv::KeyPoint>& match_right,
-                                                  cv::Mat P_cl,
-                                                  cv::Mat P_cr);
+  // pcl::PointCloud<pcl::PointXYZ> triangulate(std::vector<cv::KeyPoint>& match_left, 
+  //                                                 std::vector<cv::KeyPoint>& match_right,
+  //                                                 cv::Mat P_cl,
+  //                                                 cv::Mat P_cr);
+
+  std::vector<cv::Point3f> triangulate(std::vector<cv::KeyPoint>& match_left, 
+                                       std::vector<cv::KeyPoint>& match_right,
+                                       cv::Mat P_l,
+                                       cv::Mat P_r);
 
 };
 
@@ -230,15 +233,69 @@ cv::Point2f Matcher::project(cv::Mat pt3D, cv::Mat P)
 }
 
 
-pcl::PointCloud<pcl::PointXYZ>::Ptr Matcher::triangulate(std::vector<cv::KeyPoint>& match_left, 
-                                                                std::vector<cv::KeyPoint>& match_right,
-                                                                cv::Mat P_l,
-                                                                cv::Mat P_r)
+// pcl::PointCloud<pcl::PointXYZ> Matcher::triangulate(std::vector<cv::KeyPoint>& match_left, 
+//                                                                 std::vector<cv::KeyPoint>& match_right,
+//                                                                 cv::Mat P_l,
+//                                                                 cv::Mat P_r)
+// {  
+//   pcl::PointCloud<pcl::PointXYZ> cloud;
+
+//   if (match_left.empty() || match_right.empty())
+//     return cloud;
+
+//   int n_err = 0;
+//   int num_features = match_left.size();
+//   for(int i = 0; i < num_features; i++)
+//   {
+//     int pt_it = i - n_err;
+//     // cv::convertPointsFromHomogeneous(point3D_homogenous.col(i).t(), pt3D);
+//     cv::Mat pt3D = DLT(match_left[pt_it].pt, match_right[pt_it].pt, P_l, P_r);
+
+//     cv::Point2f proj_l = project(pt3D, P_l);
+//     cv::Point2f proj_r = project(pt3D, P_r);
+
+//     if (((pt3D.at<double>(2) < 0)                              // Point is not in front of camera
+//       && (pt3D.at<double>(2) > 150))                           // Point is more than 150m away from camera
+//       || (match_left[i].class_id != match_right[i].class_id)   // Not matched
+//       || ( pow((match_left[pt_it].pt.x - proj_l.x), 2)  + pow((match_left[pt_it].pt.y - proj_l.y), 2)  > reproj_err_ ) // To large reprojection error in left cam
+//       || ( pow((match_right[pt_it].pt.x - proj_r.x), 2) + pow((match_right[pt_it].pt.y - proj_r.y), 2) > reproj_err_ ) // To large reprojection error in right cam
+//     )
+//     {
+//       match_left.erase(match_left.begin() + pt_it);
+//       match_right.erase(match_right.begin() + pt_it);
+//       n_err++;
+//       continue;
+//     }
+
+//     pcl::PointXYZ pt;
+//     pt.x = pt3D.at<double>(0);
+//     pt.y = pt3D.at<double>(1);
+//     pt.z = pt3D.at<double>(2);
+//     ROS_INFO_STREAM("Before pt: " << pt);
+
+//     pt.data[0] = static_cast<float>(match_left[pt_it].class_id); // Keep ID // TODO: x blir skrevet over
+//     ROS_INFO_STREAM("After pt: " << pt);
+
+//     cloud.points.push_back(pt);
+    
+//   }
+//   ROS_INFO_STREAM("triangulation() - Correct: " << cloud.points.size() << ", Erronous: " << n_err);
+
+
+//   return cloud;
+// }
+
+
+
+std::vector<cv::Point3f> Matcher::triangulate(std::vector<cv::KeyPoint>& match_left, 
+                                              std::vector<cv::KeyPoint>& match_right,
+                                              cv::Mat P_l,
+                                              cv::Mat P_r)
 {  
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
+  std::vector<cv::Point3f> wrld_pts;
 
   if (match_left.empty() || match_right.empty())
-    return cloud;
+    return wrld_pts;
 
   int n_err = 0;
   int num_features = match_left.size();
@@ -251,10 +308,11 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr Matcher::triangulate(std::vector<cv::KeyPoin
     cv::Point2f proj_l = project(pt3D, P_l);
     cv::Point2f proj_r = project(pt3D, P_r);
 
-    if ( (pt3D.at<double>(2) < 0)                              // Point is not in front of camera
-      // || (match_left[i].class_id != match_right[i].class_id)   // Not same point based on LK tracking
-      || ( pow((match_left[pt_it].pt.x - proj_l.x), 2)  + pow((match_left[pt_it].pt.y - proj_l.y), 2)  > reproj_err_ )
-      || ( pow((match_right[pt_it].pt.x - proj_r.x), 2) + pow((match_right[pt_it].pt.y - proj_r.y), 2) > reproj_err_ )
+    if (((pt3D.at<double>(2) < 0)                              // Point is not in front of camera
+      && (pt3D.at<double>(2) > 150))                           // Point is more than 150m away from camera
+      || (match_left[i].class_id != match_right[i].class_id)   // Not matched
+      || ( pow((match_left[pt_it].pt.x - proj_l.x), 2)  + pow((match_left[pt_it].pt.y - proj_l.y), 2)  > reproj_err_ ) // To large reprojection error in left cam
+      || ( pow((match_right[pt_it].pt.x - proj_r.x), 2) + pow((match_right[pt_it].pt.y - proj_r.y), 2) > reproj_err_ ) // To large reprojection error in right cam
     )
     {
       match_left.erase(match_left.begin() + pt_it);
@@ -263,47 +321,17 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr Matcher::triangulate(std::vector<cv::KeyPoin
       continue;
     }
 
-    pcl::PointXYZ pt;
+    cv::Point3f pt;
     pt.x = pt3D.at<double>(0);
     pt.y = pt3D.at<double>(1);
     pt.z = pt3D.at<double>(2);
-    pt.data[0] = static_cast<float>(match_left[pt_it].class_id); // Keep ID
 
-    cloud->points.push_back(pt);
+    wrld_pts.push_back(pt);
     
   }
-  ROS_INFO_STREAM("triangulation() - Correct: " << cloud->points.size() << ", Erronous: " << n_err << "\n");
+  ROS_INFO_STREAM("triangulation() - Correct: " << wrld_pts.size() << ", Erronous: " << n_err);
 
 
-  return cloud;
+  return wrld_pts;
 }
 
-
-
-// pcl::PointCloud<pcl::PointXYZ>::Ptr Matcher::cvPointToPoinXYZ(cv::Mat OpencVPointCloud)
-// {
-//   /*
-//   *  Function: Get from a Mat to pcl pointcloud datatype
-//   *  In: cv::Mat
-//   *  Out: pcl::PointCloud
-//   */
-
-//   pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud_ptr(new pcl::PointCloud<pcl::PointXYZ>);
-
-//   for(int i=0;i<OpencVPointCloud.cols;i++)
-//   {
-//     //std::cout<<i<<endl;
-
-//     pcl::PointXYZ point;
-//     point.x = OpencVPointCloud.at<float>(0,i);
-//     point.y = OpencVPointCloud.at<float>(1,i);
-//     point.z = OpencVPointCloud.at<float>(2,i);
-
-//     point_cloud_ptr -> points.push_back(point);
-//   }
-//   point_cloud_ptr->width = (int)point_cloud_ptr->points.size();
-//   point_cloud_ptr->height = 1;
-
-//   return point_cloud_ptr;
-
-// }
