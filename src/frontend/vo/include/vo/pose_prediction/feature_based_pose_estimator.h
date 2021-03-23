@@ -27,9 +27,18 @@
 class PosePredictionFeatures
 {
 private:
+    Eigen::Matrix4d T_cb_;
 
 public:
-    PosePredictionFeatures(){};
+    PosePredictionFeatures()
+    : T_cb_(Eigen::Matrix4d::Identity())
+    {
+        // z in headed direction. The motion will be described in the negative direction of the camera depth
+        T_cb_ << 1, 0,  0, 0,
+                 0, 1,  0, 0,
+                 0, 0, -1, 0,
+                 0, 0,  0, 1;
+    };
 
     ~PosePredictionFeatures() {};
 
@@ -107,11 +116,9 @@ Eigen::Affine3d PosePredictionFeatures::estimatePoseFromFeatures(std::vector<cv:
         removeRANSACoutliers(inliers, pts_prev, pts_cur, kpts_prev, kpts_cur);	// Track + match
         cv::recoverPose(E, pts_prev, pts_cur, K, R_b1b2, t_b1b2); // z = viewer direction, x and y follows camera frame
 
-        // cv::Mat I = cv::Mat::eye(3,3, CV_64F);
-        // R_b1b2 = -I * R_b1b2;
-        // t_b1b2 = -I * t_b1b2;
+        T_b1b2 = cv2eigen(R_b1b2, t_b1b2);
 
-        return cv2eigen(R_b1b2, t_b1b2);
+        return Eigen::Affine3d{T_cb_ * T_b1b2.matrix() * T_cb_}; // In reality T_c * T * T_c.transpose()
     }
 
     return T_b1b2;

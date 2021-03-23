@@ -151,36 +151,43 @@ class VO
       //                                                             stereo_.leftProjMat(), 
       //                                                             stereo_.rightProjMat());
 
-      std::vector<cv::Point3f> wrld_pts = matcher_.triangulate(stereo_features.first, 
-                                                               stereo_features.second, 
-                                                               stereo_.leftProjMat(), 
-                                                               stereo_.rightProjMat());
-      // sequencer_.storeCloud(cloud);
+      std::pair<std::vector<cv::Point3f>, std::vector<int>> wrld_pts = matcher_.triangulate(stereo_features.first, 
+                                                                                            stereo_features.second, 
+                                                                                            stereo_.leftProjMat(), 
+                                                                                            stereo_.rightProjMat());
+      sequencer_.storeCloud(wrld_pts.first,
+                            wrld_pts.second);
 
       std::pair<std::vector<cv::Point2f>, std::vector<cv::Point2f>> img_pts = convert(stereo_features.first, 
                                                                                       stereo_features.second);
 
-      sequencer.current.world_points = structure_BA_.estimate(stereo_.getStereoTransformation(),
-                                                              wrld_pts,
-                                                              img_pts.first,
-                                                              img_pts.second);
+      sequencer_.current.world_points = structure_BA_.estimate(stereo_.getStereoTransformation(),
+                                                               sequencer_.current.world_points,
+                                                               img_pts.first,
+                                                               img_pts.second);
 
-      // std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> corr_3D2D = find3D2DCorrespondences(sequencer_.previous.cloud,
-      //                                                                                                   sequencer_.current.kpts_l);
+      std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> corr_3D2D = find3D2DCorrespondences(sequencer_.previous.world_points,
+                                                                                                        sequencer_.previous.indices,
+                                                                                                        sequencer_.current.kpts_l);
 
-      // std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> corr_3D2D_cur = find3D2DCorrespondences(sequencer_.current.cloud,
-      //                                                                                                       sequencer_.current.kpts_l);
 
-      // std::pair<std::vector<cv::Point3f>, std::vector<cv::Point3f>> corr_3D3D = find3D3DCorrespondences(sequencer_.previous.cloud,
-      //                                                                                                   sequencer_.current.cloud);
+      // std::pair<std::vector<cv::Point3f>, std::vector<cv::Point3f>> corr_3D3D = find3D3DCorrespondences(sequencer_.previous.world_points,
+      //                                                                                                   sequencer_.previous.indices,
+      //                                                                                                   sequencer_.current.world_points,
+      //                                                                                                   sequencer_.current.indices);
     
 
-      // Eigen::Affine3d T_r_opt = motion_BA_.estimate(T_r,
-      //                                               corr_3D2D.second,
-      //                                               corr_3D2D.first);
+      Eigen::Affine3d T_r_opt = motion_BA_.estimate3D2D(T_r,
+                                                        corr_3D2D.first,
+                                                        corr_3D2D.second);
 
-      // ROS_INFO_STREAM("Relative pose: \n" << T_r.matrix());
-      // ROS_INFO_STREAM("Optimized relative pose: \n" << T_r_opt.matrix());
+      // Eigen::Affine3d T_r_opt = motion_BA_.estimate3D3D(T_r,
+      //                                                   corr_3D3D.first,
+      //                                                   corr_3D3D.second);
+
+
+      ROS_INFO_STREAM("Relative pose: \n" << T_r.matrix());
+      ROS_INFO_STREAM("Optimized relative pose: \n" << T_r_opt.matrix());
 
 
       // pyr_.Estimate(prev_img, img_left);
@@ -196,8 +203,8 @@ class VO
       initialized_ = true;
       stamp_img_k_ = cam_left->header.stamp;
 
-      cloud_pub_.publish( toPointCloud2Msg(cam_left->header.stamp, 
-                                           sequencer_.current.cloud) );
+      // cloud_pub_.publish( toPointCloud2Msg(cam_left->header.stamp, 
+      //                                      sequencer_.current.cloud) );
       pose_pub_.publish( toPoseStamped(cam_left->header.stamp, 
                                        T_r) );  
 

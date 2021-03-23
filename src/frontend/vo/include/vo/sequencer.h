@@ -20,7 +20,10 @@ struct Frame
   Eigen::Affine3d T_r_;
 
   std::vector<cv::Point3f> world_points;
-  pcl::PointCloud<pcl::PointXYZ> cloud;
+  std::vector<int> indices;
+
+  // std::map<int, cv::Point3f> world_points;
+  // pcl::PointCloud<pcl::PointXYZ> cloud;
 };
 
 
@@ -29,9 +32,16 @@ struct Sequencer
   Frame current;
   Frame previous;
 
-  void storeImagePair(cv::Mat img_left, cv::Mat img_right);
-  void updatePreviousFeatures(std::vector<cv::KeyPoint> kpts_left, std::vector<cv::KeyPoint> kpts_right);
-  void storeCloud(pcl::PointCloud<pcl::PointXYZ> cloud);
+  void storeImagePair(cv::Mat img_left, 
+                      cv::Mat img_right);
+
+  void updatePreviousFeatures(std::vector<cv::KeyPoint> kpts_left, 
+                              std::vector<cv::KeyPoint> kpts_right);
+
+  void storeCloud(std::vector<cv::Point3f> world_points,
+                  std::vector<int> triangulated_indices);
+
+  void updateCloud(std::vector<cv::Point3f> world_points);
 };
 
 
@@ -59,10 +69,30 @@ void Sequencer::updatePreviousFeatures(std::vector<cv::KeyPoint> kpts_left, std:
 }
 
 
-void Sequencer::storeCloud(pcl::PointCloud<pcl::PointXYZ> cloud)
-{
-  if (! current.cloud.empty())
-    previous.cloud = current.cloud;
+// void Sequencer::storeCloud(std::map<int, cv::Point3f> world_points)
+// {
+//   if (! current.world_points.empty())
+//     previous.world_points = current.world_points;
   
-  current.cloud = cloud;
+//   current.world_points = world_points;
+// }
+
+
+void Sequencer::storeCloud(std::vector<cv::Point3f> world_points,
+                           std::vector<int> triangulated_indices)
+{
+  if (! current.world_points.empty())
+  {
+    previous.world_points = current.world_points;
+    previous.indices = current.indices;
+  }
+  
+  current.world_points = world_points;
+  current.indices = triangulated_indices;
+}
+
+
+void Sequencer::updateCloud(std::vector<cv::Point3f> world_points)
+{
+  current.world_points = world_points;
 }

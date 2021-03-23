@@ -33,11 +33,6 @@
 
 #include <gtsam/slam/PriorFactor.h> 
 
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-
-#include "objective_functions/resectioning_point.h"
-
 
 
 namespace BA
@@ -64,15 +59,15 @@ public:
                        const Eigen::Matrix3d K_cr,    // If stereo: Camera matrix for right camera
                        const Eigen::Affine3d T_wb,    // If world coordinates: World transformation to left camera
                        const double pixel_std_dev)    // Assumed pixel noise
-    : K_l_( new gtsam::Cal3_S2(K_cl(0,0), K_cl(1,1), K_cl(0,1), K_cl(0,2), K_cl(1,2)) ),
-      K_r_( new gtsam::Cal3_S2(K_cr(0,0), K_cr(1,1), K_cr(0,1), K_cr(0,2), K_cr(1,2)) ),
-      T_l_( gtsam::Pose3(T_wb.matrix()) ),
-      feature_noise_( gtsam::noiseModel::Robust::Create(
+    : K_l_( new gtsam::Cal3_S2(K_cl(0,0), K_cl(1,1), K_cl(0,1), K_cl(0,2), K_cl(1,2)) )
+    , K_r_( new gtsam::Cal3_S2(K_cr(0,0), K_cr(1,1), K_cr(0,1), K_cr(0,2), K_cr(1,2)) )
+    , T_l_( gtsam::Pose3(T_wb.matrix()) )
+    , feature_noise_( gtsam::noiseModel::Robust::Create(
         gtsam::noiseModel::mEstimator::Huber::Create(1.345),
         gtsam::noiseModel::Diagonal::Sigmas(gtsam::Vector2(pixel_std_dev, pixel_std_dev))
         )
-      ),
-      pose_noise_( gtsam::noiseModel::Diagonal::Sigmas(
+      )
+    , pose_noise_( gtsam::noiseModel::Diagonal::Sigmas(
           (gtsam::Vector(6) << gtsam::Vector3::Constant(0.0), gtsam::Vector3::Constant(0.0)).finished())
       )
     {};
@@ -130,23 +125,25 @@ std::vector<cv::Point3f> StructureEstimator::estimate(const Eigen::Affine3d T_cl
   graph.emplace_shared<gtsam::PriorFactor<gtsam::Pose3>>(gtsam::Symbol('x', 1), T_r_, pose_noise_);
 
 
-  // Insert features using GenericProjectionFactor and an initial 
+  // Insert features using GenericProjectionFactor and an initial estimate of the 3D location of the landmark
   for (size_t i = 0; i < world_inlier_points.size(); i++) 
   {
     // Left image
     gtsam::Point2 img_pt_l = gtsam::Point2(image_inlier_left[i].x, 
                                            image_inlier_left[i].y);
 
-    graph.emplace_shared<gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3, gtsam::Cal3_S2> >(
+    graph.emplace_shared<gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3>>(
         img_pt_l, feature_noise_, gtsam::Symbol('x', 0), gtsam::Symbol('l', i), K_l_);
+
 
     // Right image
     gtsam::Point2 img_pt_r = gtsam::Point2(image_inlier_right[i].x, 
                                            image_inlier_right[i].y);
 
-    graph.emplace_shared<gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3, gtsam::Cal3_S2> >(
+    graph.emplace_shared<gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3> >(
         img_pt_r, feature_noise_, gtsam::Symbol('x', 1), gtsam::Symbol('l', i), K_r_);
-    
+  
+
     // Initial estimate of "world" point position
     gtsam::Point3 wrld_pt = gtsam::Point3(world_inlier_points[i].x, 
                                           world_inlier_points[i].y, 

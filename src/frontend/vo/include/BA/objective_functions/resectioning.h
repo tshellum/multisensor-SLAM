@@ -14,15 +14,13 @@
 // Atlanta, Georgia 30332-0415
 // All Rights Reserved
 
-using gtsam::symbol_shorthand::X;
-
 /**
  * Unary factor on the unknown pose, resulting from measuring the projection of
  * a known 3D point in the image
  */
-class ResectioningPoseFactor: public gtsam::NoiseModelFactor1<gtsam::Pose3>
+class ResectioningFactor: public gtsam::NoiseModelFactor1<gtsam::Pose3>
 {
-  typedef NoiseModelFactor1<gtsam::Pose3> Base; // Dette bestemmer optimalisert variabel??
+  typedef NoiseModelFactor1<gtsam::Pose3> Base; 
 
   gtsam::Cal3_S2::shared_ptr K_; ///< camera's intrinsic parameters
   gtsam::Point3 P_;              ///< 3D point on the calibration rig
@@ -31,7 +29,7 @@ class ResectioningPoseFactor: public gtsam::NoiseModelFactor1<gtsam::Pose3>
 public:
 
   /// Construct factor given known point P and its projection p
-  ResectioningPoseFactor(const gtsam::SharedNoiseModel& model,
+  ResectioningFactor(const gtsam::SharedNoiseModel& model,
                          const gtsam::Key& key,
                          const gtsam::Cal3_S2::shared_ptr& calib,
                          const gtsam::Point2& p,
@@ -44,7 +42,7 @@ public:
 
   /// evaluate the error
   virtual gtsam::Vector evaluateError(const gtsam::Pose3& pose,
-                                      boost::optional<gtsam::Matrix&> H =  boost::none) const
+                                      boost::optional<gtsam::Matrix&> H =  boost::none) const override
   {
     gtsam::PinholeCamera<gtsam::Cal3_S2> camera(pose, *K_);
     return camera.project(P_, H, boost::none, boost::none) - p_;

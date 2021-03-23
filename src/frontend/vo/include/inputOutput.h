@@ -80,7 +80,7 @@ std::pair<std::vector<cv::Point2f>, std::vector<cv::Point2f>> convert(std::vecto
   return std::make_pair(pts_l, pts_r);
 }
 
-std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> find3D2DCorrespondences(pcl::PointCloud<pcl::PointXYZ> world_points,
+std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> find3D2DCorrespondences(std::map<int, cv::Point3f> world_points,
                                                                                       std::vector<cv::KeyPoint> image_points)
 {
   std::vector<cv::Point2f> image_point_correspondences; 
@@ -90,19 +90,68 @@ std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> find3D2DCorrespond
   {
     for(int i = 0; i < image_points.size(); i++)
     {
-      for(int j = 0; j < world_points.size(); j++)
-      {
-        if ( image_points[i].class_id == world_points.points[j].data[0] )
-        {
-          cv::Point3f wrld_pt;
-          wrld_pt.x = world_points.points[j].x;
-          wrld_pt.y = world_points.points[j].y;
-          wrld_pt.z = world_points.points[j].z;
+      int id = image_points[i].class_id;
 
-          image_point_correspondences.push_back(image_points[i].pt);
-          world_point_correspondences.push_back(wrld_pt);
-          break;
-        }
+      if ( world_points.find(id) == world_points.end() ) 
+        continue;
+
+      cv::Point3f wrld_pt;
+      wrld_pt.x = world_points[id].x;
+      wrld_pt.y = world_points[id].y;
+      wrld_pt.z = world_points[id].z;
+
+      image_point_correspondences.push_back(image_points[i].pt);
+      world_point_correspondences.push_back(wrld_pt);
+    }
+  }
+
+  return std::make_pair(world_point_correspondences, image_point_correspondences);
+}
+
+
+std::pair<std::vector<cv::Point3f>, std::vector<cv::Point3f>> find3D3DCorrespondences(std::map<int, cv::Point3f> world_points_prev, 
+                                                                                      std::map<int, cv::Point3f> world_points_cur)
+{
+  std::vector<cv::Point3f> world_point_prev_corr;
+  std::vector<cv::Point3f> world_point_cur_corr;
+
+  std::map<int, cv::Point3f>::iterator prev;
+  for (prev = world_points_prev.begin(); prev != world_points_prev.end(); prev++)
+  {
+    int id = prev->first;
+    if ( world_points_cur.find(id) == world_points_cur.end() )
+      continue;
+
+    world_point_prev_corr.push_back(world_points_prev[id]);
+    world_point_cur_corr.push_back(world_points_prev[id]);
+
+  }
+
+  return std::make_pair(world_point_prev_corr, world_point_cur_corr);
+}
+
+
+
+std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> find3D2DCorrespondences(std::vector<cv::Point3f> world_points,
+                                                                                      std::vector<int> world_point_indices,
+                                                                                      std::vector<cv::KeyPoint> image_points)
+{
+  std::vector<cv::Point2f> image_point_correspondences; 
+  std::vector<cv::Point3f> world_point_correspondences;
+  
+  if ( ! image_points.empty() && ! world_points.empty() )
+  {
+    for(int i = 0; i < image_points.size(); i++)
+    {
+      for(int j = 0; j < world_point_indices.size(); j++)
+      {
+        if ( image_points[i].class_id != world_point_indices[j] )
+          continue;
+
+        // Same ID
+        image_point_correspondences.push_back(image_points[i].pt);
+        world_point_correspondences.push_back(world_points[i]);
+        break;
       }
     }
   }
@@ -111,37 +160,29 @@ std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> find3D2DCorrespond
 }
 
 
-std::pair<std::vector<cv::Point3f>, std::vector<cv::Point3f>> find3D3DCorrespondences(pcl::PointCloud<pcl::PointXYZ> world_points_prev, 
-                                                                                      pcl::PointCloud<pcl::PointXYZ> world_points_cur)
+std::pair<std::vector<cv::Point3f>, std::vector<cv::Point3f>> find3D3DCorrespondences(std::vector<cv::Point3f> world_points_prev,
+                                                                                      std::vector<int> world_point_prev_indices,
+                                                                                      std::vector<cv::Point3f> world_points_cur,
+                                                                                      std::vector<int> world_point_cur_indices)
 {
   std::vector<cv::Point3f> world_point_prev_corr;
   std::vector<cv::Point3f> world_point_cur_corr;
-  
-  if ( ! world_points_prev.empty() && ! world_points_cur.empty() )
+
+  if ( (! world_points_prev.empty()) && (! world_points_cur.empty()) )
   {
     for(int i = 0; i < world_points_prev.size(); i++)
     {
       for(int j = 0; j < world_points_cur.size(); j++)
       {
-        if ( world_points_prev.points[j].data[0] == world_points_cur.points[j].data[0] )
-        {
-          cv::Point3f wrld_pt_prev;
-          wrld_pt_prev.x = world_points_prev.points[j].x;
-          wrld_pt_prev.y = world_points_prev.points[j].y;
-          wrld_pt_prev.z = world_points_prev.points[j].z;
+        if ( world_point_prev_indices[i] != world_point_cur_indices[j] )
+          continue;
 
-          cv::Point3f wrld_pt_cur;
-          wrld_pt_cur.x = world_points_cur.points[j].x;
-          wrld_pt_cur.y = world_points_cur.points[j].y;
-          wrld_pt_cur.z = world_points_cur.points[j].z;
-
-          world_point_prev_corr.push_back(wrld_pt_prev);
-          world_point_cur_corr.push_back(wrld_pt_cur);
-          break;
-        }
+        world_point_prev_corr.push_back(world_points_prev[i]);
+        world_point_cur_corr.push_back(world_points_cur[i]);
+        break;        
       }
     }
   }
-
+  
   return std::make_pair(world_point_prev_corr, world_point_cur_corr);
 }
