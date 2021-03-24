@@ -186,3 +186,82 @@ std::pair<std::vector<cv::Point3f>, std::vector<cv::Point3f>> find3D3DCorrespond
   
   return std::make_pair(world_point_prev_corr, world_point_cur_corr);
 }
+
+
+
+std::pair<std::vector<int>, std::vector<int>> find3D3DCorrespondenceIndices(std::vector<int> world_point_prev_indices,
+                                                                            std::vector<int> world_point_cur_indices)
+{
+  std::vector<int> idx_prev;
+  std::vector<int> idx_cur;
+
+  if ( (! world_point_prev_indices.empty()) && (! world_point_cur_indices.empty()) )
+  {
+    for(int i = 0; i < world_point_prev_indices.size(); i++)
+    {
+      for(int j = 0; j < world_point_cur_indices.size(); j++)
+      {
+        if ( world_point_prev_indices[i] != world_point_cur_indices[j] )
+          continue;
+
+        idx_prev.push_back(world_point_prev_indices[i]);
+        idx_cur.push_back(world_point_cur_indices[j]);
+        break;        
+      }
+    }
+  }
+  
+  return std::make_pair(idx_prev, idx_cur);
+}
+
+
+
+
+std::vector<cv::Point2f> findIndexMatchFeatures(std::vector<int> indices,
+                                                std::vector<cv::KeyPoint> features)
+{
+  std::vector<cv::Point2f> feature_correspondences;
+
+  if ( (! indices.empty()) && (! features.empty()) )
+  {
+    for(int i = 0; i < indices.size(); i++)
+    {
+      for(int j = 0; j < features.size(); j++)
+      {
+        if ( indices[i] != features[j].class_id )
+          continue;
+
+        feature_correspondences.push_back(features[i].pt);
+        break;        
+      }
+    }
+  }
+  
+  return feature_correspondences;
+}
+
+
+
+std::vector<cv::Point3f> findIndexMatchLandmarks(std::vector<int> indices,
+                                                 std::vector<cv::Point3f> world_points,
+                                                 std::vector<int> world_point_indices)
+{
+  std::vector<cv::Point3f> landmark_correspondences;
+
+  if ( (! indices.empty()) && (! world_point_indices.empty()) )
+  {
+    for(int i = 0; i < indices.size(); i++)
+    {
+      for(int j = 0; j < world_point_indices.size(); j++)
+      {
+        if ( indices[i] != world_point_indices[j] )
+          continue;
+
+        landmark_correspondences.push_back(world_points[j]);
+        break;        
+      }
+    }
+  }
+  
+  return landmark_correspondences;
+}

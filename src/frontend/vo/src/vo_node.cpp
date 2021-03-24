@@ -144,15 +144,12 @@ class VO
                                                                                                                   sequencer_.current.kpts_l, 
                                                                                                                   sequencer_.current.kpts_r);
 
+      sequencer_.storeFeatures(stereo_features.first, stereo_features.second);
+
       ROS_INFO_STREAM("matched - match_left.size(): " << stereo_features.first.size() << ", match_right.size(): " << stereo_features.second.size());
 
-      // pcl::PointCloud<pcl::PointXYZ> cloud = matcher_.triangulate(stereo_features.first, 
-      //                                                             stereo_features.second, 
-      //                                                             stereo_.leftProjMat(), 
-      //                                                             stereo_.rightProjMat());
-
-      std::pair<std::vector<cv::Point3f>, std::vector<int>> wrld_pts = matcher_.triangulate(stereo_features.first, 
-                                                                                            stereo_features.second, 
+      std::pair<std::vector<cv::Point3f>, std::vector<int>> wrld_pts = matcher_.triangulate(sequencer_.current.kpts_l, 
+                                                                                            sequencer_.current.kpts_l, 
                                                                                             stereo_.leftProjMat(), 
                                                                                             stereo_.rightProjMat());
       sequencer_.storeCloud(wrld_pts.first,
@@ -166,24 +163,49 @@ class VO
                                                                img_pts.first,
                                                                img_pts.second);
 
-      std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> corr_3D2D = find3D2DCorrespondences(sequencer_.previous.world_points,
-                                                                                                        sequencer_.previous.indices,
-                                                                                                        sequencer_.current.kpts_l);
-
-
-      // std::pair<std::vector<cv::Point3f>, std::vector<cv::Point3f>> corr_3D3D = find3D3DCorrespondences(sequencer_.previous.world_points,
+      // std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> corr_3D2D = find3D2DCorrespondences(sequencer_.previous.world_points,
       //                                                                                                   sequencer_.previous.indices,
-      //                                                                                                   sequencer_.current.world_points,
-      //                                                                                                   sequencer_.current.indices);
-    
+      //                                                                                                   sequencer_.current.kpts_l);
 
-      Eigen::Affine3d T_r_opt = motion_BA_.estimate3D2D(T_r,
-                                                        corr_3D2D.first,
-                                                        corr_3D2D.second);
+      // Eigen::Affine3d T_r_opt = motion_BA_.estimate3D2D(T_r,
+      //                                                   corr_3D2D.first,
+      //                                                   corr_3D2D.second);
 
-      // Eigen::Affine3d T_r_opt = motion_BA_.estimate3D3D(T_r,
-      //                                                   corr_3D3D.first,
-      //                                                   corr_3D3D.second);
+
+
+
+
+      std::pair<std::vector<int>, std::vector<int>> corr_3D3D = find3D3DCorrespondenceIndices(sequencer_.previous.indices,
+                                                                                              sequencer_.current.indices);
+
+      // Previous
+      std::vector<cv::Point2f> features_prev_l = findIndexMatchFeatures(corr_3D3D.first,
+                                                                        sequencer_.previous.kpts_l);
+      
+      std::vector<cv::Point2f> features_prev_r = findIndexMatchFeatures(corr_3D3D.first,
+                                                                        sequencer_.previous.kpts_r);
+
+      std::vector<cv::Point3f> landmarks_prev = findIndexMatchLandmarks(corr_3D3D.first,
+                                                                        sequencer_.previous.world_points,
+                                                                        sequencer_.previous.indices);
+      // Current
+      std::vector<cv::Point2f> features_cur_l = findIndexMatchFeatures(corr_3D3D.second,
+                                                                       sequencer_.current.kpts_l);
+      
+      std::vector<cv::Point2f> features_cur_r = findIndexMatchFeatures(corr_3D3D.second,
+                                                                       sequencer_.current.kpts_r);
+
+      std::vector<cv::Point3f> landmarks_cur = findIndexMatchLandmarks(corr_3D3D.second,
+                                                                       sequencer_.current.world_points,
+                                                                       sequencer_.current.indices);
+
+      Eigen::Affine3d T_r_opt = motion_BA_.estimate3D3D(T_r,
+                                                        landmarks_prev,
+                                                        landmarks_cur,
+                                                        features_prev_l,
+                                                        features_prev_r,
+                                                        features_cur_l,
+                                                        features_cur_r);
 
 
       ROS_INFO_STREAM("Relative pose: \n" << T_r.matrix());

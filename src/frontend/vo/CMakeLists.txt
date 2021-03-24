@@ -58,7 +58,7 @@ endif()
 
 find_package(Eigen3 3.3 REQUIRED)
 find_package(GTSAM REQUIRED)
-find_package(Sophus REQUIRED)
+# find_package(Sophus REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -163,7 +163,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   gtsam
-  ${Sophus_INCLUDE_DIRS}
+  # ${Sophus_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -196,7 +196,7 @@ target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
   gtsam
-  ${Sophus_LIBRARIES}
+  # ${Sophus_LIBRARIES}
 )
 
 #############

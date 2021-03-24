@@ -8,13 +8,13 @@
 #include <Eigen/Dense>
 
 #include "vo/pose_prediction/imu_preintegrator.h"
-#include "vo/pose_prediction/motion_model.h"
+// #include "vo/pose_prediction/motion_model.h"
 #include "vo/pose_prediction/feature_based_pose_estimator.h"
 
 class PosePredictor
 {
 private:
-  MotionModel            model_;
+  // MotionModel            model_;
   IMUPosePredictor       imu_; 
   PosePredictionFeatures feature_estimator_; 
 
@@ -73,8 +73,8 @@ Eigen::Affine3d PosePredictor::predict(double dt)
   else
   {
     approximateDerivative(dt, T_r_pred_);
-    T_r_pred_.translation() = model_.predictTranslation(dt, ang_k_, vel_k_);
-    T_r_pred_.linear()      = model_.predictRotation(dt, T_r_pred_.linear(), ang_rate_k_);
+    // T_r_pred_.translation() = model_.predictTranslation(dt, ang_k_, vel_k_);
+    // T_r_pred_.linear()      = model_.predictRotation(dt, T_r_pred_.linear(), ang_rate_k_);
   }
 
   ROS_INFO_STREAM("T_r_pred_: \n" << T_r_pred_.matrix());

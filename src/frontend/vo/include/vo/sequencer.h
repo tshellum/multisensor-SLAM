@@ -35,6 +35,10 @@ struct Sequencer
   void storeImagePair(cv::Mat img_left, 
                       cv::Mat img_right);
 
+  void storeFeatures(std::vector<cv::KeyPoint> kpts_left, 
+                     std::vector<cv::KeyPoint> kpts_right);
+
+
   void updatePreviousFeatures(std::vector<cv::KeyPoint> kpts_left, 
                               std::vector<cv::KeyPoint> kpts_right);
 
@@ -59,6 +63,18 @@ void Sequencer::storeImagePair(cv::Mat img_left, cv::Mat img_right)
 }
 
 
+void Sequencer::storeFeatures(std::vector<cv::KeyPoint> kpts_left, std::vector<cv::KeyPoint> kpts_right)
+{
+  if (! current.kpts_l.empty() && ! current.kpts_r.empty())
+  {
+    previous.kpts_l = current.kpts_l;
+    previous.kpts_r = current.kpts_r;
+  }
+  
+  current.kpts_l = kpts_left;
+  current.kpts_r = kpts_right;
+}
+
 void Sequencer::updatePreviousFeatures(std::vector<cv::KeyPoint> kpts_left, std::vector<cv::KeyPoint> kpts_right)
 {
   previous.kpts_l = kpts_left;
@@ -69,13 +85,7 @@ void Sequencer::updatePreviousFeatures(std::vector<cv::KeyPoint> kpts_left, std:
 }
 
 
-// void Sequencer::storeCloud(std::map<int, cv::Point3f> world_points)
-// {
-//   if (! current.world_points.empty())
-//     previous.world_points = current.world_points;
-  
-//   current.world_points = world_points;
-// }
+
 
 
 void Sequencer::storeCloud(std::vector<cv::Point3f> world_points,

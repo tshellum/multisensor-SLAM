@@ -61,11 +61,6 @@ public:
                                                                     cv::Mat P_l,
                                                                     cv::Mat P_r);
 
-  // std::map<int, cv::Point3f> triangulate(std::vector<cv::KeyPoint>& match_left, 
-  //                                        std::vector<cv::KeyPoint>& match_right,
-  //                                        cv::Mat P_l,
-  //                                        cv::Mat P_r);
-
 };
 
 
@@ -287,56 +282,3 @@ std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::
   return std::make_pair(wrld_pts, indices);;
 }
 
-
-
-// std::map<int, cv::Point3f> Matcher::triangulate(std::vector<cv::KeyPoint>& match_left, 
-//                                                 std::vector<cv::KeyPoint>& match_right,
-//                                                 cv::Mat P_l,
-//                                                 cv::Mat P_r)
-// {  
-//   std::map<int, cv::Point3f> wrld_pts_indx;
-
-//   if (match_left.empty() || match_right.empty())
-//     return wrld_pts_indx;
-
-//   int n_err = 0;
-//   int num_features = match_left.size();
-//   for(int i = 0; i < num_features; i++)
-//   {
-//     int pt_it = i - n_err;
-
-//     // Triangulate
-//     cv::Mat pt3D = DLT(match_left[pt_it].pt, match_right[pt_it].pt, P_l, P_r);
-
-//     // Check potential errors when triangulating
-//     cv::Point2f proj_l = project(pt3D, P_l);
-//     cv::Point2f proj_r = project(pt3D, P_r);
-
-//     if (((pt3D.at<double>(2) < 0)                              // Point is not in front of camera
-//       && (pt3D.at<double>(2) > 150))                           // Point is more than 150m away from camera
-//       || (match_left[i].class_id != match_right[i].class_id)   // Not matched
-//       || ( pow((match_left[pt_it].pt.x - proj_l.x), 2)  + pow((match_left[pt_it].pt.y - proj_l.y), 2)  > reproj_err_ ) // To large reprojection error in left cam
-//       || ( pow((match_right[pt_it].pt.x - proj_r.x), 2) + pow((match_right[pt_it].pt.y - proj_r.y), 2) > reproj_err_ ) // To large reprojection error in right cam
-//     )
-//     {
-//       match_left.erase(match_left.begin() + pt_it);
-//       match_right.erase(match_right.begin() + pt_it);
-//       n_err++;
-//       continue;
-//     }
-
-//     // Safe --> add point
-//     cv::Point3f pt;
-//     pt.x = pt3D.at<double>(0);
-//     pt.y = pt3D.at<double>(1);
-//     pt.z = pt3D.at<double>(2);
-
-//     int id = match_left[pt_it].class_id; // Keep ID
-
-//     wrld_pts_indx[id] = pt;    
-//   }
-//   ROS_INFO_STREAM("triangulation() - Correct: " << wrld_pts_indx.size() << ", Erronous: " << n_err);
-
-
-//   return wrld_pts_indx;
-// }
