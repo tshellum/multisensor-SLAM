@@ -171,9 +171,9 @@ std::vector<cv::Point3f> StructureEstimator::estimate(const Eigen::Affine3d T_cl
     Eigen::Vector3d wrld_pt_opt = result.at<gtsam::Point3>(gtsam::Symbol('l', i)).matrix();
     wrld_pts_optim.push_back( cv::Point3f(wrld_pt_opt.x(), wrld_pt_opt.y(), wrld_pt_opt.z()) );
 
-    // ROS_INFO_STREAM( "Original[" << i << "]: " << world_inlier_points[i] );
-    // ROS_INFO_STREAM( "Optimized[" << i << "]: " << wrld_pts_optim[i] );
-    // ROS_INFO_STREAM( "Diff[" << i << "]: " << world_inlier_points[i] - wrld_pts_optim[i] );
+    ROS_INFO_STREAM( "Original[" << i << "]: " << world_inlier_points[i] );
+    ROS_INFO_STREAM( "Optimized[" << i << "]: " << wrld_pts_optim[i] );
+    ROS_INFO_STREAM( "Diff[" << i << "]: " << world_inlier_points[i] - wrld_pts_optim[i] );
   }
 
   return wrld_pts_optim;

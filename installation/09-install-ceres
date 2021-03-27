@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+
+command -v sudo > /dev/null 2>&1 || { apt update && apt install --no-install-recommends -y sudo; }
+
+# cd ${SOFTWARE_DIR}
+cd ~/software
+
+
+# google-glog + gflags
+sudo apt-get install -y libgoogle-glog-dev libgflags-dev
+# BLAS & LAPACK
+sudo apt-get install -y libatlas-base-dev
+# SuiteSparse and CXSparse (optional)
+sudo apt-get install -y libsuitesparse-dev
+
+# Install Ceres
+if [ ! -d "ceres-solver-2.0.0" ] 
+then
+  wget http://ceres-solver.org/ceres-solver-2.0.0.tar.gz
+  tar zxf ceres-solver-2.0.0.tar.gz
+  mkdir ceres-bin
+fi
+  
+cd ceres-bin
+cmake ../ceres-solver-2.0.0
+make -j3
+make test
+# Optionally install Ceres, it can also be exported using CMake which
+# allows Ceres to be used without requiring installation, see the documentation
+# for the EXPORT_BUILD_DIR option for more information.
+sudo make install
+
+
+rm ceres-solver-2.0.0.tar.gz

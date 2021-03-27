@@ -58,6 +58,8 @@ endif()
 
 find_package(Eigen3 3.3 REQUIRED)
 find_package(GTSAM REQUIRED)
+# find_package(Ceres REQUIRED)
+
 # find_package(Sophus REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -163,6 +165,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   gtsam
+  # ${CERES_INCLUDE_DIRS}
   # ${Sophus_INCLUDE_DIRS}
 )
 
@@ -196,6 +199,7 @@ target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
   gtsam
+  ${CERES_LIBRARIES}
   # ${Sophus_LIBRARIES}
 )
 

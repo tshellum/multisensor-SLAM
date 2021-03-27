@@ -27,8 +27,9 @@
 #include "vo/feature_management/detector.h"
 #include "vo/feature_management/matcher.h"
 #include "vo/sequencer.h"
-#include "BA/structure-only_BA.h"
-#include "BA/motion-only_BA.h"
+// #include "BA/ceres/motion-only_BA.h"
+// #include "BA/gtsam/structure-only_BA.h"
+#include "BA/gtsam/motion-only_BA.h"
 // #include "PYR/PYR.h"
 // #include "JET/jet.h"
 
@@ -45,6 +46,8 @@ class VO
     message_filters::Subscriber<sensor_msgs::Image> sub_cam_right_;
     boost::shared_ptr<Sync> sync_;
 
+    ros::Subscriber gnss_sub_; // remove
+
     // Publisher
     ros::Publisher cloud_pub_; 
     ros::Publisher pose_pub_;
@@ -55,7 +58,7 @@ class VO
     Detector                detector_;
     Matcher                 matcher_;
     PosePredictor           pose_predictor_;
-    BA::StructureEstimator  structure_BA_;
+    // BA::StructureEstimator  structure_BA_;
     BA::MotionEstimator     motion_BA_;
     // PYR           pyr_;
     // JET jet;
@@ -72,19 +75,25 @@ class VO
     const boost::property_tree::ptree camera_config;
     const boost::property_tree::ptree detector_config;
 
+    double scale_;              // remove
+    double x_tf_, y_tf_, z_tf_; // remove
   public:
     VO() 
-    : initialized_(false),
-      stereo_(nh_, 10),
-      pose_predictor_(nh_, "imu_topic", 1000),
-      structure_BA_(stereo_.left().K_eig(), stereo_.right().K_eig(), 0.5),
-      motion_BA_(stereo_.left().K_eig(), 0.5)
+    : scale_(0.0)                         // remove
+    , x_tf_(0.0), y_tf_(0.0), z_tf_(0.0)  // remove
+    , initialized_(false)
+    , stereo_(nh_, 10)
+    , pose_predictor_(nh_, "imu_topic", 1000)
+    // , structure_BA_(stereo_.left().K_eig(), stereo_.right().K_eig(), 0.5)
+    , motion_BA_(stereo_.left().K_eig(), 0.5)
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       sub_cam_left_.subscribe(nh_, "cam_left", 1);
       sub_cam_right_.subscribe(nh_, "cam_right", 1);
       sync_.reset(new Sync(MySyncPolicy(10), sub_cam_left_, sub_cam_right_));
       sync_->registerCallback(boost::bind(&VO::callback, this, _1, _2));
+
+ 			gnss_sub_ = nh_.subscribe("/tf", 1, &VO::readTF, this); // remove
 
       // Publish
       cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/frontend/vo/point_cloud", 1000);
@@ -104,8 +113,26 @@ class VO
     ~VO() {}
 
 
+    void readTF(const tf2_msgs::TFMessage& msg) // remove
+    {
+      double scale = sqrt( pow(msg.transforms[0].transform.translation.x - x_tf_, 2)    // x²
+                         + pow(msg.transforms[0].transform.translation.y - y_tf_, 2)    // y²
+                         + pow(msg.transforms[0].transform.translation.z - z_tf_, 2) ); // z²
+
+      if (scale != 0) // if not same GNSS measurement
+        scale_ = scale;
+
+      x_tf_ = msg.transforms[0].transform.translation.x;
+      y_tf_ = msg.transforms[0].transform.translation.y;
+      z_tf_ = msg.transforms[0].transform.translation.z;
+    }
+
+
+
     void callback(const sensor_msgs::ImageConstPtr &cam_left, const sensor_msgs::ImageConstPtr &cam_right)
     {
+      ROS_INFO("-------------------------------------------------------");
+
       tic_ = cv::getTickCount();
       
       if (initialized_)
@@ -149,29 +176,20 @@ class VO
       ROS_INFO_STREAM("matched - match_left.size(): " << stereo_features.first.size() << ", match_right.size(): " << stereo_features.second.size());
 
       std::pair<std::vector<cv::Point3f>, std::vector<int>> wrld_pts = matcher_.triangulate(sequencer_.current.kpts_l, 
-                                                                                            sequencer_.current.kpts_l, 
+                                                                                            sequencer_.current.kpts_r, 
                                                                                             stereo_.leftProjMat(), 
                                                                                             stereo_.rightProjMat());
       sequencer_.storeCloud(wrld_pts.first,
                             wrld_pts.second);
 
-      std::pair<std::vector<cv::Point2f>, std::vector<cv::Point2f>> img_pts = convert(stereo_features.first, 
-                                                                                      stereo_features.second);
 
-      sequencer_.current.world_points = structure_BA_.estimate(stereo_.getStereoTransformation(),
-                                                               sequencer_.current.world_points,
-                                                               img_pts.first,
-                                                               img_pts.second);
+      // std::pair<std::vector<cv::Point2f>, std::vector<cv::Point2f>> img_pts = convert(stereo_features.first, 
+      //                                                                                 stereo_features.second);
 
-      // std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> corr_3D2D = find3D2DCorrespondences(sequencer_.previous.world_points,
-      //                                                                                                   sequencer_.previous.indices,
-      //                                                                                                   sequencer_.current.kpts_l);
-
-      // Eigen::Affine3d T_r_opt = motion_BA_.estimate3D2D(T_r,
-      //                                                   corr_3D2D.first,
-      //                                                   corr_3D2D.second);
-
-
+      // sequencer_.current.world_points = structure_BA_.estimate(stereo_.getStereoTransformation(),
+      //                                                          sequencer_.current.world_points,
+      //                                                          img_pts.first,
+      //                                                          img_pts.second);
 
 
 
@@ -199,23 +217,22 @@ class VO
                                                                        sequencer_.current.world_points,
                                                                        sequencer_.current.indices);
 
-      Eigen::Affine3d T_r_opt = motion_BA_.estimate3D3D(T_r,
-                                                        landmarks_prev,
-                                                        landmarks_cur,
-                                                        features_prev_l,
-                                                        features_prev_r,
-                                                        features_cur_l,
-                                                        features_cur_r);
+      // T_r = pose_predictor_.cam2body(T_r);
+      // Eigen::Affine3d T_r_scaled = T_r;
+      // T_r_scaled.translation() *= scale_;
+
+      // ROS_INFO_STREAM("Relative pose: \n" << T_r.matrix());
+      // ROS_INFO_STREAM("Relative pose scaled: \n" << T_r_scaled.matrix());
 
 
-      ROS_INFO_STREAM("Relative pose: \n" << T_r.matrix());
-      ROS_INFO_STREAM("Optimized relative pose: \n" << T_r_opt.matrix());
+      Eigen::Affine3d T_r_opt3D2D_resec = motion_BA_.estimate3D2D(T_r,
+                                                                  landmarks_prev,
+                                                                  features_cur_l);
 
 
-      // pyr_.Estimate(prev_img, img_left);
-      // cv::Mat img_current_disp2 = pyr_.Draw(img_left);		
-      // imshow("results", img_current_disp2);
+      ROS_INFO_STREAM("Optimized relative pose 3D2D resec: \n" << T_r_opt3D2D_resec.matrix());
 
+      
       displayWindowFeatures(sequencer_.current.img_l, 
                             stereo_features.first,
                             sequencer_.current.img_r,
