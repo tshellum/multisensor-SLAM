@@ -248,6 +248,7 @@ std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::
 
     // Triangulate
     cv::Mat pt3D = DLT(match_left[pt_it].pt, match_right[pt_it].pt, P_l, P_r);
+    ROS_INFO_STREAM("triangulation() - pt3D: " << pt3D);
 
     // Check potential errors when triangulating
     cv::Point2f proj_l = project(pt3D, P_l);
@@ -271,6 +272,8 @@ std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::
     pt.x = pt3D.at<double>(0);
     pt.y = pt3D.at<double>(1);
     pt.z = pt3D.at<double>(2);
+
+    ROS_INFO_STREAM("triangulation() - pt: " << pt);
 
     wrld_pts.push_back(pt);
     indices.push_back(match_left[pt_it].class_id);

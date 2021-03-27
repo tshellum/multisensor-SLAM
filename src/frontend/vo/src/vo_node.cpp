@@ -149,7 +149,7 @@ class VO
       ROS_INFO_STREAM("matched - match_left.size(): " << stereo_features.first.size() << ", match_right.size(): " << stereo_features.second.size());
 
       std::pair<std::vector<cv::Point3f>, std::vector<int>> wrld_pts = matcher_.triangulate(sequencer_.current.kpts_l, 
-                                                                                            sequencer_.current.kpts_l, 
+                                                                                            sequencer_.current.kpts_r, 
                                                                                             stereo_.leftProjMat(), 
                                                                                             stereo_.rightProjMat());
       sequencer_.storeCloud(wrld_pts.first,
