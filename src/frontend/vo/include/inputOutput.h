@@ -5,6 +5,7 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <tf2_eigen/tf2_eigen.h>
+#include "vo/vo_msg.h"
 
 /*** PCL packages ***/
 #include <pcl/point_cloud.h>
@@ -65,6 +66,32 @@ sensor_msgs::PointCloud2 toPointCloud2Msg(ros::Time stamp, pcl::PointCloud<pcl::
   cloud_msg.header.frame_id = "point_cloud";
 
   return cloud_msg;
+}
+
+
+vo::vo_msg generateMsg(ros::Time stamp, 
+                       Eigen::Affine3d T,
+                       std::vector<cv::Point3f> world_points,
+                       std::vector<int> world_point_indices)
+{
+  vo::vo_msg vo_msg;
+  vo_msg.header.frame_id = "vo";
+  vo_msg.header.stamp = stamp;
+  vo_msg.pose = tf2::toMsg(T);
+
+  vo_msg.cloud_size = world_points.size();
+  for(int i = 0; i < world_points.size(); i++)
+  {
+    geometry_msgs::Point pt_msg	= tf2::toMsg(Eigen::Vector3d(
+      world_points[i].x,
+      world_points[i].y,
+      world_points[i].z
+    ));
+    vo_msg.cloud.push_back(pt_msg);
+    vo_msg.point_ids.push_back(world_point_indices[i]);
+  }
+
+  return vo_msg;
 }
 
 

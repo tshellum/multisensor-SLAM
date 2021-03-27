@@ -61,6 +61,16 @@ public:
                                const std::vector<cv::Point3f> world_inlier_points,
                                const std::vector<cv::Point2f> image_inlier_points);
 
+  /// \brief Estimates camera pose from 3D-2D correspondences.
+  /// \param T_r Initial estimate of relative transformation.
+  /// \param image_points 2D image points.
+  /// \param world_points 3D planar world points.
+  /// \return The results.
+  // Eigen::Affine3d estimate3D2D(const Eigen::Affine3d T_r,                           
+  //                              const std::vector<cv::Point3f> world_points,
+  //                              const std::vector<cv::Point2f> image_points_left,
+  //                              const std::vector<cv::Point2f> image_points_right);
+
 };
 
 
@@ -103,6 +113,56 @@ Eigen::Affine3d MotionEstimator::estimate3D2D(const Eigen::Affine3d T_r,        
   return Eigen::Affine3d{result.at<gtsam::Pose3>(gtsam::Symbol('x',1)).matrix()};
 }
 
+
+
+// Eigen::Affine3d MotionEstimator::estimate3D2D(const Eigen::Affine3d T_r,     
+//                                               const Eigen::Affine3d T_clcr,                                                                 
+//                                               const std::vector<cv::Point3f> world_points,
+//                                               const std::vector<cv::Point2f> image_points_left,
+//                                               const std::vector<cv::Point2f> image_points_right) 
+// {
+//   // Create factor graph.
+//   gtsam::NonlinearFactorGraph graph;
+//   gtsam::Values initial;
+//   gtsam::Values result;
+
+//   // Add each 3D-2D correspondence to the factor graph.
+//   for (size_t i=0; i<world_points.size(); ++i)
+//   {
+//     const cv::Point2f img_pt_l  = image_points_left[i];
+//     const cv::Point2f img_pt_r  = image_points_right[i];
+//     const cv::Point3f wrld_pt = world_points[i];
+
+//     graph.emplace_shared<ResectioningFactor>(feature_noise_, gtsam::Symbol('x',1), K_,
+//                                              gtsam::Point2(img_pt_l.x, img_pt_l.y),
+//                                              gtsam::Point3(wrld_pt.x, wrld_pt.y, wrld_pt.z));
+
+//     graph.emplace_shared<ResectioningFactor>(feature_noise_, gtsam::Symbol('x',2), K_,
+//                                              gtsam::Point2(img_pt_l.x, img_pt_l.y),
+//                                              gtsam::Point3(wrld_pt.x, wrld_pt.y, wrld_pt.z));
+
+//     gtsam::Pose3 pose_cam_r = gtsam::Pose3(T_r.matrix() * T_clcr.matrix());
+//     graph.add(gtsam::BetweenFactor<gtsam::Pose3>(
+//         gtsam::Symbol('x',1), gtsam::Symbol('x',2), pose_cam_r, 
+//     ));
+//   }
+
+//   // Set initial estimate.
+//   initial.insert( gtsam::Symbol('x',1), gtsam::Pose3(T_r.matrix()) );
+
+//   // Find the optimal camera pose given correspondences and assumed noise model.
+//   try
+//   {
+//     result = gtsam::LevenbergMarquardtOptimizer(graph, initial).optimize();
+//   }
+//   catch (gtsam::CheiralityException& e)
+//   {
+//     return Eigen::Affine3d::Identity();
+//   }
+
+//   // Update pose estimate.
+//   return Eigen::Affine3d{result.at<gtsam::Pose3>(gtsam::Symbol('x',1)).matrix()};
+// }
 
 
 } // namespace BA

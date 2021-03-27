@@ -10,6 +10,8 @@
 #include <tf2_ros/transform_listener.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseStamped.h>
+#include "vo/vo_msg.h"
+
 
 /*** OpenCV packages ***/
 #include "opencv2/core.hpp"
@@ -51,6 +53,7 @@ class VO
     // Publisher
     ros::Publisher cloud_pub_; 
     ros::Publisher pose_pub_;
+    ros::Publisher vo_pub_;
 
     // Classes
     Sequencer               sequencer_;
@@ -98,6 +101,7 @@ class VO
       // Publish
       cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/frontend/vo/point_cloud", 1000);
 		  pose_pub_  = nh_.advertise<geometry_msgs::PoseStamped>("/frontend/vo/pose_relative", 1000);
+		  vo_pub_  = nh_.advertise<vo::vo_msg>("/frontend/vo", 1000);
 
       // Construct classes
       const std::string config_path_ = ros::package::getPath("vo") + "/../../../config/kitti/";
@@ -229,10 +233,8 @@ class VO
                                                                   landmarks_prev,
                                                                   features_cur_l);
 
-
       ROS_INFO_STREAM("Optimized relative pose 3D2D resec: \n" << T_r_opt3D2D_resec.matrix());
 
-      
       displayWindowFeatures(sequencer_.current.img_l, 
                             stereo_features.first,
                             sequencer_.current.img_r,
@@ -242,10 +244,11 @@ class VO
       initialized_ = true;
       stamp_img_k_ = cam_left->header.stamp;
 
-      // cloud_pub_.publish( toPointCloud2Msg(cam_left->header.stamp, 
-      //                                      sequencer_.current.cloud) );
-      pose_pub_.publish( toPoseStamped(cam_left->header.stamp, 
-                                       T_r) );  
+
+      vo_pub_.publish( generateMsg(cam_left->header.stamp, 
+                                    T_r,
+                                    sequencer_.previous.world_points,
+                                    sequencer_.previous.indices) );
 
       toc_ = cv::getTickCount();
       ROS_INFO_STREAM("Time per iteration: " <<  (toc_ - tic_)/ cv::getTickFrequency() << "\n");
