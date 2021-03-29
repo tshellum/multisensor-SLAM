@@ -148,16 +148,22 @@ public:
 		// 						 y, 
 		// 						 z;
 
+		_T_clcr = Eigen::Affine3d::Identity();
 		_T_clcr.translation() << x, 
 								 0, 
 								 0;
 
-		_T_crcl.linear() << r11, r21, r31,
-							r12, r22, r32,
-							r13, r23, r33;
+		// _T_crcl.linear() << r11, r21, r31,
+		// 					r12, r22, r32,
+		// 					r13, r23, r33;
+		// _T_crcl.translation() << -x, 
+		// 						 -y, 
+		// 						 -z;
+
+		_T_crcl = Eigen::Affine3d::Identity();
 		_T_crcl.translation() << -x, 
-								 -y, 
-								 -z;
+								  0, 
+								  0;
 
 	};
 	~StereoCameras() {};

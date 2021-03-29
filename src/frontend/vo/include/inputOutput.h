@@ -187,6 +187,38 @@ std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> find3D2DCorrespond
 }
 
 
+
+void find3D2DCorrespondences(std::vector<cv::Point3f> world_points,
+                             std::vector<int> world_point_indices,
+                             std::vector<cv::KeyPoint> image_points_l,
+                             std::vector<cv::KeyPoint> image_points_r,
+                             std::vector<cv::Point3f>& world_point_corr,
+                             std::vector<cv::Point2f>& image_points_l_corr,
+                             std::vector<cv::Point2f>& image_points_r_corr)
+{ 
+  world_point_corr.clear();
+  image_points_l_corr.clear();
+  image_points_r_corr.clear();
+
+  for(int i = 0; i < image_points_l.size(); i++)
+  {
+    for(int j = 0; j < world_point_indices.size(); j++)
+    {
+      if ( ( image_points_l[i].class_id != world_point_indices[j] ) 
+        || ( image_points_r[i].class_id != world_point_indices[j] ))
+        continue;
+
+      // Same ID
+      image_points_l_corr.push_back(image_points_l[i].pt);
+      image_points_r_corr.push_back(image_points_r[i].pt);
+      world_point_corr.push_back(world_points[j]);
+      break;
+    }
+  }
+
+}
+
+
 std::pair<std::vector<cv::Point3f>, std::vector<cv::Point3f>> find3D3DCorrespondences(std::vector<cv::Point3f> world_points_prev,
                                                                                       std::vector<int> world_point_prev_indices,
                                                                                       std::vector<cv::Point3f> world_points_cur,

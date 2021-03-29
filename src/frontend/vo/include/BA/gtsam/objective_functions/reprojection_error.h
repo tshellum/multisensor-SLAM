@@ -19,7 +19,7 @@
  * Unary factor on the unknown pose, resulting from measuring the projection of
  * a known 3D point in the image
  */
-class ResectioningPointFactor: public gtsam::NoiseModelFactor1<gtsam::Point3>
+class ReprojectionFactor: public gtsam::NoiseModelFactor1<gtsam::Point3>
 {
   typedef NoiseModelFactor1<gtsam::Point3> Base; // Dette bestemmer optimalisert variabel??
 
@@ -32,7 +32,7 @@ class ResectioningPointFactor: public gtsam::NoiseModelFactor1<gtsam::Point3>
 public:
 
   /// Construct factor given known point P and its projection p
-  ResectioningPointFactor(const gtsam::SharedNoiseModel& model,
+  ReprojectionFactor(const gtsam::SharedNoiseModel& model,
                           const gtsam::Key& key,
                           const gtsam::Cal3_S2::shared_ptr& calib,
                           const gtsam::Point2& p,

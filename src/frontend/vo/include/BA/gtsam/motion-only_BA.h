@@ -8,6 +8,7 @@
 #include "gtsam/nonlinear/NonlinearFactor.h"
 #include "gtsam/inference/Symbol.h"
 #include "gtsam/nonlinear/LevenbergMarquardtOptimizer.h"
+#include <gtsam/slam/BetweenFactor.h>
 
 #include "objective_functions/resectioning.h"
 
@@ -24,61 +25,61 @@ private:
   gtsam::Cal3_S2::shared_ptr K_;
   gtsam::Cal3_S2Stereo::shared_ptr K_stereo_;
 
-  gtsam::Pose3 T_wb0_;
+  gtsam::Pose3 T_stereo_;
 
   // Use same robust measurement noise model.
-  const gtsam::SharedNoiseModel feature_noise_;     // uncertainty of feature pos
+  const gtsam::SharedNoiseModel feature_noise_;  // uncertainty of feature pos
+  const gtsam::SharedNoiseModel pose_noise_;     // Set static - Pose should not change
 
 public:
   /// \brief Constructs pose estimator in world frame.
   /// \param K Camera calibration matrix.
   /// \param pixel_std_dev Measurement noise.
   MotionEstimator(const Eigen::Matrix3d& K,
-                  const Eigen::Affine3d T_wb,
+                  const Eigen::Affine3d T_stereo,
                   const double pixel_std_dev = 0.5)
-  : K_(new gtsam::Cal3_S2(K(0,0), K(1,1), K(0,1), K(0,2), K(1,2)))
-  , K_stereo_(new gtsam::Cal3_S2Stereo(K(0,0), K(1,1), K(0,1), K(0,2), K(1,2), 0.537))
-  , T_wb0_()
+  : K_( new gtsam::Cal3_S2(K(0,0), K(1,1), K(0,1), K(0,2), K(1,2)) )
+  , K_stereo_( new gtsam::Cal3_S2Stereo(K(0,0), K(1,1), K(0,1), K(0,2), K(1,2), 0.537) )
+  , T_stereo_( gtsam::Pose3(T_stereo.matrix()) )
   , feature_noise_( gtsam::noiseModel::Robust::Create(
       gtsam::noiseModel::mEstimator::Huber::Create(1.345),
       gtsam::noiseModel::Diagonal::Sigmas(gtsam::Vector2(pixel_std_dev, pixel_std_dev))
       )
     )
+  , pose_noise_( gtsam::noiseModel::Diagonal::Sigmas(
+      (gtsam::Vector(6) << gtsam::Vector3::Constant(0.0), gtsam::Vector3::Constant(0.0)).finished())
+    )
+
   {};
 
   /// \brief Constructs pose estimator using relative motion description.
   MotionEstimator(const Eigen::Matrix3d& K,
-                  const double pixel_std_dev = 0)
+                  const double pixel_std_dev = 0.5)
   : MotionEstimator(K, Eigen::Affine3d::Identity(), pixel_std_dev)
   {};
 
-  /// \brief Estimates camera pose from 3D-2D correspondences.
-  /// \param T_r Initial estimate of relative transformation.
-  /// \param image_points 2D image points.
-  /// \param world_points 3D planar world points.
-  /// \return The results.
-  Eigen::Affine3d estimate3D2D(const Eigen::Affine3d T_r,                           
-                               const std::vector<cv::Point3f> world_inlier_points,
-                               const std::vector<cv::Point2f> image_inlier_points);
+  // bool isValidStereo() {return T_stereo_ == gtsam::Pose3::identity(); }
+  bool isValidStereo() {return !(T_stereo_.equals( gtsam::Pose3::identity()) ); }
 
   /// \brief Estimates camera pose from 3D-2D correspondences.
   /// \param T_r Initial estimate of relative transformation.
-  /// \param image_points 2D image points.
   /// \param world_points 3D planar world points.
+  /// \param image_points 2D image points for left and right camera.
   /// \return The results.
-  // Eigen::Affine3d estimate3D2D(const Eigen::Affine3d T_r,                           
-  //                              const std::vector<cv::Point3f> world_points,
-  //                              const std::vector<cv::Point2f> image_points_left,
-  //                              const std::vector<cv::Point2f> image_points_right);
+  Eigen::Affine3d estimate3D2D(const Eigen::Affine3d T_r,      
+                               const std::vector<cv::Point3f> world_points,
+                               const std::vector<cv::Point2f> image_points_left,
+                               const std::vector<cv::Point2f> image_points_right = {});
 
 };
 
 
 
 
-Eigen::Affine3d MotionEstimator::estimate3D2D(const Eigen::Affine3d T_r,                           /// Camera pose in the world.                                        
-                                              const std::vector<cv::Point3f> world_inlier_points,  /// 3D inlier world points in previous frame
-                                              const std::vector<cv::Point2f> image_inlier_points)  /// 2D inlier image points in current frame
+Eigen::Affine3d MotionEstimator::estimate3D2D(const Eigen::Affine3d T_r,     
+                                              const std::vector<cv::Point3f> world_points,
+                                              const std::vector<cv::Point2f> image_points_left,
+                                              const std::vector<cv::Point2f> image_points_right) 
 {
   // Create factor graph.
   gtsam::NonlinearFactorGraph graph;
@@ -86,18 +87,37 @@ Eigen::Affine3d MotionEstimator::estimate3D2D(const Eigen::Affine3d T_r,        
   gtsam::Values result;
 
   // Add each 3D-2D correspondence to the factor graph.
-  for (size_t i=0; i<image_inlier_points.size(); ++i)
+  for (size_t i=0; i<world_points.size(); ++i)
   {
-    const cv::Point2f img_pt  = image_inlier_points[i];
-    const cv::Point3f wrld_pt = world_inlier_points[i];
+    const cv::Point2f img_pt_l  = image_points_left[i];
+    const cv::Point3f wrld_pt = world_points[i];
 
     graph.emplace_shared<ResectioningFactor>(feature_noise_, gtsam::Symbol('x',1), K_,
-                                             gtsam::Point2(img_pt.x, img_pt.y),
+                                             gtsam::Point2(img_pt_l.x, img_pt_l.y),
                                              gtsam::Point3(wrld_pt.x, wrld_pt.y, wrld_pt.z));
+
+    if ( isValidStereo() )
+    {
+      const cv::Point2f img_pt_r  = image_points_right[i];
+      graph.emplace_shared<ResectioningFactor>(feature_noise_, gtsam::Symbol('x',2), K_,
+                                              gtsam::Point2(img_pt_r.x, img_pt_r.y),
+                                              gtsam::Point3(wrld_pt.x, wrld_pt.y, wrld_pt.z));
+    }
+
   }
 
-  // Set initial estimate.
-  initial.insert( gtsam::Symbol('x',1), gtsam::Pose3(T_r.matrix()) );
+  gtsam::Pose3 pose_wb = gtsam::Pose3(T_r.matrix());
+  initial.insert( gtsam::Symbol('x',1), pose_wb );
+
+  if ( isValidStereo() )
+  {
+    graph.add(gtsam::BetweenFactor<gtsam::Pose3>(
+      gtsam::Symbol('x',1), gtsam::Symbol('x',2), T_stereo_, pose_noise_
+      ));
+
+    initial.insert( gtsam::Symbol('x',2), pose_wb * T_stereo_ );
+  }
+  
 
   // Find the optimal camera pose given correspondences and assumed noise model.
   try
@@ -112,57 +132,6 @@ Eigen::Affine3d MotionEstimator::estimate3D2D(const Eigen::Affine3d T_r,        
   // Update pose estimate.
   return Eigen::Affine3d{result.at<gtsam::Pose3>(gtsam::Symbol('x',1)).matrix()};
 }
-
-
-
-// Eigen::Affine3d MotionEstimator::estimate3D2D(const Eigen::Affine3d T_r,     
-//                                               const Eigen::Affine3d T_clcr,                                                                 
-//                                               const std::vector<cv::Point3f> world_points,
-//                                               const std::vector<cv::Point2f> image_points_left,
-//                                               const std::vector<cv::Point2f> image_points_right) 
-// {
-//   // Create factor graph.
-//   gtsam::NonlinearFactorGraph graph;
-//   gtsam::Values initial;
-//   gtsam::Values result;
-
-//   // Add each 3D-2D correspondence to the factor graph.
-//   for (size_t i=0; i<world_points.size(); ++i)
-//   {
-//     const cv::Point2f img_pt_l  = image_points_left[i];
-//     const cv::Point2f img_pt_r  = image_points_right[i];
-//     const cv::Point3f wrld_pt = world_points[i];
-
-//     graph.emplace_shared<ResectioningFactor>(feature_noise_, gtsam::Symbol('x',1), K_,
-//                                              gtsam::Point2(img_pt_l.x, img_pt_l.y),
-//                                              gtsam::Point3(wrld_pt.x, wrld_pt.y, wrld_pt.z));
-
-//     graph.emplace_shared<ResectioningFactor>(feature_noise_, gtsam::Symbol('x',2), K_,
-//                                              gtsam::Point2(img_pt_l.x, img_pt_l.y),
-//                                              gtsam::Point3(wrld_pt.x, wrld_pt.y, wrld_pt.z));
-
-//     gtsam::Pose3 pose_cam_r = gtsam::Pose3(T_r.matrix() * T_clcr.matrix());
-//     graph.add(gtsam::BetweenFactor<gtsam::Pose3>(
-//         gtsam::Symbol('x',1), gtsam::Symbol('x',2), pose_cam_r, 
-//     ));
-//   }
-
-//   // Set initial estimate.
-//   initial.insert( gtsam::Symbol('x',1), gtsam::Pose3(T_r.matrix()) );
-
-//   // Find the optimal camera pose given correspondences and assumed noise model.
-//   try
-//   {
-//     result = gtsam::LevenbergMarquardtOptimizer(graph, initial).optimize();
-//   }
-//   catch (gtsam::CheiralityException& e)
-//   {
-//     return Eigen::Affine3d::Identity();
-//   }
-
-//   // Update pose estimate.
-//   return Eigen::Affine3d{result.at<gtsam::Pose3>(gtsam::Symbol('x',1)).matrix()};
-// }
 
 
 } // namespace BA

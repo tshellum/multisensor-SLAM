@@ -88,7 +88,7 @@ class VO
     , stereo_(nh_, 10)
     , pose_predictor_(nh_, "imu_topic", 1000)
     // , structure_BA_(stereo_.left().K_eig(), stereo_.right().K_eig(), 0.5)
-    , motion_BA_(stereo_.left().K_eig(), 0.5)
+    , motion_BA_(stereo_.left().K_eig(), stereo_.getStereoTransformation(), 0.5)
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       sub_cam_left_.subscribe(nh_, "cam_left", 1);
@@ -145,24 +145,30 @@ class VO
         // pose_predictor_.predict(dt);
       }
 
-      // Preprocess and store image
+
+
+      /***** Preprocess and store image *****/
       std::pair<cv::Mat, cv::Mat> images = stereo_.preprocessImages(readGray(cam_left), 
                                                                     readGray(cam_right));
 
       sequencer_.storeImagePair(images.first, 
                                 images.second);
       
-      // Feature management
+      
+
+      /***** Track features and estimate relative pose *****/
       matcher_.track(sequencer_.previous.img_l, 
                      sequencer_.current.img_l, 
                      sequencer_.previous.kpts_l,
                      sequencer_.current.kpts_l);
 
-      // Predict pose
       Eigen::Affine3d T_r = pose_predictor_.estimatePoseFromFeatures(sequencer_.previous.kpts_l, 
                                                                      sequencer_.current.kpts_l, 
                                                                      stereo_.left().K_cv());
 
+
+
+      /***** Manage new features *****/
       detector_.bucketedFeatureDetection(sequencer_.current.img_l, 
                                          sequencer_.current.kpts_l);
       
@@ -187,6 +193,8 @@ class VO
                             wrld_pts.second);
 
 
+
+      /***** Refine results using BA *****/
       // std::pair<std::vector<cv::Point2f>, std::vector<cv::Point2f>> img_pts = convert(stereo_features.first, 
       //                                                                                 stereo_features.second);
 
@@ -196,31 +204,6 @@ class VO
       //                                                          img_pts.second);
 
 
-
-      std::pair<std::vector<int>, std::vector<int>> corr_3D3D = find3D3DCorrespondenceIndices(sequencer_.previous.indices,
-                                                                                              sequencer_.current.indices);
-
-      // Previous
-      std::vector<cv::Point2f> features_prev_l = findIndexMatchFeatures(corr_3D3D.first,
-                                                                        sequencer_.previous.kpts_l);
-      
-      std::vector<cv::Point2f> features_prev_r = findIndexMatchFeatures(corr_3D3D.first,
-                                                                        sequencer_.previous.kpts_r);
-
-      std::vector<cv::Point3f> landmarks_prev = findIndexMatchLandmarks(corr_3D3D.first,
-                                                                        sequencer_.previous.world_points,
-                                                                        sequencer_.previous.indices);
-      // Current
-      std::vector<cv::Point2f> features_cur_l = findIndexMatchFeatures(corr_3D3D.second,
-                                                                       sequencer_.current.kpts_l);
-      
-      std::vector<cv::Point2f> features_cur_r = findIndexMatchFeatures(corr_3D3D.second,
-                                                                       sequencer_.current.kpts_r);
-
-      std::vector<cv::Point3f> landmarks_cur = findIndexMatchLandmarks(corr_3D3D.second,
-                                                                       sequencer_.current.world_points,
-                                                                       sequencer_.current.indices);
-
       // T_r = pose_predictor_.cam2body(T_r);
       // Eigen::Affine3d T_r_scaled = T_r;
       // T_r_scaled.translation() *= scale_;
@@ -228,13 +211,25 @@ class VO
       // ROS_INFO_STREAM("Relative pose: \n" << T_r.matrix());
       // ROS_INFO_STREAM("Relative pose scaled: \n" << T_r_scaled.matrix());
 
-
+      std::vector<cv::Point3f> landmarks_prev;
+      std::vector<cv::Point2f> features_cur_l, features_cur_r;
+      find3D2DCorrespondences(sequencer_.previous.world_points,
+                              sequencer_.previous.indices,
+                              sequencer_.current.kpts_l,
+                              sequencer_.current.kpts_r,
+                              landmarks_prev,
+                              features_cur_l,
+                              features_cur_r);
+      
       Eigen::Affine3d T_r_opt3D2D_resec = motion_BA_.estimate3D2D(T_r,
                                                                   landmarks_prev,
-                                                                  features_cur_l);
+                                                                  features_cur_l,
+                                                                  features_cur_r);
 
-      ROS_INFO_STREAM("Optimized relative pose 3D2D resec: \n" << T_r_opt3D2D_resec.matrix());
 
+      ROS_INFO_STREAM("Motion-BA using " << landmarks_prev.size() << " points - Optimized pose: \n" << T_r_opt3D2D_resec.matrix());
+
+      /***** End of iteration processes *****/
       displayWindowFeatures(sequencer_.current.img_l, 
                             stereo_features.first,
                             sequencer_.current.img_r,
