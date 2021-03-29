@@ -16,37 +16,35 @@
 
 
 /**
- * Unary factor on the unknown pose, resulting from measuring the projection of
- * a known 3D point in the image
+ * Unary factor on the unknown landmark, resulting from measuring the projection of
+ * a the landmark onto the image with a known pose
  */
 class ReprojectionFactor: public gtsam::NoiseModelFactor1<gtsam::Point3>
 {
-  typedef NoiseModelFactor1<gtsam::Point3> Base; // Dette bestemmer optimalisert variabel??
+  typedef NoiseModelFactor1<gtsam::Point3> Base; 
 
-  gtsam::Cal3_S2::shared_ptr K_; ///< camera's intrinsic parameters
-  // gtsam::Point3 P_;              ///< 3D point on the calibration rig
+  int id_;
   gtsam::Point2 p_;              ///< 2D measurement of the 3D point
-  gtsam::Pose3 T_;
-  gtsam::PinholeCamera<gtsam::Cal3_S2> camera_;
+  gtsam::PinholeCamera<gtsam::Cal3_S2> camera_; ///< camera's intrinsic and extrinsic parameters
 
 public:
 
   /// Construct factor given known point P and its projection p
   ReprojectionFactor(const gtsam::SharedNoiseModel& model,
-                          const gtsam::Key& key,
-                          const gtsam::Cal3_S2::shared_ptr& calib,
-                          const gtsam::Point2& p,
-                          const gtsam::Pose3& T)
+                     const gtsam::Key& key,
+                     const gtsam::Cal3_S2::shared_ptr& calib,
+                     const gtsam::Point2& p,
+                     const gtsam::Pose3& T,
+                     const int id)
       : Base(model, key)
-      , K_(calib)
       , p_(p)
-      , T_(T)
-      , camera_(T_, *K_)
+      , camera_(T, *calib)
+      , id_(id)
   {}
 
   /// evaluate the error
   virtual gtsam::Vector evaluateError(const gtsam::Point3& P,
-                                      boost::optional<gtsam::Matrix&> H =  boost::none) const
+                                      boost::optional<gtsam::Matrix&> H =  boost::none) const override
   {
     return camera_.project(P, H, boost::none, boost::none) - p_;
   }

@@ -30,10 +30,10 @@ public:
 
   /// Construct factor given known point P and its projection p
   ResectioningFactor(const gtsam::SharedNoiseModel& model,
-                         const gtsam::Key& key,
-                         const gtsam::Cal3_S2::shared_ptr& calib,
-                         const gtsam::Point2& p,
-                         const gtsam::Point3& P)
+                     const gtsam::Key& key,
+                     const gtsam::Cal3_S2::shared_ptr& calib,
+                     const gtsam::Point2& p,
+                     const gtsam::Point3& P)
       : Base(model, key)
       , K_(calib)
       , P_(P)

@@ -59,27 +59,27 @@ public:
   {};
 
   // bool isValidStereo() {return T_stereo_ == gtsam::Pose3::identity(); }
-  bool isValidStereo() {return !(T_stereo_.equals( gtsam::Pose3::identity()) ); }
+  bool isValidStereo() {return !( T_stereo_.equals(gtsam::Pose3::identity()) ); }
 
   /// \brief Estimates camera pose from 3D-2D correspondences.
   /// \param T_r Initial estimate of relative transformation.
   /// \param world_points 3D planar world points.
   /// \param image_points 2D image points for left and right camera.
   /// \return The results.
-  Eigen::Affine3d estimate3D2D(const Eigen::Affine3d T_r,      
-                               const std::vector<cv::Point3f> world_points,
-                               const std::vector<cv::Point2f> image_points_left,
-                               const std::vector<cv::Point2f> image_points_right = {});
+  Eigen::Affine3d estimate(const Eigen::Affine3d T_r,      
+                           const std::vector<cv::Point3f> world_points,
+                           const std::vector<cv::Point2f> image_points_left,
+                           const std::vector<cv::Point2f> image_points_right = {});
 
 };
 
 
 
 
-Eigen::Affine3d MotionEstimator::estimate3D2D(const Eigen::Affine3d T_r,     
-                                              const std::vector<cv::Point3f> world_points,
-                                              const std::vector<cv::Point2f> image_points_left,
-                                              const std::vector<cv::Point2f> image_points_right) 
+Eigen::Affine3d MotionEstimator::estimate(const Eigen::Affine3d T_r,     
+                                          const std::vector<cv::Point3f> world_points,
+                                          const std::vector<cv::Point2f> image_points_left,
+                                          const std::vector<cv::Point2f> image_points_right) 
 {
   // Create factor graph.
   gtsam::NonlinearFactorGraph graph;
@@ -92,14 +92,14 @@ Eigen::Affine3d MotionEstimator::estimate3D2D(const Eigen::Affine3d T_r,
     const cv::Point2f img_pt_l  = image_points_left[i];
     const cv::Point3f wrld_pt = world_points[i];
 
-    graph.emplace_shared<ResectioningFactor>(feature_noise_, gtsam::Symbol('x',1), K_,
+    graph.emplace_shared<ResectioningFactor>(feature_noise_, gtsam::Symbol('x', 1), K_,
                                              gtsam::Point2(img_pt_l.x, img_pt_l.y),
                                              gtsam::Point3(wrld_pt.x, wrld_pt.y, wrld_pt.z));
 
     if ( isValidStereo() )
     {
       const cv::Point2f img_pt_r  = image_points_right[i];
-      graph.emplace_shared<ResectioningFactor>(feature_noise_, gtsam::Symbol('x',2), K_,
+      graph.emplace_shared<ResectioningFactor>(feature_noise_, gtsam::Symbol('x', 2), K_,
                                               gtsam::Point2(img_pt_r.x, img_pt_r.y),
                                               gtsam::Point3(wrld_pt.x, wrld_pt.y, wrld_pt.z));
     }
@@ -107,15 +107,15 @@ Eigen::Affine3d MotionEstimator::estimate3D2D(const Eigen::Affine3d T_r,
   }
 
   gtsam::Pose3 pose_wb = gtsam::Pose3(T_r.matrix());
-  initial.insert( gtsam::Symbol('x',1), pose_wb );
+  initial.insert( gtsam::Symbol('x', 1), pose_wb );
 
   if ( isValidStereo() )
   {
     graph.add(gtsam::BetweenFactor<gtsam::Pose3>(
-      gtsam::Symbol('x',1), gtsam::Symbol('x',2), T_stereo_, pose_noise_
+      gtsam::Symbol('x',1), gtsam::Symbol('x', 2), T_stereo_, pose_noise_
       ));
 
-    initial.insert( gtsam::Symbol('x',2), pose_wb * T_stereo_ );
+    initial.insert( gtsam::Symbol('x', 2), pose_wb * T_stereo_ );
   }
   
 
@@ -124,13 +124,13 @@ Eigen::Affine3d MotionEstimator::estimate3D2D(const Eigen::Affine3d T_r,
   {
     result = gtsam::LevenbergMarquardtOptimizer(graph, initial).optimize();
   }
-  catch (gtsam::CheiralityException& e)
+  catch (std::exception& e)
   {
     return Eigen::Affine3d::Identity();
   }
 
   // Update pose estimate.
-  return Eigen::Affine3d{result.at<gtsam::Pose3>(gtsam::Symbol('x',1)).matrix()};
+  return Eigen::Affine3d{result.at<gtsam::Pose3>(gtsam::Symbol('x', 1)).matrix()};
 }
 
 

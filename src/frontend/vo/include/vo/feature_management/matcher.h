@@ -253,8 +253,8 @@ std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::
     cv::Point2f proj_l = project(pt3D, P_l);
     cv::Point2f proj_r = project(pt3D, P_r);
 
-    if (((pt3D.at<double>(2) < 0)                              // Point is not in front of camera
-      && (pt3D.at<double>(2) > 150))                           // Point is more than 150m away from camera
+    if ( (pt3D.at<double>(2) < 0)                              // Point is not in front of camera
+      || (pt3D.at<double>(2) > 100)                           // Point is more than ..m away from camera
       || (match_left[i].class_id != match_right[i].class_id)   // Not matched
       || ( pow((match_left[pt_it].pt.x - proj_l.x), 2)  + pow((match_left[pt_it].pt.y - proj_l.y), 2)  > reproj_err_ ) // To large reprojection error in left cam
       || ( pow((match_right[pt_it].pt.x - proj_r.x), 2) + pow((match_right[pt_it].pt.y - proj_r.y), 2) > reproj_err_ ) // To large reprojection error in right cam

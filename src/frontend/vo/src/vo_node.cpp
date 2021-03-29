@@ -29,8 +29,7 @@
 #include "vo/feature_management/detector.h"
 #include "vo/feature_management/matcher.h"
 #include "vo/sequencer.h"
-// #include "BA/ceres/motion-only_BA.h"
-// #include "BA/gtsam/structure-only_BA.h"
+#include "BA/gtsam/structure-only_BA.h"
 #include "BA/gtsam/motion-only_BA.h"
 // #include "PYR/PYR.h"
 // #include "JET/jet.h"
@@ -61,7 +60,7 @@ class VO
     Detector                detector_;
     Matcher                 matcher_;
     PosePredictor           pose_predictor_;
-    // BA::StructureEstimator  structure_BA_;
+    BA::StructureEstimator  structure_BA_;
     BA::MotionEstimator     motion_BA_;
     // PYR           pyr_;
     // JET jet;
@@ -87,8 +86,8 @@ class VO
     , initialized_(false)
     , stereo_(nh_, 10)
     , pose_predictor_(nh_, "imu_topic", 1000)
-    // , structure_BA_(stereo_.left().K_eig(), stereo_.right().K_eig(), 0.5)
-    , motion_BA_(stereo_.left().K_eig(), stereo_.getStereoTransformation(), 0.5)
+    , structure_BA_(stereo_.left().K_eig(), stereo_.right().K_eig(), stereo_.getInverseStereoTransformation(), 0.5)
+    , motion_BA_(stereo_.left().K_eig(), stereo_.getStereoTransformation(), 0.1)
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       sub_cam_left_.subscribe(nh_, "cam_left", 1);
@@ -195,16 +194,14 @@ class VO
 
 
       /***** Refine results using BA *****/
-      // std::pair<std::vector<cv::Point2f>, std::vector<cv::Point2f>> img_pts = convert(stereo_features.first, 
-      //                                                                                 stereo_features.second);
+      std::pair<std::vector<cv::Point2f>, std::vector<cv::Point2f>> img_pts = convert(sequencer_.current.kpts_l, 
+                                                                                      sequencer_.current.kpts_r);
 
-      // sequencer_.current.world_points = structure_BA_.estimate(stereo_.getStereoTransformation(),
-      //                                                          sequencer_.current.world_points,
-      //                                                          img_pts.first,
-      //                                                          img_pts.second);
+      sequencer_.current.world_points = structure_BA_.estimate(sequencer_.current.world_points,
+                                                               img_pts.first,
+                                                               img_pts.second);
 
-
-      // T_r = pose_predictor_.cam2body(T_r);
+      T_r = pose_predictor_.cam2body(T_r);
       // Eigen::Affine3d T_r_scaled = T_r;
       // T_r_scaled.translation() *= scale_;
 
@@ -221,10 +218,10 @@ class VO
                               features_cur_l,
                               features_cur_r);
       
-      Eigen::Affine3d T_r_opt3D2D_resec = motion_BA_.estimate3D2D(T_r,
-                                                                  landmarks_prev,
-                                                                  features_cur_l,
-                                                                  features_cur_r);
+      Eigen::Affine3d T_r_opt3D2D_resec = motion_BA_.estimate(T_r,
+                                                              landmarks_prev,
+                                                              features_cur_l,
+                                                              features_cur_r);
 
 
       ROS_INFO_STREAM("Motion-BA using " << landmarks_prev.size() << " points - Optimized pose: \n" << T_r_opt3D2D_resec.matrix());
@@ -241,9 +238,9 @@ class VO
 
 
       vo_pub_.publish( generateMsg(cam_left->header.stamp, 
-                                    T_r,
-                                    sequencer_.previous.world_points,
-                                    sequencer_.previous.indices) );
+                                   T_r,
+                                   sequencer_.previous.world_points,
+                                   sequencer_.previous.indices) );
 
       toc_ = cv::getTickCount();
       ROS_INFO_STREAM("Time per iteration: " <<  (toc_ - tic_)/ cv::getTickFrequency() << "\n");

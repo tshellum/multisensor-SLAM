@@ -74,6 +74,13 @@ vo::vo_msg generateMsg(ros::Time stamp,
                        std::vector<cv::Point3f> world_points,
                        std::vector<int> world_point_indices)
 {
+  // Eigen::Matrix4d T_bc << 0, 0, 1, 0,
+  //                         1, 0, 0, 0,
+  //                         0, 1, 0, 0,
+  //                         0, 0, 0, 1;
+  
+  // Eigen::Matrix4d T_cb = T_bc.transpose();
+
   vo::vo_msg vo_msg;
   vo_msg.header.frame_id = "vo";
   vo_msg.header.stamp = stamp;
