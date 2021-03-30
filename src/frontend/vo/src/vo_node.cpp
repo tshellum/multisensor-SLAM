@@ -10,7 +10,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseStamped.h>
-#include "vo/vo_msg.h"
+#include "vo/VO_msg.h"
 
 
 /*** OpenCV packages ***/
@@ -50,8 +50,6 @@ class VO
     ros::Subscriber gnss_sub_; // remove
 
     // Publisher
-    ros::Publisher cloud_pub_; 
-    ros::Publisher pose_pub_;
     ros::Publisher vo_pub_;
 
     // Classes
@@ -87,7 +85,7 @@ class VO
     , stereo_(nh_, 10)
     , pose_predictor_(nh_, "imu_topic", 1000)
     , structure_BA_(stereo_.left().K_eig(), stereo_.right().K_eig(), stereo_.getInverseStereoTransformation(), 0.5)
-    , motion_BA_(stereo_.left().K_eig(), stereo_.getStereoTransformation(), 0.1)
+    , motion_BA_(stereo_.left().K_eig(), stereo_.getStereoTransformation(), 0.1, M_PI/9, 2)
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       sub_cam_left_.subscribe(nh_, "cam_left", 1);
@@ -98,9 +96,7 @@ class VO
  			gnss_sub_ = nh_.subscribe("/tf", 1, &VO::readTF, this); // remove
 
       // Publish
-      cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/frontend/vo/point_cloud", 1000);
-		  pose_pub_  = nh_.advertise<geometry_msgs::PoseStamped>("/frontend/vo/pose_relative", 1000);
-		  vo_pub_  = nh_.advertise<vo::vo_msg>("/frontend/vo", 1000);
+		  vo_pub_  = nh_.advertise<vo::VO_msg>("/frontend/vo", 1000);
 
       // Construct classes
       const std::string config_path_ = ros::package::getPath("vo") + "/../../../config/kitti/";
@@ -156,14 +152,29 @@ class VO
       
 
       /***** Track features and estimate relative pose *****/
+      cv::Mat P_b1b2 = stereo_.createProjectionMatrix(pose_predictor_.getPoseRelative(),
+                                                      stereo_.left().K_eig());
+
+      sequencer_.current.kpts_l = matcher_.projectLandmarks(sequencer_.previous.world_points,
+                                                            pose_predictor_.getPoseRelative(),
+                                                            stereo_.left().K_eig());
+
+      ROS_INFO_STREAM("projected - previous.kpts_l: " << sequencer_.previous.kpts_l.size() << " - current.kpts_l: " << sequencer_.current.kpts_l.size());
+
+
       matcher_.track(sequencer_.previous.img_l, 
                      sequencer_.current.img_l, 
                      sequencer_.previous.kpts_l,
                      sequencer_.current.kpts_l);
 
+      ROS_INFO_STREAM("tracked - previous.kpts_l: " << sequencer_.previous.kpts_l.size() << " - current.kpts_l: " << sequencer_.current.kpts_l.size());
+
+
       Eigen::Affine3d T_r = pose_predictor_.estimatePoseFromFeatures(sequencer_.previous.kpts_l, 
                                                                      sequencer_.current.kpts_l, 
                                                                      stereo_.left().K_cv());
+
+      T_r.translation() *= pose_predictor_.getPreviousScale();
 
 
 
@@ -172,6 +183,7 @@ class VO
                                          sequencer_.current.kpts_l);
       
       ROS_INFO_STREAM("detected - kpts_l.size(): " << sequencer_.current.kpts_l.size());
+
 
       std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> stereo_features = matcher_.circularMatching(sequencer_.current.img_l,
                                                                                                                   sequencer_.current.img_r,
@@ -183,6 +195,7 @@ class VO
       sequencer_.storeFeatures(stereo_features.first, stereo_features.second);
 
       ROS_INFO_STREAM("matched - match_left.size(): " << stereo_features.first.size() << ", match_right.size(): " << stereo_features.second.size());
+
 
       std::pair<std::vector<cv::Point3f>, std::vector<int>> wrld_pts = matcher_.triangulate(sequencer_.current.kpts_l, 
                                                                                             sequencer_.current.kpts_r, 
@@ -219,18 +232,22 @@ class VO
                               features_cur_r);
       
       Eigen::Affine3d T_r_opt = motion_BA_.estimate(T_r,
-                                                              landmarks_prev,
-                                                              features_cur_l,
-                                                              features_cur_r);
-
+                                                    landmarks_prev,
+                                                    features_cur_l,
+                                                    features_cur_r);
 
       ROS_INFO_STREAM("Motion-BA using " << landmarks_prev.size() << " points - Optimized pose: \n" << T_r_opt.matrix());
+
+
 
       /***** End of iteration processes *****/
       displayWindowFeatures(sequencer_.current.img_l, 
                             stereo_features.first,
                             sequencer_.current.img_r,
                             stereo_features.second); 
+      
+      pose_predictor_.updatePredicted(T_r_opt);
+      pose_predictor_.calculateScale(T_r_opt.translation());
 
       sequencer_.updatePreviousFeatures(sequencer_.current.kpts_l, sequencer_.current.kpts_r);  
       initialized_ = true;

@@ -117,8 +117,10 @@ Eigen::Affine3d PosePredictionFeatures::estimatePoseFromFeatures(std::vector<cv:
         cv::recoverPose(E, pts_prev, pts_cur, K, R_b1b2, t_b1b2); // z = viewer direction, x and y follows camera frame
 
         T_b1b2 = cv2eigen(R_b1b2, t_b1b2);
+        T_b1b2(2,3) *= -1;
 
-        return Eigen::Affine3d{T_cb_ * T_b1b2.matrix() * T_cb_}; // In reality T_c * T * T_c.transpose()
+        return T_b1b2; 
+        // return Eigen::Affine3d{T_cb_ * T_b1b2.matrix() * T_cb_}; // In reality T_c * T * T_c.transpose()
     }
 
     return T_b1b2;

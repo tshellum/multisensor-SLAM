@@ -3,7 +3,7 @@
 /*** ROS packages ***/
 #include <geometry_msgs/PoseStamped.h>
 #include <tf2_eigen/tf2_eigen.h>
-#include "viewer/vo_msg.h"
+#include "viewer/VO_msg.h"
 
 /*** Eigen packages ***/
 #include <Eigen/Dense>
@@ -71,8 +71,8 @@ public:
 	};
 	~Visualization() {};
 
-	void readPose(const viewer::vo_msg msg);
-	void readCloud(const viewer::vo_msg msg);
+	void readPose(const viewer::VO_msg msg);
+	void readCloud(const viewer::VO_msg msg);
 	void addCamera();
 	void setEnvironment();
 
@@ -82,7 +82,7 @@ public:
 
 
 
-void Visualization::readPose(const viewer::vo_msg msg)
+void Visualization::readPose(const viewer::VO_msg msg)
 {
 	Eigen::Affine3d T_b1b2;
 	tf2::fromMsg(msg.pose, T_b1b2);
@@ -92,13 +92,13 @@ void Visualization::readPose(const viewer::vo_msg msg)
 
 
 
-void Visualization::readCloud(const viewer::vo_msg msg)
+void Visualization::readCloud(const viewer::VO_msg msg)
 {
 	pcl::PointCloud<pcl::PointXYZ> cloud;
 	for(int i = 0; i < msg.cloud_size; i++)
 	{
 		Eigen::Vector3d pt_eig;
-		tf2::fromMsg(msg.cloud[i], pt_eig);
+		tf2::fromMsg(msg.cloud[i].world_point, pt_eig);
 
 		pt_eig = T_wb_.linear() * pt_eig + T_wb_.translation();
 

@@ -54,7 +54,8 @@ find_package(PCL REQUIRED)
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
-  vo_msg.msg
+  VO_msg.msg
+  PointID_msg.msg
 )
 
 ## Generate services in the 'srv' folder

@@ -5,7 +5,8 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <tf2_eigen/tf2_eigen.h>
-#include "vo/vo_msg.h"
+#include "vo/VO_msg.h"
+#include "vo/PointID_msg.h"
 
 /*** PCL packages ***/
 #include <pcl/point_cloud.h>
@@ -69,12 +70,12 @@ sensor_msgs::PointCloud2 toPointCloud2Msg(ros::Time stamp, pcl::PointCloud<pcl::
 }
 
 
-vo::vo_msg generateMsg(ros::Time stamp, 
+vo::VO_msg generateMsg(ros::Time stamp, 
                        Eigen::Affine3d T_clcr,
                        std::vector<cv::Point3f> world_points,
                        std::vector<int> world_point_indices)
 {
-  vo::vo_msg vo_msg;
+  vo::VO_msg vo_msg;
   vo_msg.header.frame_id = "vo";
   vo_msg.header.stamp = stamp;
   vo_msg.pose = tf2::toMsg( T_clcr );
@@ -89,8 +90,11 @@ vo::vo_msg generateMsg(ros::Time stamp,
         world_points[i].z
       )
     );
-    vo_msg.cloud.push_back(pt_msg);
-    vo_msg.point_ids.push_back(world_point_indices[i]);
+    
+    vo::PointID_msg pt_id_msg;
+    pt_id_msg.world_point = pt_msg;
+    pt_id_msg.id = world_point_indices[i];
+    vo_msg.cloud.push_back(pt_id_msg);
   }
 
   return vo_msg;
@@ -98,7 +102,7 @@ vo::vo_msg generateMsg(ros::Time stamp,
 
 
 
-vo::vo_msg generateMsgInBody(ros::Time stamp, 
+vo::VO_msg generateMsgInBody(ros::Time stamp, 
                              Eigen::Affine3d T_clcr,
                              std::vector<cv::Point3f> world_points,
                              std::vector<int> world_point_indices)
@@ -111,7 +115,7 @@ vo::vo_msg generateMsgInBody(ros::Time stamp,
   
   Eigen::Matrix4d T_cb = T_bc.transpose();
 
-  vo::vo_msg vo_msg;
+  vo::VO_msg vo_msg;
   vo_msg.header.frame_id = "vo";
   vo_msg.header.stamp = stamp;
   vo_msg.pose = tf2::toMsg( Eigen::Affine3d{T_bc * T_clcr * T_cb} );
@@ -127,8 +131,11 @@ vo::vo_msg generateMsgInBody(ros::Time stamp,
       )
     } );
 
-    vo_msg.cloud.push_back(pt_msg);
-    vo_msg.point_ids.push_back(world_point_indices[i]);
+    vo::PointID_msg pt_id_msg;
+    pt_id_msg.world_point = pt_msg;
+    pt_id_msg.id = world_point_indices[i];
+    vo_msg.cloud.push_back(pt_id_msg);
+
   }
 
   return vo_msg;

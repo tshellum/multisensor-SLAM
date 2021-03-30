@@ -1,5 +1,5 @@
 #include <ros/ros.h>
-#include "viewer/vo_msg.h"
+#include "viewer/VO_msg.h"
 
 #include "viewer/viewer.h"
 
@@ -16,11 +16,11 @@ private:
 public:
   Viewer()
   {
-    sub_ = nh_.subscribe("topic", 1, &Viewer::callback, this); // remove
+    sub_ = nh_.subscribe("topic", 1, &Viewer::callback, this); 
     viewer_timer_ = nh_.createTimer(ros::Duration(0.1), &Viewer::timerCB, this);
   }
 
-  void callback(const viewer::vo_msg msg)
+  void callback(const viewer::VO_msg msg)
   {
     viz.readPose(msg);
     viz.readCloud(msg);

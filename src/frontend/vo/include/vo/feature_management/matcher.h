@@ -15,6 +15,9 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
+/*** Eigen packages ***/
+#include <Eigen/Dense> 
+
 
 class Matcher
 {
@@ -61,6 +64,9 @@ public:
                                                                     cv::Mat P_l,
                                                                     cv::Mat P_r);
 
+  std::vector<cv::KeyPoint> projectLandmarks(std::vector<cv::Point3f> landmarks, 
+                                             Eigen::Affine3d T,
+                                             Eigen::Matrix3d K);
 };
 
 
@@ -74,8 +80,11 @@ void Matcher::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>
   std::size_t n_pts = prev_kps.size(); 
   std::vector<cv::Point2f> prev_pts(n_pts), cur_pts(n_pts);
 
-  for (std::size_t i = 0; i < n_pts; ++i)
-    prev_pts[i] = prev_kps[i].pt; 
+  // for (std::size_t i = 0; i < n_pts; ++i)
+  //   prev_pts[i] = prev_kps[i].pt; 
+
+  cv::KeyPoint::convert(prev_kps, prev_pts);
+  cv::KeyPoint::convert(cur_kps, cur_pts);
 
   std::vector<uchar> status; 
   std::vector<float> error; 
@@ -223,7 +232,7 @@ cv::Point2f Matcher::project(cv::Mat pt3D, cv::Mat P)
   pt3D.copyTo(x_homogenous(cv::Rect(0, 0, 1, 3)));
 
   cv::Mat pt_proj = P * x_homogenous;
-  return cv::Point2d(pt_proj.at<double>(0) / pt_proj.at<double>(2),
+  return cv::Point2f(pt_proj.at<double>(0) / pt_proj.at<double>(2),
                      pt_proj.at<double>(1) / pt_proj.at<double>(2));
 }
 
@@ -280,5 +289,50 @@ std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::
 
 
   return std::make_pair(wrld_pts, indices);;
+}
+
+
+
+std::vector<cv::KeyPoint> Matcher::projectLandmarks(std::vector<cv::Point3f> landmarks, 
+                                                    Eigen::Affine3d T,
+                                                    Eigen::Matrix3d K)
+{
+  int width = 2*K(0,2);
+  int height = 2*K(1,2);
+
+  // Create projection matrix
+  cv::Mat R, t, Rt, K_cv, P;
+  Eigen::Matrix3d R_mat = T.linear();
+  Eigen::Vector3d t_mat = T.translation();
+  cv::eigen2cv(R_mat, R);
+  cv::eigen2cv(t_mat, t);
+  cv::eigen2cv(K, K_cv);
+  
+  cv::hconcat(R, t, Rt);
+  P = K_cv*Rt;
+
+  // Project landmarks
+  std::vector<cv::KeyPoint> projected_pts;
+  for(int i = 0; i < landmarks.size(); i++)
+  {
+    cv::Mat pt3D = cv::Mat::zeros(3,1, CV_64F);
+    pt3D.at<double>(0) = landmarks[i].x;
+    pt3D.at<double>(1) = landmarks[i].y;
+    pt3D.at<double>(2) = landmarks[i].z;
+
+    // Check potential errors when triangulating
+    cv::Point2f proj = project(pt3D, P);
+
+    if ( proj.x < 0
+      || proj.y < 0
+      || proj.x > width
+      || proj.y > height )
+      continue;
+
+    cv::KeyPoint kp(proj, 1.f);
+    projected_pts.push_back(kp);
+  }
+
+  return projected_pts;
 }
 

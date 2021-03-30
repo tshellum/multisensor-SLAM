@@ -18,6 +18,7 @@ private:
   IMUPosePredictor       imu_; 
   PosePredictionFeatures feature_estimator_; 
 
+  // For motion model
   Eigen::Vector3d pos_k_;
   Eigen::Vector3d vel_k_;
   Eigen::Vector3d acc_k_;
@@ -25,10 +26,14 @@ private:
   Eigen::Vector3d ang_k_;
   Eigen::Vector3d ang_rate_k_;
 
+
+  // Predicted variables
   Eigen::Affine3d T_r_pred_;
 
   Eigen::Matrix4d T_cb_;
   Eigen::Matrix4d T_bc_;
+
+  double scale_;
 
 public:
   PosePredictor(){}
@@ -37,9 +42,11 @@ public:
     ros::NodeHandle nh, 
     const std::string& topic, 
     uint32_t queue_size 
-  ) : imu_(nh, topic, queue_size),
-      vel_k_(Eigen::Vector3d::Zero()),
-      ang_k_(Eigen::Vector3d::Zero())
+  ) : imu_(nh, topic, queue_size)
+    , vel_k_(Eigen::Vector3d::Zero())
+    , ang_k_(Eigen::Vector3d::Zero())
+    , scale_(1.0)
+
   {
     T_bc_ << 0, 0, 1, 0,
              1, 0, 0, 0,
@@ -52,6 +59,7 @@ public:
   ~PosePredictor() {};
 
   Eigen::Affine3d getPoseRelative() {return T_r_pred_;};
+  double getPreviousScale() {return scale_;};
 
   void approximateDerivative(double dt, Eigen::Affine3d T_r);
 
@@ -60,6 +68,9 @@ public:
   Eigen::Affine3d estimatePoseFromFeatures(std::vector<cv::KeyPoint>& kpts_prev, std::vector<cv::KeyPoint>& kpts_cur, cv::Mat K);
 
   Eigen::Affine3d cam2body(Eigen::Affine3d T_c);
+
+  void updatePredicted(Eigen::Affine3d T);
+  void calculateScale(Eigen::Vector3d t);
 };
 
 
@@ -110,4 +121,20 @@ Eigen::Affine3d PosePredictor::estimatePoseFromFeatures(std::vector<cv::KeyPoint
 Eigen::Affine3d PosePredictor::cam2body(Eigen::Affine3d T_clcr)
 {
   return Eigen::Affine3d{T_bc_ * T_clcr.matrix() * T_cb_}; 
+}
+
+
+
+void PosePredictor::updatePredicted(Eigen::Affine3d T)
+{
+  T_r_pred_ = T; 
+}
+
+
+void PosePredictor::calculateScale(Eigen::Vector3d t)
+{
+  double norm = t.norm(); 
+  if (norm < 10)
+    scale_ = norm;
+  // else: scale is unchanged / set to previous
 }

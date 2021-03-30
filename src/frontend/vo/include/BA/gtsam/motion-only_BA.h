@@ -37,9 +37,9 @@ public:
   /// \param pixel_std_dev Measurement noise.
   MotionEstimator(const Eigen::Matrix3d& K,
                   const Eigen::Affine3d T_stereo,
-                  const double pixel_std_dev = 0.5,
-                  const double rot_std_dev = M_PI/9,
-                  const double trans_std_dev = 3)
+                  const double pixel_std_dev = 0.5,   // 0.5 pixels
+                  const double rot_std_dev = M_PI/9,  // 20 degrees
+                  const double trans_std_dev = 2)     // 2 meters
   : K_( new gtsam::Cal3_S2(K(0,0), K(1,1), K(0,1), K(0,2), K(1,2)) )
   , K_stereo_( new gtsam::Cal3_S2Stereo(K(0,0), K(1,1), K(0,1), K(0,2), K(1,2), 0.537) )
   , T_stereo_( gtsam::Pose3(T_stereo.matrix()) )
@@ -56,9 +56,9 @@ public:
 
   /// \brief Constructs pose estimator using relative motion description.
   MotionEstimator(const Eigen::Matrix3d& K,
-                  const double pixel_std_dev = 0.5,
-                  const double rot_std_dev = M_PI/9,
-                  const double trans_std_dev = 3)
+                  const double pixel_std_dev = 0.5,   // 0.5 pixels
+                  const double rot_std_dev = M_PI/9,  // 20 degrees
+                  const double trans_std_dev = 2)     // 2 meters
   : MotionEstimator(K, Eigen::Affine3d::Identity(), pixel_std_dev)
   {};
 
