@@ -201,7 +201,7 @@ class VO
                                                                img_pts.first,
                                                                img_pts.second);
 
-      T_r = pose_predictor_.cam2body(T_r);
+      // T_r = pose_predictor_.cam2body(T_r);
       // Eigen::Affine3d T_r_scaled = T_r;
       // T_r_scaled.translation() *= scale_;
 
@@ -218,13 +218,13 @@ class VO
                               features_cur_l,
                               features_cur_r);
       
-      Eigen::Affine3d T_r_opt3D2D_resec = motion_BA_.estimate(T_r,
+      Eigen::Affine3d T_r_opt = motion_BA_.estimate(T_r,
                                                               landmarks_prev,
                                                               features_cur_l,
                                                               features_cur_r);
 
 
-      ROS_INFO_STREAM("Motion-BA using " << landmarks_prev.size() << " points - Optimized pose: \n" << T_r_opt3D2D_resec.matrix());
+      ROS_INFO_STREAM("Motion-BA using " << landmarks_prev.size() << " points - Optimized pose: \n" << T_r_opt.matrix());
 
       /***** End of iteration processes *****/
       displayWindowFeatures(sequencer_.current.img_l, 
@@ -237,10 +237,10 @@ class VO
       stamp_img_k_ = cam_left->header.stamp;
 
 
-      vo_pub_.publish( generateMsg(cam_left->header.stamp, 
-                                   T_r,
-                                   sequencer_.previous.world_points,
-                                   sequencer_.previous.indices) );
+      vo_pub_.publish( generateMsgInBody(cam_left->header.stamp, 
+                                         T_r_opt,
+                                         sequencer_.previous.world_points,
+                                         sequencer_.previous.indices) );
 
       toc_ = cv::getTickCount();
       ROS_INFO_STREAM("Time per iteration: " <<  (toc_ - tic_)/ cv::getTickFrequency() << "\n");

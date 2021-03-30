@@ -70,30 +70,63 @@ sensor_msgs::PointCloud2 toPointCloud2Msg(ros::Time stamp, pcl::PointCloud<pcl::
 
 
 vo::vo_msg generateMsg(ros::Time stamp, 
-                       Eigen::Affine3d T,
+                       Eigen::Affine3d T_clcr,
                        std::vector<cv::Point3f> world_points,
                        std::vector<int> world_point_indices)
 {
-  // Eigen::Matrix4d T_bc << 0, 0, 1, 0,
-  //                         1, 0, 0, 0,
-  //                         0, 1, 0, 0,
-  //                         0, 0, 0, 1;
-  
-  // Eigen::Matrix4d T_cb = T_bc.transpose();
-
   vo::vo_msg vo_msg;
   vo_msg.header.frame_id = "vo";
   vo_msg.header.stamp = stamp;
-  vo_msg.pose = tf2::toMsg(T);
+  vo_msg.pose = tf2::toMsg( T_clcr );
 
   vo_msg.cloud_size = world_points.size();
   for(int i = 0; i < world_points.size(); i++)
   {
-    geometry_msgs::Point pt_msg	= tf2::toMsg(Eigen::Vector3d(
-      world_points[i].x,
-      world_points[i].y,
-      world_points[i].z
-    ));
+    geometry_msgs::Point pt_msg	= tf2::toMsg( 
+      Eigen::Vector3d(
+        world_points[i].x,
+        world_points[i].y,
+        world_points[i].z
+      )
+    );
+    vo_msg.cloud.push_back(pt_msg);
+    vo_msg.point_ids.push_back(world_point_indices[i]);
+  }
+
+  return vo_msg;
+}
+
+
+
+vo::vo_msg generateMsgInBody(ros::Time stamp, 
+                             Eigen::Affine3d T_clcr,
+                             std::vector<cv::Point3f> world_points,
+                             std::vector<int> world_point_indices)
+{
+  Eigen::Matrix4d T_bc;
+  T_bc << 0, 0, 1, 0,
+          1, 0, 0, 0,
+          0, 1, 0, 0,
+          0, 0, 0, 1;
+  
+  Eigen::Matrix4d T_cb = T_bc.transpose();
+
+  vo::vo_msg vo_msg;
+  vo_msg.header.frame_id = "vo";
+  vo_msg.header.stamp = stamp;
+  vo_msg.pose = tf2::toMsg( Eigen::Affine3d{T_bc * T_clcr * T_cb} );
+
+  vo_msg.cloud_size = world_points.size();
+  for(int i = 0; i < world_points.size(); i++)
+  {
+    geometry_msgs::Point pt_msg	= tf2::toMsg( Eigen::Vector3d {
+      T_bc.block<3,3>(0,0) * Eigen::Vector3d(
+        world_points[i].x,
+        world_points[i].y,
+        world_points[i].z
+      )
+    } );
+
     vo_msg.cloud.push_back(pt_msg);
     vo_msg.point_ids.push_back(world_point_indices[i]);
   }
