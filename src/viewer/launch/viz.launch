@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+    <arg name = "topic"  default = "/frontend/vo"/>
+
+    <node 
+        name   = "viewer"
+        pkg    = "viewer"
+        type   = "viewer_node"
+        args   = "$(arg topic)"
+        output = "screen"
+    >
+
+    <remap from = "topic" to = "$(arg topic)"/>
+    </node>
+</launch>
