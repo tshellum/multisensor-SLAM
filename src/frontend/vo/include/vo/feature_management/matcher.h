@@ -66,7 +66,8 @@ public:
 
   std::vector<cv::KeyPoint> projectLandmarks(std::vector<cv::Point3f> landmarks, 
                                              Eigen::Affine3d T,
-                                             Eigen::Matrix3d K);
+                                             Eigen::Matrix3d K,
+                                             std::vector<cv::KeyPoint>& kpts_prev);
 };
 
 
@@ -89,6 +90,15 @@ void Matcher::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>
   std::vector<uchar> status; 
   std::vector<float> error; 
 
+  // Default values are specified so that the cv::OPTFLOW_USE_INITIAL_FLOW flag may be used
+  cv::Size winSize = cv::Size(21, 21);
+  int maxPyramidLevel = 3;
+  cv::TermCriteria criteria = cv::TermCriteria((cv::TermCriteria::COUNT) + (cv::TermCriteria::EPS), 30, 0.01);
+  
+  int flags = 0;
+  if ( prev_kps.size() == cur_kps.size() )
+    flags = cv::OPTFLOW_USE_INITIAL_FLOW;
+
   // https://docs.opencv.org/3.4/d4/dee/tutorial_optical_flow.html
   cv::calcOpticalFlowPyrLK(
     prev_img, 
@@ -96,7 +106,11 @@ void Matcher::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>
     prev_pts, 
     cur_pts, 
     status, 
-    error
+    error,
+    winSize,
+    maxPyramidLevel,
+    criteria,
+    flags
   );
 
   std::vector<cv::KeyPoint> tracked_kpts_prev, tracked_kpts_cur;
@@ -295,26 +309,31 @@ std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::
 
 std::vector<cv::KeyPoint> Matcher::projectLandmarks(std::vector<cv::Point3f> landmarks, 
                                                     Eigen::Affine3d T,
-                                                    Eigen::Matrix3d K)
+                                                    Eigen::Matrix3d K,
+                                                    std::vector<cv::KeyPoint>& kpts_prev)
 {
+  std::vector<cv::KeyPoint> kpts_prev_cp = kpts_prev;
+
   int width = 2*K(0,2);
   int height = 2*K(1,2);
 
   // Create projection matrix
-  cv::Mat R, t, Rt, K_cv, P;
-  Eigen::Matrix3d R_mat = T.linear();
-  Eigen::Vector3d t_mat = T.translation();
-  cv::eigen2cv(R_mat, R);
-  cv::eigen2cv(t_mat, t);
+  cv::Mat R, t, Rt, K_cv;
+  cv::eigen2cv(Eigen::Matrix3d{ T.linear() }, R);
+  cv::eigen2cv(Eigen::Vector3d{ T.translation() }, t);
   cv::eigen2cv(K, K_cv);
   
   cv::hconcat(R, t, Rt);
-  P = K_cv*Rt;
+  cv::Mat P = K_cv*Rt;
 
   // Project landmarks
   std::vector<cv::KeyPoint> projected_pts;
-  for(int i = 0; i < landmarks.size(); i++)
+  int n_err = 0;
+  int num_features = landmarks.size();
+  for(int i = 0; i < num_features; i++)
   {
+    int pt_it = i - n_err;
+
     cv::Mat pt3D = cv::Mat::zeros(3,1, CV_64F);
     pt3D.at<double>(0) = landmarks[i].x;
     pt3D.at<double>(1) = landmarks[i].y;
@@ -327,11 +346,19 @@ std::vector<cv::KeyPoint> Matcher::projectLandmarks(std::vector<cv::Point3f> lan
       || proj.y < 0
       || proj.x > width
       || proj.y > height )
+    {
+      kpts_prev.erase(kpts_prev.begin() + pt_it);
+      n_err++;
       continue;
+    }
 
     cv::KeyPoint kp(proj, 1.f);
     projected_pts.push_back(kp);
   }
+
+  // Too many features are lost 
+  if ( kpts_prev.size() < (kpts_prev_cp.size() / 2) )
+    kpts_prev = kpts_prev_cp;
 
   return projected_pts;
 }

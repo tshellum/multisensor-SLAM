@@ -152,12 +152,10 @@ class VO
       
 
       /***** Track features and estimate relative pose *****/
-      cv::Mat P_b1b2 = stereo_.createProjectionMatrix(pose_predictor_.getPoseRelative(),
-                                                      stereo_.left().K_eig());
-
       sequencer_.current.kpts_l = matcher_.projectLandmarks(sequencer_.previous.world_points,
                                                             pose_predictor_.getPoseRelative(),
-                                                            stereo_.left().K_eig());
+                                                            stereo_.left().K_eig(),
+                                                            sequencer_.previous.kpts_l);
 
       ROS_INFO_STREAM("projected - previous.kpts_l: " << sequencer_.previous.kpts_l.size() << " - current.kpts_l: " << sequencer_.current.kpts_l.size());
 
@@ -170,11 +168,11 @@ class VO
       ROS_INFO_STREAM("tracked - previous.kpts_l: " << sequencer_.previous.kpts_l.size() << " - current.kpts_l: " << sequencer_.current.kpts_l.size());
 
 
-      Eigen::Affine3d T_r = pose_predictor_.estimatePoseFromFeatures(sequencer_.previous.kpts_l, 
-                                                                     sequencer_.current.kpts_l, 
-                                                                     stereo_.left().K_cv());
+      sequencer_.current.T_r = pose_predictor_.estimatePoseFromFeatures(sequencer_.previous.kpts_l, 
+                                                                        sequencer_.current.kpts_l, 
+                                                                        stereo_.left().K_cv());
 
-      T_r.translation() *= pose_predictor_.getPreviousScale();
+      sequencer_.current.T_r.translation() *= sequencer_.previous.scale;
 
 
 
@@ -214,13 +212,6 @@ class VO
                                                                img_pts.first,
                                                                img_pts.second);
 
-      // T_r = pose_predictor_.cam2body(T_r);
-      // Eigen::Affine3d T_r_scaled = T_r;
-      // T_r_scaled.translation() *= scale_;
-
-      // ROS_INFO_STREAM("Relative pose: \n" << T_r.matrix());
-      // ROS_INFO_STREAM("Relative pose scaled: \n" << T_r_scaled.matrix());
-
       std::vector<cv::Point3f> landmarks_prev;
       std::vector<cv::Point2f> features_cur_l, features_cur_r;
       find3D2DCorrespondences(sequencer_.previous.world_points,
@@ -231,7 +222,7 @@ class VO
                               features_cur_l,
                               features_cur_r);
       
-      Eigen::Affine3d T_r_opt = motion_BA_.estimate(T_r,
+      Eigen::Affine3d T_r_opt = motion_BA_.estimate(sequencer_.current.T_r,
                                                     landmarks_prev,
                                                     features_cur_l,
                                                     features_cur_r);
@@ -244,20 +235,30 @@ class VO
       displayWindowFeatures(sequencer_.current.img_l, 
                             stereo_features.first,
                             sequencer_.current.img_r,
-                            stereo_features.second); 
+                            stereo_features.second,
+                            "Feature matches",
+                            1920,
+                            1080); 
       
-      pose_predictor_.updatePredicted(T_r_opt);
-      pose_predictor_.calculateScale(T_r_opt.translation());
-
-      sequencer_.updatePreviousFeatures(sequencer_.current.kpts_l, sequencer_.current.kpts_r);  
-      initialized_ = true;
-      stamp_img_k_ = cam_left->header.stamp;
-
+      // Add some method of rejecting bad pose estimates
+      if ( T_r_opt.matrix() == Eigen::Matrix4d::Identity() )
+      {
+        sequencer_.current.T_r = T_r_opt;
+        sequencer_.current.scale = pose_predictor_.calculateScale(sequencer_.current.T_r.translation(),
+                                                                  sequencer_.previous.scale);
+      }
+      else
+        sequencer_.current.scale = sequencer_.previous.scale;
 
       vo_pub_.publish( generateMsgInBody(cam_left->header.stamp, 
-                                         T_r_opt,
-                                         sequencer_.previous.world_points,
-                                         sequencer_.previous.indices) );
+                                         sequencer_.current.T_r,
+                                         sequencer_.current.world_points,
+                                         sequencer_.current.indices) );
+
+
+      sequencer_.updatePreviousFrame();
+      initialized_ = true;
+      stamp_img_k_ = cam_left->header.stamp;
 
       toc_ = cv::getTickCount();
       ROS_INFO_STREAM("Time per iteration: " <<  (toc_ - tic_)/ cv::getTickFrequency() << "\n");

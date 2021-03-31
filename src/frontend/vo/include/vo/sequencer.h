@@ -17,13 +17,11 @@ struct Frame
   cv::Mat descriptor_l; 
   cv::Mat descriptor_r; 
 
-  Eigen::Affine3d T_r_;
+  Eigen::Affine3d T_r;
+  double scale;
 
   std::vector<cv::Point3f> world_points;
   std::vector<int> indices;
-
-  // std::map<int, cv::Point3f> world_points;
-  // pcl::PointCloud<pcl::PointXYZ> cloud;
 };
 
 
@@ -45,7 +43,7 @@ struct Sequencer
   void storeCloud(std::vector<cv::Point3f> world_points,
                   std::vector<int> triangulated_indices);
 
-  void updateCloud(std::vector<cv::Point3f> world_points);
+  void updatePreviousFrame();
 };
 
 
@@ -86,8 +84,6 @@ void Sequencer::updatePreviousFeatures(std::vector<cv::KeyPoint> kpts_left, std:
 
 
 
-
-
 void Sequencer::storeCloud(std::vector<cv::Point3f> world_points,
                            std::vector<int> triangulated_indices)
 {
@@ -102,7 +98,17 @@ void Sequencer::storeCloud(std::vector<cv::Point3f> world_points,
 }
 
 
-void Sequencer::updateCloud(std::vector<cv::Point3f> world_points)
+void Sequencer::updatePreviousFrame()
 {
-  current.world_points = world_points;
+  previous = current;
+  
+  current.img_l.release();
+  current.img_r.release();
+  current.kpts_l.clear();
+  current.kpts_r.clear();
+  current.descriptor_l.release();
+  current.descriptor_r.release();
+  current.T_r = Eigen::Affine3d::Identity();
+  current.world_points.clear();
+  current.indices.clear();
 }

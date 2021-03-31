@@ -39,38 +39,33 @@ boost::property_tree::ptree readConfigFromJsonFile(const std::string& filename)
 void displayWindow
 (
   cv::Mat image1, cv::Mat image2=cv::Mat(), 
-  std::string name="Stereo images", int resizeWidth=2000, int resizeHeight=500, int key=3
+  std::string name="Stereo images", int resizeWidth=1920, int resizeHeight=1080, int key=3
 )
 {
   if (image1.empty() && image2.empty())
     return;
 
+  // Decide image to be displayed
+  cv::Mat display_image;
   if (image2.empty())
-  {
-    cv::namedWindow(name, cv::WINDOW_NORMAL);
+    display_image = image1;
 
-    cv::imshow(name, image1);
-    cv::resizeWindow(name, resizeWidth, resizeHeight);
-    cv::waitKey(key);
-  }
   else if (image1.empty())
-  {
-    cv::namedWindow(name, cv::WINDOW_NORMAL);
-
-    cv::imshow(name, image2);
-    cv::resizeWindow(name, resizeWidth, resizeHeight);
-    cv::waitKey(key);
-  }
+    display_image = image2;
+  
   else
-  {
-    cv::Mat splitimage;
-    cv::hconcat(image1, image2, splitimage);
-    
-    cv::namedWindow(name, cv::WINDOW_NORMAL);
-    cv::imshow(name, splitimage);
-    cv::resizeWindow(name, resizeWidth, resizeHeight);
-    cv::waitKey(key);
-  }
+    cv::hconcat(image1, image2, display_image);
+
+  // Resize
+  double width_ratio = (double) display_image.cols / resizeWidth;
+  double height_ratio = (double) display_image.rows / resizeHeight;
+  double ratio = std::max(width_ratio, height_ratio);
+  resize(display_image, display_image, cv::Size(display_image.cols / ratio, display_image.rows / ratio)); 
+
+  // Display
+  cv::namedWindow(name, cv::WINDOW_FULLSCREEN);
+  cv::imshow(name, display_image);
+  cv::waitKey(key);
 }
 
 
@@ -78,7 +73,7 @@ void displayWindowFeatures
 (
   cv::Mat image1, std::vector<cv::KeyPoint> kps1={}, 
   cv::Mat image2=cv::Mat(), std::vector<cv::KeyPoint> kps2={},
-  std::string name="Detections", int resizeWidth=2000, int resizeHeight=500, int key=3
+  std::string name="Detections", int resizeWidth=1920, int resizeHeight=1080, int key=3
 )
 {
   cv::Mat img_kps1 = image1; cv::Mat img_kps2 = image2;

@@ -70,7 +70,8 @@ public:
   Eigen::Affine3d cam2body(Eigen::Affine3d T_c);
 
   void updatePredicted(Eigen::Affine3d T);
-  void calculateScale(Eigen::Vector3d t);
+  double calculateScale(Eigen::Vector3d t);
+  double calculateScale(Eigen::Vector3d t, double previous_scale);
 };
 
 
@@ -131,10 +132,21 @@ void PosePredictor::updatePredicted(Eigen::Affine3d T)
 }
 
 
-void PosePredictor::calculateScale(Eigen::Vector3d t)
+double PosePredictor::calculateScale(Eigen::Vector3d t)
 {
   double norm = t.norm(); 
   if (norm < 10)
     scale_ = norm;
   // else: scale is unchanged / set to previous
+  return scale_;
+}
+
+
+double PosePredictor::calculateScale(Eigen::Vector3d t, double previous_scale)
+{
+  double scale = t.norm(); 
+  if (scale > 10) // scale is unchanged / set to previous
+    scale = previous_scale;
+
+  return scale;
 }
