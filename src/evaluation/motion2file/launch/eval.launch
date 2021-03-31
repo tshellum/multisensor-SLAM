@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+    <arg name = "vo_topic" default = "/backend/pose"/>
+    <arg name = "gt_topic" default = "/tf"/>
+
+    <node 
+        name   = "motion2file"
+        pkg    = "motion2file"
+        type   = "motion2file_node"
+        args   = "$(arg vo_topic) 
+                  $(arg gt_topic)"
+        output = "screen"
+    >
+    
+    <remap from = "vo_topic"  to = "$(arg vo_topic)"/>
+    <remap from = "gt_topic"  to = "$(arg gt_topic)"/>
+    </node>
+
+</launch>

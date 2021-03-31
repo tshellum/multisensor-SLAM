@@ -1,0 +1,2 @@
+geometry_msgs/Point world_point
+int32 id

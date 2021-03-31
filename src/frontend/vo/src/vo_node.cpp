@@ -42,12 +42,10 @@ class VO
     typedef message_filters::Synchronizer<MySyncPolicy> Sync;
     
     // Subscriber
-    ros::NodeHandle nh_; // TODO: Trenger man flere nodehandlers
+    ros::NodeHandle nh_;
     message_filters::Subscriber<sensor_msgs::Image> sub_cam_left_;
     message_filters::Subscriber<sensor_msgs::Image> sub_cam_right_;
     boost::shared_ptr<Sync> sync_;
-
-    ros::Subscriber gnss_sub_; // remove
 
     // Publisher
     ros::Publisher vo_pub_;
@@ -93,8 +91,6 @@ class VO
       sync_.reset(new Sync(MySyncPolicy(10), sub_cam_left_, sub_cam_right_));
       sync_->registerCallback(boost::bind(&VO::callback, this, _1, _2));
 
- 			gnss_sub_ = nh_.subscribe("/tf", 1, &VO::readTF, this); // remove
-
       // Publish
 		  vo_pub_  = nh_.advertise<vo::VO_msg>("/frontend/vo", 1000);
 
@@ -110,22 +106,6 @@ class VO
     }
 
     ~VO() {}
-
-
-    void readTF(const tf2_msgs::TFMessage& msg) // remove
-    {
-      double scale = sqrt( pow(msg.transforms[0].transform.translation.x - x_tf_, 2)    // x²
-                         + pow(msg.transforms[0].transform.translation.y - y_tf_, 2)    // y²
-                         + pow(msg.transforms[0].transform.translation.z - z_tf_, 2) ); // z²
-
-      if (scale != 0) // if not same GNSS measurement
-        scale_ = scale;
-
-      x_tf_ = msg.transforms[0].transform.translation.x;
-      y_tf_ = msg.transforms[0].transform.translation.y;
-      z_tf_ = msg.transforms[0].transform.translation.z;
-    }
-
 
 
     void callback(const sensor_msgs::ImageConstPtr &cam_left, const sensor_msgs::ImageConstPtr &cam_right)
@@ -241,7 +221,7 @@ class VO
                             1080); 
       
       // Add some method of rejecting bad pose estimates
-      if ( T_r_opt.matrix() == Eigen::Matrix4d::Identity() )
+      if ( T_r_opt.matrix() != Eigen::Matrix4d::Identity() ) // Valid motion-BA
       {
         sequencer_.current.T_r = T_r_opt;
         sequencer_.current.scale = pose_predictor_.calculateScale(sequencer_.current.T_r.translation(),

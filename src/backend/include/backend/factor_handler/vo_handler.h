@@ -4,6 +4,7 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <tf2_eigen/tf2_eigen.h>
+#include "backend/VO_msg.h"
 
 #include <Eigen/Dense>
 
@@ -24,7 +25,7 @@ namespace backend
 namespace factor_handler
 {
 
-class VOHandler : public FactorHandler<const geometry_msgs::PoseStampedConstPtr&> 
+class VOHandler : public FactorHandler<const backend::VO_msg> 
 {
 private:
   const gtsam::noiseModel::Diagonal::shared_ptr noise_; 
@@ -52,25 +53,31 @@ public:
   ~VOHandler() = default; 
 
 
-  void callback(const geometry_msgs::PoseStampedConstPtr& msg)
+  void callback(const backend::VO_msg msg)
   {
-    if (backend_->checkNavStatus() == false)
+    if ( (backend_->checkNavStatus() == false) && (backend_->checkInitialized() == false) )
     {
-      if (++num_rec_meas_ < 5)
-        return;
-      
-      if (num_rec_meas_ == 5)
-      {
-        backend_->tryInsertValue(gtsam::symbol_shorthand::X(backend_->getPoseID()), gtsam::Pose3::identity());
-        backend_->addFactor(gtsam::PriorFactor<gtsam::Pose3>(gtsam::symbol_shorthand::X(backend_->getPoseID()), gtsam::Pose3::identity(), noise_));
-      }
+      backend_->tryInsertValue(gtsam::symbol_shorthand::X(backend_->getPoseID()), gtsam::Pose3::identity());
+      backend_->addFactor(
+        gtsam::PriorFactor<gtsam::Pose3>(
+          gtsam::symbol_shorthand::X(backend_->getPoseID()), gtsam::Pose3::identity(), noise_
+        )
+      );
+      backend_->setInitialized(true);
+      backend_->incrementPoseID();
+
+      return;
     }
-      
+
+    if (backend_->checkInitialized() == false)
+      return;
+    
+
     Eigen::Isometry3d T_b1b2;
-    tf2::fromMsg(msg->pose, T_b1b2);
+    tf2::fromMsg(msg.pose, T_b1b2);
     gtsam::Pose3 pose_relative(T_b1b2.matrix()); 
 
-    std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg->header.stamp, from_time_);
+    std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg.header.stamp, from_time_);
     int to_id = associated_id.first;
 
     gtsam::Key pose_key_from = gtsam::symbol_shorthand::X(from_id_); 
@@ -85,9 +92,9 @@ public:
       )
     );
 
-    backend_->updatedPreviousRelativeTimeStamp(msg->header.stamp);
+    backend_->updatedPreviousRelativeTimeStamp(msg.header.stamp);
     from_id_ = to_id;
-    from_time_ = msg->header.stamp;
+    from_time_ = msg.header.stamp;
 
     backend_->isUpdated();
   }

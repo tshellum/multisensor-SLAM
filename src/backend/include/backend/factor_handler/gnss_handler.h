@@ -20,6 +20,11 @@
 // Local 
 #include "backend/factor_handler/factor_handler.h"
 
+
+
+enum { OFFLINE = 0, ONLINE = 1 };
+
+
 namespace backend
 {
 
@@ -47,7 +52,9 @@ public:
           ).finished() 
         ) 
       ), pose_id_(0)
-  {}
+  {
+    backend->updateNavStatus(ONLINE);
+  }
   ~GNSSHandler() = default; 
 
   void callback(const tf2_msgs::TFMessage& msg)

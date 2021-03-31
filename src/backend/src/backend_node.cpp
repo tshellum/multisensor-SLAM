@@ -24,13 +24,13 @@ int main(int argc, char **argv)
 		backend
 	);
 
+	// backend::factor_handler::IMUHandler imu(
+	// 	nh, "imu_topic", 1, 
+	// 	backend
+	// );
+
 	backend::factor_handler::VOHandler vo(
 		nh, "vo_topic", 1, 
-		backend
-	);
-
-	backend::factor_handler::IMUHandler imu(
-		nh, "imu_topic", 1, 
 		backend
 	);
 

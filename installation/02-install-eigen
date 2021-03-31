@@ -29,3 +29,7 @@ else
   sudo cmake --build . --target install
 fi
 
+# https://github.com/opencv/opencv/issues/14868
+if [ ! -d "/usr/include/Eigen" ]; then
+  sudo ln -s /usr/include/eigen3/Eigen /usr/include/Eigen
+fi

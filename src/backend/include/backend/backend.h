@@ -36,6 +36,7 @@ private:
   std::string graph_filename_;
 
   // ISAM2
+  int num_opt_;
   gtsam::ISAM2 isam2_; 
   gtsam::ISAM2Params isam2_params_; 
 
@@ -53,18 +54,25 @@ private:
 
   // Measurement states
   bool nav_status_;                  // is online
+  bool initialized_;                 // is online
   std::pair<bool, bool> imu_status_; // <is online, is updated>
 
 public:
   Backend() 
-  : pose_id_(0), time_prev_pose_relative_(ros::Time(0.0)),
-    updated_(false), nav_status_(false), imu_status_(std::make_pair(false, false)),
-    association_threshold_(0.01),
-    pose_(gtsam::Pose3::identity()),
-    graph_filename_("graph.dot"), result_path_(ros::package::getPath("backend") + "/../../results/"),
-    buffer_size_(1000),
-    optimize_timer_(nh_.createTimer(ros::Duration(0.1), &Backend::callback, this)),
-    world_pose_pub_(nh_.advertise<geometry_msgs::PoseStamped>("/backend/pose_world", buffer_size_)) 
+  : pose_id_(0)
+  , num_opt_(50)
+  , time_prev_pose_relative_(ros::Time(0.0))
+  , initialized_(false)
+  , updated_(false)
+  , nav_status_(false)
+  , imu_status_(std::make_pair(false, false))
+  , association_threshold_(0.01)
+  , pose_(gtsam::Pose3::identity())
+  , graph_filename_("graph.dot")
+  , result_path_(ros::package::getPath("backend") + "/../../results/")
+  , buffer_size_(1000)
+  , optimize_timer_(nh_.createTimer(ros::Duration(0.1), &Backend::callback, this))
+  , world_pose_pub_(nh_.advertise<geometry_msgs::PoseStamped>("/backend/pose", buffer_size_)) 
   {};
 
   ~Backend() 
@@ -77,11 +85,13 @@ public:
   gtsam::Values& getValues()              { return new_values_;  }
   gtsam::NonlinearFactorGraph& getGraph() { return new_factors_; }
   gtsam::ISAM2& getiSAM2()                { return isam2_; }
+  bool checkInitialized()                 { return initialized_; }
   bool checkNavStatus()                   { return nav_status_; }
   std::pair<bool, bool> checkIMUStatus()  { return imu_status_; }
 
   int  incrementPoseID() { return ++pose_id_; }
   void registerStampedPose(ros::Time stamp, int id) { stamped_pose_ids_[stamp] = id; }
+  void setInitialized(bool status) { initialized_ = status; }
   void isUpdated() { updated_ = true; }
   void updatedPreviousRelativeTimeStamp(ros::Time time) { time_prev_pose_relative_ = time; }
   void updateNavStatus(bool status) { nav_status_ = status; }
@@ -114,8 +124,8 @@ void Backend::callback(const ros::TimerEvent& event)
     // new_values_.print();
 
     isam2_.update(new_factors_, new_values_);
-    // for (int i = 0; i < optNum; ++i)
-    //   isam2_.update(); 
+    for (int i = 0; i < num_opt_; ++i)
+      isam2_.update(); 
       
     gtsam::Values current_estimate = isam2_.calculateBestEstimate();
     pose_ = current_estimate.at<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id_));
@@ -166,7 +176,7 @@ bool Backend::tryInsertValue(gtsam::Key pose_key, Value value)
 template <typename Value>
 void Backend::forceInsertValue(gtsam::Key pose_key, Value value)
 {
-  new_values_.print();
+  // new_values_.print();
   if (new_values_.exists(pose_key)) // Value exist, thus is deleted
   {
     new_values_.erase(pose_key);

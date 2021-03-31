@@ -202,7 +202,7 @@ target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
   gtsam
-  ${CERES_LIBRARIES}
+  # ${CERES_LIBRARIES}
   # ${Sophus_LIBRARIES}
 )
 
