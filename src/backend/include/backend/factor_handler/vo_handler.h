@@ -34,6 +34,9 @@ private:
   ros::Time from_time_;
   int       num_rec_meas_;
 
+  gtsam::Pose3 pose_initial_;
+  Eigen::Affine3d T_wb_;
+
 public:
   VOHandler(
     ros::NodeHandle nh, 
@@ -48,23 +51,61 @@ public:
       ),
       from_id_(0), from_time_(0.0), num_rec_meas_(0)
   {
+    // pose_initial_ = gtsam::Pose3::identity();
+    Eigen::Quaterniond q(0.8677891330809939, 0.012781201696915715, 0.020143893153311693, 0.49635963268415356);
+    Eigen::Vector3d t(0.9427439151613526, 1.0509059665194544, -0.9737327970033957);
+
+    pose_initial_ = gtsam::Pose3(gtsam::Rot3(q), gtsam::Point3(t));
+
+    // T_wb_ = Eigen::Affine3d::Identity();
+    // T_wb_.translation() = t;
+    // T_wb_.linear() = q.normalized().toRotationMatrix();
+
+    // gtsam::Key pose_key = gtsam::symbol_shorthand::X(backend_->incrementPoseID());       
+
+    // backend_->tryInsertValue(pose_key, pose_initial_);
+    // backend_->addFactor(
+    //   gtsam::PriorFactor<gtsam::Pose3>(
+    //     pose_key, pose_initial_, noise_
+    //   )
+    // );    
     
   }
   ~VOHandler() = default; 
 
 
   void callback(const backend::VO_msg msg)
-  {
-    if ( (backend_->checkNavStatus() == false) && (backend_->checkInitialized() == false) )
+  { 
+    // Eigen::Affine3d T_b1b2;
+    // tf2::fromMsg(msg.pose, T_b1b2);
+
+    // T_wb_ = T_wb_ * T_b1b2;
+
+    // gtsam::Key pose_key = gtsam::symbol_shorthand::X(backend_->incrementPoseID());       
+
+    // gtsam::Pose3 pose = gtsam::Pose3(T_wb_.matrix());
+    // // pose.print();
+
+    // backend_->tryInsertValue(pose_key, pose);
+    // backend_->addFactor(
+    //   gtsam::PriorFactor<gtsam::Pose3>(
+    //     pose_key, pose, noise_
+    //   )
+    // );
+
+    // backend_->isUpdated();
+
+
+    if ( (backend_->checkNavStatus() == false) && (backend_->checkInitialized() == false) ) // GNSS is offline and the graph is not yet initialized by any module --> initialize
     {
-      backend_->tryInsertValue(gtsam::symbol_shorthand::X(backend_->getPoseID()), gtsam::Pose3::identity());
+      backend_->tryInsertValue(gtsam::symbol_shorthand::X(backend_->getPoseID()), pose_initial_);
       backend_->addFactor(
         gtsam::PriorFactor<gtsam::Pose3>(
-          gtsam::symbol_shorthand::X(backend_->getPoseID()), gtsam::Pose3::identity(), noise_
+          gtsam::symbol_shorthand::X(backend_->getPoseID()), pose_initial_, noise_
         )
       );
       backend_->setInitialized(true);
-      backend_->incrementPoseID();
+      // backend_->incrementPoseID();
 
       return;
     }
@@ -83,7 +124,7 @@ public:
     gtsam::Key pose_key_from = gtsam::symbol_shorthand::X(from_id_); 
     gtsam::Key pose_key_to   = gtsam::symbol_shorthand::X(to_id); 
 
-    ROS_INFO_STREAM("vo - id: " << to_id);
+    ROS_INFO_STREAM("VO - from_id: " << from_id_ << ", to_id: " << to_id);
 
     backend_->tryInsertValue(pose_key_to, pose_relative);  
     backend_->addFactor(

@@ -84,6 +84,8 @@ public:
   int getPoseID() const                   { return pose_id_; }
   gtsam::Values& getValues()              { return new_values_;  }
   gtsam::NonlinearFactorGraph& getGraph() { return new_factors_; }
+  gtsam::Pose3 getPose()                  { return pose_; }
+  gtsam::Pose3 getPoseAt(gtsam::Key key);
   gtsam::ISAM2& getiSAM2()                { return isam2_; }
   bool checkInitialized()                 { return initialized_; }
   bool checkNavStatus()                   { return nav_status_; }
@@ -101,6 +103,8 @@ public:
   geometry_msgs::PoseStamped generateMsg();
   void callback(const ros::TimerEvent& event);
 
+  bool valueExist(gtsam::Key pose_key);
+
   template <typename Value>
   bool tryInsertValue(gtsam::Key pose_key, Value value);
 
@@ -117,20 +121,27 @@ public:
 
 void Backend::callback(const ros::TimerEvent& event)
 {
-  if (updated_ || (imu_status_.first && imu_status_.second))
+  if (updated_)
   {
+    ROS_INFO("-------------------------------------------------");
+    updated_ = false;
+    imu_status_.second = false;
+
     ros::Time tic = ros::Time::now();
     
-    // new_values_.print();
-
+    // new_values_.print("----- Values -----");
+    // new_factors_.print("----- New factors -----");
+    
+    // ROS_INFO_STREAM("Inserting");
     isam2_.update(new_factors_, new_values_);
+    // ROS_INFO_STREAM("Inserted");
     for (int i = 0; i < num_opt_; ++i)
       isam2_.update(); 
       
     gtsam::Values current_estimate = isam2_.calculateBestEstimate();
     pose_ = current_estimate.at<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id_));
 
-    pose_.print();
+    // pose_.print();
     world_pose_pub_.publish(generateMsg());
 
 
@@ -138,8 +149,6 @@ void Backend::callback(const ros::TimerEvent& event)
     new_factors_.resize(0);
     new_values_.clear();
     stamped_pose_ids_.clear(); // Alternatively [begin, previous relative pose]
-    updated_ = false;
-    imu_status_.second = false;
 
     ros::Time toc = ros::Time::now();
     ROS_INFO_STREAM("Time per iteration: " <<  (toc - tic) << "\n");
@@ -160,10 +169,29 @@ geometry_msgs::PoseStamped Backend::generateMsg()
 }
 
 
+gtsam::Pose3 Backend::getPoseAt(gtsam::Key key)
+{
+  if (new_values_.exists(key))
+    return new_values_.at<gtsam::Pose3>(key);
+  else
+    return pose_;
+}
+
+
+bool Backend::valueExist(gtsam::Key key)
+{
+  if ( isam2_.valueExists(key) || new_values_.exists(key) )
+    return true;
+
+  return false;
+}
+
+
+
 template <typename Value>
 bool Backend::tryInsertValue(gtsam::Key pose_key, Value value)
 {
-  if (! new_values_.exists(pose_key)) // Value doesn't exist, thus is inserted
+  if (! valueExist(pose_key)) // Value doesn't exist, thus is inserted
   {
     new_values_.insert(pose_key, value); 
     return true;

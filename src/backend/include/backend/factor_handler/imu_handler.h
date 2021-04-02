@@ -31,6 +31,7 @@ private:
   const gtsam::noiseModel::Diagonal::shared_ptr noise_; 
   double dt_;
   int from_id_;
+  bool initialized_;
 
   gtsam::noiseModel::Robust::shared_ptr velocity_noise_model_;
   gtsam::noiseModel::Robust::shared_ptr bias_noise_model_;
@@ -63,7 +64,9 @@ public:
           (gtsam::Vector(6) << 0.1, 0.1, 0.1, 0.15, 0.15, 0.1).finished()  // rad,rad,rad,m, m, m 
         ) 
       ),
-      dt_(1 / 100.0), from_id_(0)
+      dt_(1 / 100.0), 
+      from_id_(0),
+      initialized_(false)
   { 
     // Noise
     {
@@ -102,13 +105,6 @@ public:
     prev_bias_ = prior_imu_bias;
 
     preintegrated_ = new gtsam::PreintegratedCombinedMeasurements(params, prior_imu_bias);
-
-    // Insert initial values in graph
-    backend->tryInsertValue(gtsam::symbol_shorthand::B(from_id_), prior_imu_bias);
-    backend->tryInsertValue(gtsam::symbol_shorthand::V(from_id_), prior_velocity);
-
-    backend_->addFactor(gtsam::PriorFactor<gtsam::imuBias::ConstantBias>(gtsam::symbol_shorthand::B(from_id_), prior_imu_bias, bias_noise_model_));
-    backend_->addFactor(gtsam::PriorFactor<gtsam::Vector3>(gtsam::symbol_shorthand::V(from_id_), prior_velocity, velocity_noise_model_));
   }
 
   ~IMUHandler() {delete preintegrated_;} 
@@ -116,18 +112,39 @@ public:
 
   void callback(const sensor_msgs::ImuConstPtr& msg)
   {
-    if (backend_->checkIMUStatus().first == false)
-      backend_->updateIMUOnlineStatus(true);
+    // Wait to begin preintegration until graph is initialized by another module 
+    if (backend_->checkInitialized() == false) 
+      return;
 
+    // Initialize by inserting initial priors to the graph
+    if (backend_->checkInitialized() == true && (initialized_ == false) ) 
+    {
+      from_id_ = backend_->getPoseID();
+      ROS_INFO_STREAM("IMU - from_id: " << from_id_);
+
+      backend_->tryInsertValue(gtsam::symbol_shorthand::B(from_id_), prev_bias_);
+      backend_->tryInsertValue(gtsam::symbol_shorthand::V(from_id_), pred_state_.velocity());
+
+      backend_->addFactor(gtsam::PriorFactor<gtsam::imuBias::ConstantBias>(gtsam::symbol_shorthand::B(from_id_), prev_bias_, bias_noise_model_));
+      backend_->addFactor(gtsam::PriorFactor<gtsam::Vector3>(gtsam::symbol_shorthand::V(from_id_), pred_state_.velocity(), velocity_noise_model_));
+
+      initialized_ = true;
+    }
+    
+    // Read measurements and preintegrate
     Eigen::Vector3d gyr, acc;
     tf2::fromMsg(msg->angular_velocity, gyr);
     tf2::fromMsg(msg->linear_acceleration, acc);
     
     preintegrated_->integrateMeasurement(acc, gyr, dt_);
-    if (backend_->getPoseID() > from_id_)
+
+    // New pose is added --> add preintegrated measurement
+    int to_id = backend_->getPoseID();
+    if (to_id > from_id_)
     {
-      // ROS_INFO_STREAM("imu - id: " << backend_->getPoseID());
-      addPreintegratedFactor(backend_->getPoseID());
+      ROS_INFO_STREAM("IMU - from_id: " << from_id_ << ", to_id: " << to_id);
+
+      addPreintegratedFactor(to_id);
       backend_->updatePreintegrationStatus(true);
     }
   }
@@ -157,12 +174,21 @@ public:
                                         bias_key_from,
                                         bias_key_to, 
                                         *preintegrated_);
+    ROS_INFO_STREAM("Adding IMU");
     backend_->addFactor(imu_factor);
-    
+    ROS_INFO_STREAM("Added IMU");
+
     // Update states
-    prev_state_ = gtsam::NavState(backend_->getValues().at<gtsam::Pose3>(pose_key_to),
+
+    prev_state_ = gtsam::NavState(backend_->getPoseAt(pose_key_to),
                                   backend_->getValues().at<gtsam::Vector3>(vel_key_to));
+
+    // prev_state_ = gtsam::NavState(backend_->getValues().at<gtsam::Pose3>(pose_key_to),
+    //                               backend_->getValues().at<gtsam::Vector3>(vel_key_to));
     prev_bias_ = backend_->getValues().at<gtsam::imuBias::ConstantBias>(bias_key_to);
+
+    ROS_INFO_STREAM("updated IMU");
+
     preintegrated_->resetIntegrationAndSetBias(prev_bias_);
 
     from_id_ = to_id;

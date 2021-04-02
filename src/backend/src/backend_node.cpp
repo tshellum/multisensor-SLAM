@@ -19,18 +19,18 @@ int main(int argc, char **argv)
 
 	std::shared_ptr<backend::Backend> backend = std::make_shared<backend::Backend>(); 
 
-	backend::factor_handler::GNSSHandler gnss(
-		nh, "gnss_topic", 1, 
-		backend
-	);
-
-	// backend::factor_handler::IMUHandler imu(
-	// 	nh, "imu_topic", 1, 
+	// backend::factor_handler::GNSSHandler gnss(
+	// 	nh, "gnss_topic", 1000, 
 	// 	backend
 	// );
 
+	backend::factor_handler::IMUHandler imu(
+		nh, "imu_topic", 1000, 
+		backend
+	);
+
 	backend::factor_handler::VOHandler vo(
-		nh, "vo_topic", 1, 
+		nh, "vo_topic", 1000, 
 		backend
 	);
 
