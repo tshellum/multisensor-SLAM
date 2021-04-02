@@ -79,10 +79,10 @@ void displayWindowFeatures
   cv::Mat img_kps1 = image1; cv::Mat img_kps2 = image2;
   
   if (! kps1.empty())
-    cv::drawKeypoints(image1, kps1, img_kps1, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
+    cv::drawKeypoints(image1, kps1, img_kps1, cv::Scalar(0, 255, 255), cv::DrawMatchesFlags::DEFAULT);
     
   if (! kps2.empty())
-    cv::drawKeypoints(image2, kps2, img_kps2, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
+    cv::drawKeypoints(image2, kps2, img_kps2, cv::Scalar(0, 255, 255), cv::DrawMatchesFlags::DEFAULT);
   
   displayWindow(img_kps1, img_kps2, name, resizeWidth, resizeHeight, key);
 }

@@ -22,6 +22,11 @@ struct Frame
 
   std::vector<cv::Point3f> world_points;
   std::vector<int> indices;
+
+  Frame()
+  : T_r(Eigen::Affine3d::Identity())
+  , scale(1.0)
+  {}
 };
 
 

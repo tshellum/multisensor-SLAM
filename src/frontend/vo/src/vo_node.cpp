@@ -83,7 +83,7 @@ class VO
     , stereo_(nh_, 10)
     , pose_predictor_(nh_, "imu_topic", 1000)
     , structure_BA_(stereo_.left().K_eig(), stereo_.right().K_eig(), stereo_.getInverseStereoTransformation(), 0.5)
-    , motion_BA_(stereo_.left().K_eig(), stereo_.getStereoTransformation(), 0.1, M_PI/9, 2)
+    , motion_BA_(stereo_.left().K_eig(), stereo_.getStereoTransformation(), 0.1, M_PI/9, 1)
     {
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       sub_cam_left_.subscribe(nh_, "cam_left", 1);
@@ -152,6 +152,9 @@ class VO
                                                                         sequencer_.current.kpts_l, 
                                                                         stereo_.left().K_cv());
 
+      if ( ! pose_predictor_.evaluateValidity(sequencer_.current.T_r, sequencer_.previous.T_r) )
+        sequencer_.current.T_r = sequencer_.previous.T_r;
+
       sequencer_.current.T_r.translation() *= sequencer_.previous.scale;
 
 
@@ -207,8 +210,10 @@ class VO
                                                     features_cur_l,
                                                     features_cur_r);
 
-      ROS_INFO_STREAM("Motion-BA using " << landmarks_prev.size() << " points - Optimized pose: \n" << T_r_opt.matrix());
+      // ROS_INFO_STREAM("Motion-BA using " << landmarks_prev.size() << " points - Optimized pose: \n" << T_r_opt.matrix());
 
+      double scale_cur = pose_predictor_.calculateScale(T_r_opt.translation(), 
+                                                        sequencer_.previous.scale);
 
 
       /***** End of iteration processes *****/
@@ -220,15 +225,22 @@ class VO
                             1920,
                             1080); 
       
-      // Add some method of rejecting bad pose estimates
-      if ( T_r_opt.matrix() != Eigen::Matrix4d::Identity() ) // Valid motion-BA
+      // Rejecting bad pose optimization --> Setting equal to previous
+      if ( (T_r_opt.matrix() == Eigen::Matrix4d::Identity()) // motion-BA actually produces an estimate
+        || (scale_cur > 10)                                  // No large motion
+        || (scale_cur < 0.1)                                 // Standing still - this is typically where thing goes wrong
+        || (T_r_opt(2,3) < -0.1)                             // No large backward motion
+      )                                
       {
-        sequencer_.current.T_r = T_r_opt;
-        sequencer_.current.scale = pose_predictor_.calculateScale(sequencer_.current.T_r.translation(),
-                                                                  sequencer_.previous.scale);
+        sequencer_.current.scale = sequencer_.previous.scale;
       }
       else
-        sequencer_.current.scale = sequencer_.previous.scale;
+      {
+        sequencer_.current.T_r = T_r_opt;
+        sequencer_.current.scale = scale_cur;
+      }
+
+      ROS_INFO_STREAM("VO - calculated pose: \n" << sequencer_.current.T_r.matrix());
 
       vo_pub_.publish( generateMsgInBody(cam_left->header.stamp, 
                                          sequencer_.current.T_r,

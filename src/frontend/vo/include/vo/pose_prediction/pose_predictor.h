@@ -72,6 +72,7 @@ public:
   void updatePredicted(Eigen::Affine3d T);
   double calculateScale(Eigen::Vector3d t);
   double calculateScale(Eigen::Vector3d t, double previous_scale);
+  bool evaluateValidity(Eigen::Affine3d T_cur, Eigen::Affine3d T_prev, double rot_thresh = M_PI/6);
 };
 
 
@@ -142,6 +143,7 @@ double PosePredictor::calculateScale(Eigen::Vector3d t)
 }
 
 
+
 double PosePredictor::calculateScale(Eigen::Vector3d t, double previous_scale)
 {
   double scale = t.norm(); 
@@ -149,4 +151,20 @@ double PosePredictor::calculateScale(Eigen::Vector3d t, double previous_scale)
     scale = previous_scale;
 
   return scale;
+}
+
+
+bool PosePredictor::evaluateValidity(Eigen::Affine3d T_cur, Eigen::Affine3d T_prev, double rot_thresh)
+{
+  Eigen::Vector3d rot_euler_cur  = T_cur.linear().eulerAngles(0,1,2);
+  Eigen::Vector3d rot_euler_prev = T_prev.linear().eulerAngles(0,1,2);
+  Eigen::Vector3d rot_diff_abs = (rot_euler_cur - rot_euler_prev).cwiseAbs(); 
+
+  // No major difference in rotational estimates since prev
+  return ( (rot_diff_abs.x() < rot_thresh)  
+        && (rot_diff_abs.y() < rot_thresh)  
+        && (rot_diff_abs.z() < rot_thresh) 
+        && (std::abs(T_cur(2,3)) > std::abs(T_cur(0,3)))        // No sideways motion  
+        && (std::abs(T_cur(2,3)) > std::abs(T_cur(1,3)))        // No upwards/downwards motion  
+  );
 }
