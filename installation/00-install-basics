@@ -33,8 +33,9 @@ pip install scipy
 pip install -U latex
 pip install colorama
 pip install pyyaml
+pip install ruamel.yaml
 
-sudo apt-get install python-tk
+sudo apt-get install -y python-tk
 
 # VScode
 sudo snap install --classic code
