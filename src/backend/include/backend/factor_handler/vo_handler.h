@@ -1,11 +1,10 @@
 #pragma once
 
 /*** ROS packages ***/
-#include <sensor_msgs/PointCloud2.h>
-#include <geometry_msgs/PoseStamped.h>
 #include <tf2_eigen/tf2_eigen.h>
 #include "backend/VO_msg.h"
 
+/*** Eigen packages ***/
 #include <Eigen/Dense>
 
 /*** GTSAM packages ***/
@@ -15,6 +14,9 @@
 #include <gtsam/geometry/Rot3.h> 
 #include <gtsam/geometry/Pose3.h> 
 #include <gtsam/inference/Symbol.h> 
+
+/*** Boost packages ***/
+#include <boost/property_tree/ptree.hpp>
 
 /*** Local ***/
 #include "backend/factor_handler/factor_handler.h"
@@ -32,70 +34,46 @@ private:
 
   int       from_id_;
   ros::Time from_time_;
-  int       num_rec_meas_;
 
   gtsam::Pose3 pose_initial_;
-  Eigen::Affine3d T_wb_;
 
 public:
   VOHandler(
     ros::NodeHandle nh, 
     const std::string& topic, 
     uint32_t queue_size, 
-    std::shared_ptr<Backend> backend
-  ) : FactorHandler(nh, topic, queue_size, backend), 
-      noise_(  
-        gtsam::noiseModel::Diagonal::Sigmas( 
-          (gtsam::Vector(6) << 1.0, 1.0, 1.0, 1.0, 1.0, 1.0).finished()  // rad/deg?, rad/deg?, rad/deg?, m, m, m 
-        ) 
-      ),
-      from_id_(0), from_time_(0.0), num_rec_meas_(0)
+    std::shared_ptr<Backend> backend,
+    boost::property_tree::ptree parameters = boost::property_tree::ptree()
+  ) 
+  : FactorHandler(nh, topic, queue_size, backend)
+  , noise_(  
+      gtsam::noiseModel::Diagonal::Sigmas( 
+        (gtsam::Vector(6) << 1.0, 1.0, 1.0, 1.0, 1.0, 1.0).finished()  // rad/deg?, rad/deg?, rad/deg?, m, m, m 
+      ) 
+    )
+  , from_id_(0)
+  , from_time_(0.0)
   {
-    // pose_initial_ = gtsam::Pose3::identity();
-    Eigen::Quaterniond q(0.8677891330809939, 0.012781201696915715, 0.020143893153311693, 0.49635963268415356);
-    Eigen::Vector3d t(0.9427439151613526, 1.0509059665194544, -0.9737327970033957);
+    pose_initial_ = gtsam::Pose3::identity();
+    if (parameters != boost::property_tree::ptree())
+    {
+      Eigen::Quaterniond q(parameters.get< double >("pose.orientation.w"), 
+                          parameters.get< double >("pose.orientation.x"), 
+                          parameters.get< double >("pose.orientation.y"), 
+                          parameters.get< double >("pose.orientation.z"));
+      
+      Eigen::Vector3d t(parameters.get< double >("pose.translation.x"), 
+                        parameters.get< double >("pose.translation.y"), 
+                        parameters.get< double >("pose.translation.z"));
 
-    pose_initial_ = gtsam::Pose3(gtsam::Rot3(q), gtsam::Point3(t));
-
-    // T_wb_ = Eigen::Affine3d::Identity();
-    // T_wb_.translation() = t;
-    // T_wb_.linear() = q.normalized().toRotationMatrix();
-
-    // gtsam::Key pose_key = gtsam::symbol_shorthand::X(backend_->incrementPoseID());       
-
-    // backend_->tryInsertValue(pose_key, pose_initial_);
-    // backend_->addFactor(
-    //   gtsam::PriorFactor<gtsam::Pose3>(
-    //     pose_key, pose_initial_, noise_
-    //   )
-    // );    
-    
+      pose_initial_ = gtsam::Pose3(gtsam::Rot3(q), gtsam::Point3(t));
+    }
   }
   ~VOHandler() = default; 
 
 
   void callback(const backend::VO_msg msg)
   { 
-    // Eigen::Affine3d T_b1b2;
-    // tf2::fromMsg(msg.pose, T_b1b2);
-
-    // T_wb_ = T_wb_ * T_b1b2;
-
-    // gtsam::Key pose_key = gtsam::symbol_shorthand::X(backend_->incrementPoseID());       
-
-    // gtsam::Pose3 pose = gtsam::Pose3(T_wb_.matrix());
-    // // pose.print();
-
-    // backend_->tryInsertValue(pose_key, pose);
-    // backend_->addFactor(
-    //   gtsam::PriorFactor<gtsam::Pose3>(
-    //     pose_key, pose, noise_
-    //   )
-    // );
-
-    // backend_->isUpdated();
-
-
     if ( (backend_->checkNavStatus() == false) && (backend_->checkInitialized() == false) ) // GNSS is offline and the graph is not yet initialized by any module --> initialize
     {
       backend_->tryInsertValue(gtsam::symbol_shorthand::X(backend_->getPoseID()), pose_initial_);
@@ -105,7 +83,6 @@ public:
         )
       );
       backend_->setInitialized(true);
-      // backend_->incrementPoseID();
 
       return;
     }

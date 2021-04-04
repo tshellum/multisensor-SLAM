@@ -3,10 +3,9 @@
 <launch>
     <arg name = "vo_topic"  default = "/frontend/vo"/>
     <arg name = "gnss_topic" default = "/tf"/>
-    <arg name = "imu_topic" default = "/kitti/oxts/imu"/>
+    <arg name = "imu_topic" default = "/xsens/imu"/>
 
-    <param name = "dataset" type = "string" value = "kitti" />
-    <param name = "config_name" type = "string" value = "kitti00_parameters.json" />
+    <param name = "dataset" type = "string" value = "milliAmpere" />
 
     <node 
         name   = "backend"

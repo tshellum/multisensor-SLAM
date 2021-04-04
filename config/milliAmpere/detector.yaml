@@ -1,0 +1,10 @@
+# %YAML:1.0
+
+detector:
+   extractor_type: "FAST"
+   descriptor_type: "ORB"
+   feature_threshold: 25
+   grid_size: 10
+   max_number_of_features: 2
+   nms_distance: 10
+

@@ -8,6 +8,8 @@
 
 #include <boost/make_shared.hpp>
 
+#include <Eigen/Dense>
+
 /*** GTSAM packages ***/
 #include <gtsam/navigation/PreintegrationParams.h>
 #include <gtsam/navigation/CombinedImuFactor.h>
@@ -57,16 +59,18 @@ public:
     ros::NodeHandle nh, 
     const std::string& topic, 
     uint32_t queue_size, 
-    std::shared_ptr<Backend> backend
-  ) : FactorHandler(nh, topic, queue_size, backend), 
-      noise_( 
-        gtsam::noiseModel::Diagonal::Sigmas( 
-          (gtsam::Vector(6) << 0.1, 0.1, 0.1, 0.15, 0.15, 0.1).finished()  // rad,rad,rad,m, m, m 
-        ) 
-      ),
-      dt_(1 / 100.0), 
-      from_id_(0),
-      initialized_(false)
+    std::shared_ptr<Backend> backend,
+    boost::property_tree::ptree parameters = boost::property_tree::ptree()
+  ) 
+  : FactorHandler(nh, topic, queue_size, backend)
+  , noise_( 
+      gtsam::noiseModel::Diagonal::Sigmas( 
+        (gtsam::Vector(6) << 0.1, 0.1, 0.1, 0.15, 0.15, 0.1).finished()  // rad,rad,rad,m, m, m 
+      ) 
+    )
+  , dt_( parameters.get< double >("imu.dt") )
+  , from_id_(0)
+  , initialized_(false)
   { 
     // Noise
     {
@@ -99,6 +103,23 @@ public:
 
     gtsam::Pose3 prior_pose = gtsam::Pose3::identity();
     gtsam::Vector3 prior_velocity = gtsam::Vector3(0, 0, 0);
+    if (parameters != boost::property_tree::ptree())
+    {
+      Eigen::Quaterniond q(parameters.get< double >("pose.orientation.w"), 
+                           parameters.get< double >("pose.orientation.x"), 
+                           parameters.get< double >("pose.orientation.y"), 
+                           parameters.get< double >("pose.orientation.z"));
+      
+      Eigen::Vector3d t(parameters.get< double >("pose.translation.x"), 
+                        parameters.get< double >("pose.translation.y"), 
+                        parameters.get< double >("pose.translation.z"));
+
+      prior_pose = gtsam::Pose3(gtsam::Rot3(q), gtsam::Point3(t));
+
+      prior_velocity = gtsam::Vector3(parameters.get< double >("imu.velocity.x"), 
+                                      parameters.get< double >("imu.velocity.y"), 
+                                      parameters.get< double >("imu.velocity.z"));
+    }
 
     prev_state_ = gtsam::NavState(prior_pose, prior_velocity);
     pred_state_ = prev_state_;
@@ -112,8 +133,10 @@ public:
 
   void callback(const sensor_msgs::ImuConstPtr& msg)
   {
+    // ROS_INFO_STREAM("IMU measurement STAMP: " << msg->header.stamp);
+
     // Wait to begin preintegration until graph is initialized by another module 
-    if (backend_->checkInitialized() == false) 
+    if (backend_->checkInitialized() == false)
       return;
 
     // Initialize by inserting initial priors to the graph
@@ -166,7 +189,12 @@ public:
     backend_->tryInsertValue(pose_key_to, pred_state_.pose());
     backend_->tryInsertValue(vel_key_to, pred_state_.velocity());
     backend_->tryInsertValue(bias_key_to, prev_bias_);
-      
+    
+    // preintegrated_->print("PREINTEGRATION");
+
+    // backend_->getPoseAt(pose_key_to).print("POSE AT");
+    // pred_state_.pose().print("IMU PREDICT");
+
     gtsam::CombinedImuFactor imu_factor(pose_key_from, 
                                         vel_key_from,
                                         pose_key_to, 
@@ -174,20 +202,28 @@ public:
                                         bias_key_from,
                                         bias_key_to, 
                                         *preintegrated_);
-    ROS_INFO_STREAM("Adding IMU");
+
     backend_->addFactor(imu_factor);
-    ROS_INFO_STREAM("Added IMU");
+
+    // backend_->getPoseAt(pose_key_to).print("POSE AT");
+    // backend_->getPose().print("POSE MOST RECENT");
+
+    // ROS_INFO_STREAM("backend_->getVelocity(): " << backend_->getVelocity());
+    // ROS_INFO_STREAM("backend_->getValues().velocity: " << backend_->getValues().at<gtsam::Vector3>(vel_key_to));
 
     // Update states
+    gtsam::Vector3 velocity = backend_->getVelocity();
+    if ( velocity == gtsam::Vector3(0.0, 0.0, 0.0) )
+      velocity = backend_->getValues().at<gtsam::Vector3>(vel_key_to);
 
-    prev_state_ = gtsam::NavState(backend_->getPoseAt(pose_key_to),
-                                  backend_->getValues().at<gtsam::Vector3>(vel_key_to));
+    prev_state_ = gtsam::NavState(backend_->getPose(),
+                                  velocity);
 
     // prev_state_ = gtsam::NavState(backend_->getValues().at<gtsam::Pose3>(pose_key_to),
     //                               backend_->getValues().at<gtsam::Vector3>(vel_key_to));
     prev_bias_ = backend_->getValues().at<gtsam::imuBias::ConstantBias>(bias_key_to);
 
-    ROS_INFO_STREAM("updated IMU");
+    // ROS_INFO_STREAM("updated IMU");
 
     preintegrated_->resetIntegrationAndSetBias(prev_bias_);
 

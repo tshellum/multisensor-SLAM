@@ -45,12 +45,15 @@ private:
   gtsam::Values new_values_; 
   gtsam::NonlinearFactorGraph new_factors_;
 
-  // Current state
-  int pose_id_;
+  // Association
   ros::Time time_prev_pose_relative_;
   double association_threshold_; // in seconds
   std::map<ros::Time, int> stamped_pose_ids_;
+  
+  // Current state
+  int pose_id_;
   gtsam::Pose3 pose_;
+  gtsam::Vector3 velocity_;
 
   // Measurement states
   bool nav_status_;                  // is online
@@ -68,6 +71,7 @@ public:
   , imu_status_(std::make_pair(false, false))
   , association_threshold_(0.01)
   , pose_(gtsam::Pose3::identity())
+  , velocity_(gtsam::Vector3(0.0, 0.0, 0.0))
   , graph_filename_("graph.dot")
   , result_path_(ros::package::getPath("backend") + "/../../results/")
   , buffer_size_(1000)
@@ -86,6 +90,7 @@ public:
   gtsam::NonlinearFactorGraph& getGraph() { return new_factors_; }
   gtsam::Pose3 getPose()                  { return pose_; }
   gtsam::Pose3 getPoseAt(gtsam::Key key);
+  gtsam::Vector3 getVelocity()            { return velocity_; }
   gtsam::ISAM2& getiSAM2()                { return isam2_; }
   bool checkInitialized()                 { return initialized_; }
   bool checkNavStatus()                   { return nav_status_; }
@@ -131,17 +136,19 @@ void Backend::callback(const ros::TimerEvent& event)
     
     // new_values_.print("----- Values -----");
     // new_factors_.print("----- New factors -----");
-    
-    // ROS_INFO_STREAM("Inserting");
+
+    // Optimize    
     isam2_.update(new_factors_, new_values_);
-    // ROS_INFO_STREAM("Inserted");
     for (int i = 0; i < num_opt_; ++i)
       isam2_.update(); 
-      
+    
+    // Get updated values
     gtsam::Values current_estimate = isam2_.calculateBestEstimate();
-    pose_ = current_estimate.at<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id_));
+    pose_ = current_estimate.at<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id_));          // Pose
+    if ( current_estimate.exists(gtsam::symbol_shorthand::V(pose_id_)) )
+      velocity_ = current_estimate.at<gtsam::Vector3>(gtsam::symbol_shorthand::V(pose_id_));  // Velocity
 
-    // pose_.print();
+    // pose_.print("BACKEND OPTIMIZED");
     world_pose_pub_.publish(generateMsg());
 
 
