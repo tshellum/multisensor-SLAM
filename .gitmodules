@@ -1,6 +1,7 @@
 [submodule "src/evaluation/rpg_trajectory_evaluation"]
 	path = src/evaluation/rpg_trajectory_evaluation
 	url = https://github.com/uzh-rpg/rpg_trajectory_evaluation.git
+	ignore = dirty
 [submodule "src/evaluation/catkin_simple"]
 	path = src/evaluation/catkin_simple
 	url = https://github.com/catkin/catkin_simple.git
