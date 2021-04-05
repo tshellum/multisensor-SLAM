@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+    <arg name = "lidar_topic"        default = "/kitti/velo/pointcloud"/>
+    <arg name = "backend_pose_topic" default = "/backend/pose"/>
+
+    <param name = "dataset" type = "string" value = "milliAmpere" />
+
+    <node 
+        name   = "lidar_odometry"
+        pkg    = "lidar_odometry"
+        type   = "lidar_odometry_node"
+        args   = "$(arg lidar_topic) 
+                  $(arg backend_pose_topic)"
+        output = "screen"
+    >
+    
+    <remap from = "lidar_topic"        to = "$(arg lidar_topic)"/>
+    <remap from = "backend_pose_topic" to = "$(arg backend_pose_topic)"/>
+    </node>
+
+    <node pkg="tf2_ros" type="static_transform_publisher" name="link1_broadcaster" args="0 0 0 0 0 0 1 vessel_center velodyne" />
+
+</launch>
