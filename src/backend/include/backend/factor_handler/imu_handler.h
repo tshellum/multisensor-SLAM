@@ -159,6 +159,9 @@ public:
     tf2::fromMsg(msg->angular_velocity, gyr);
     tf2::fromMsg(msg->linear_acceleration, acc);
     
+    gyr *= -1;
+    acc *= -1;
+
     preintegrated_->integrateMeasurement(acc, gyr, dt_);
 
     // New pose is added --> add preintegrated measurement

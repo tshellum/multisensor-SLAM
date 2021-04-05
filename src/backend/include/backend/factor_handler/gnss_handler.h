@@ -5,9 +5,9 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2_eigen/tf2_eigen.h>
 #include <sensor_msgs/NavSatFix.h>
+#include "backend/NorthEastHeading.h"
 
 #include <Eigen/Dense>
-
 
 /*** GTSAM packages ***/
 #include <gtsam/slam/PriorFactor.h> 

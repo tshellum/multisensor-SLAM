@@ -48,7 +48,7 @@ public:
   : FactorHandler(nh, topic, queue_size, backend)
   , noise_(  
       gtsam::noiseModel::Diagonal::Sigmas( 
-        (gtsam::Vector(6) << 1.0, 1.0, 1.0, 1.0, 1.0, 1.0).finished()  // rad/deg?, rad/deg?, rad/deg?, m, m, m 
+        (gtsam::Vector(6) << M_PI/18, M_PI/18, M_PI/18, 0.2, 0.2, 0.2).finished()  // rad/deg?, rad/deg?, rad/deg?, m, m, m 
       ) 
     )
   , from_id_(0)

@@ -57,6 +57,7 @@ add_message_files(
   FILES
   VO_msg.msg
   PointID_msg.msg
+  NorthEastHeading.msg
 )
 
 ## Generate services in the 'srv' folder
