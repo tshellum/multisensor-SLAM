@@ -19,6 +19,7 @@
 #include <gtsam/geometry/Pose3.h> 
 #include <gtsam/inference/Symbol.h> 
 
+#include <string>
 
 
 namespace backend
@@ -54,6 +55,8 @@ private:
 
   std::map<ros::Time, IMUMeasurement> stamped_measurements_;
 
+  gtsam::Pose3 pose_prior_;
+
 public:
   IMUHandler(
     ros::NodeHandle nh, 
@@ -68,9 +71,10 @@ public:
         (gtsam::Vector(6) << 0.1, 0.1, 0.1, 0.15, 0.15, 0.1).finished()  // rad,rad,rad,m, m, m 
       ) 
     )
-  , dt_( parameters.get< double >("imu.dt") )
-  , from_id_(0)
+  , dt_( parameters.get< double >("imu.dt_avg") )
+  , from_id_(backend_->getPoseID())
   , initialized_(false)
+  , pose_prior_(gtsam::Pose3::identity())
   { 
     // Noise
     {
@@ -84,15 +88,33 @@ public:
     }
 
     // Create preintegrated instance that follows the NED frame
-    boost::shared_ptr<gtsam::PreintegratedCombinedMeasurements::Params> params = gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedD(9.81); // NED
-    params->accelerometerCovariance = gtsam::I_3x3 * 0.004;  // acc white noise in continuous
-    params->integrationCovariance   = gtsam::I_3x3 * 0.002;  // integration uncertainty continuous
-    params->gyroscopeCovariance     = gtsam::I_3x3 * 0.001;  // gyro white noise in continuous
-    params->biasAccCovariance       = gtsam::I_3x3 * 0.004;  // acc bias in continuous
-    params->biasOmegaCovariance     = gtsam::I_3x3 * 0.001;  // gyro bias in continuous
+    std::string dataset;
+	  nh.getParam("/dataset", dataset);
+	
+    boost::shared_ptr<gtsam::PreintegratedCombinedMeasurements::Params> params;
+    if (parameters.get< std::string >("imu.frame") == "ENU")
+      params = gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedU(9.81); // ENU
+    else if (parameters.get< std::string >("imu.frame") == "NED")
+      params = gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedD(9.81); // NED
+    else
+      params = boost::make_shared<gtsam::PreintegratedCombinedMeasurements::Params>(gtsam::Vector3(0.0, 0.0, 9.81));
+    
+    // params->accelerometerCovariance = gtsam::I_3x3 * 0.004;  // acc white noise in continuous
+    // params->integrationCovariance   = gtsam::I_3x3 * 0.002;  // integration uncertainty continuous
+    // params->gyroscopeCovariance     = gtsam::I_3x3 * 0.001;  // gyro white noise in continuous
+    // params->biasAccCovariance       = gtsam::I_3x3 * 0.004;  // acc bias in continuous
+    // params->biasOmegaCovariance     = gtsam::I_3x3 * 0.001;  // gyro bias in continuous
+    // params->biasAccOmegaInt         = gtsam::Matrix::Identity(6, 6) * 1e-4;
+
+    params->accelerometerCovariance = gtsam::I_3x3 * pow(parameters.get< double >("imu.accelerometer_sigma"), 2);       // acc white noise in continuous
+    params->gyroscopeCovariance     = gtsam::I_3x3 * pow(parameters.get< double >("imu.gyroscope_sigma"), 2);           // gyro white noise in continuous
+    params->integrationCovariance   = gtsam::I_3x3 * pow(parameters.get< double >("imu.integration_sigma"), 2);         // integration uncertainty continuous
+    params->biasAccCovariance       = gtsam::I_3x3 * pow(parameters.get< double >("imu.accelerometer_bias_sigma"), 2);  // acc bias in continuous
+    params->biasOmegaCovariance     = gtsam::I_3x3 * pow(parameters.get< double >("imu.gyroscope_bias_sigma"), 2);      // gyro bias in continuous
     params->biasAccOmegaInt         = gtsam::Matrix::Identity(6, 6) * 1e-4;
 
-    gtsam::Vector3 acc_bias(0.2, -0.2, -0.04);  // in camera frame
+
+    gtsam::Vector3 acc_bias(0.2, -0.2, -0.04);  
     gtsam::Vector3 gyro_bias(0.005, 0.0006, 0.024);
     gtsam::imuBias::ConstantBias prior_imu_bias = gtsam::imuBias::ConstantBias(acc_bias, gyro_bias);
 
@@ -105,14 +127,14 @@ public:
     gtsam::Vector3 prior_velocity = gtsam::Vector3(0, 0, 0);
     if (parameters != boost::property_tree::ptree())
     {
-      Eigen::Quaterniond q(parameters.get< double >("pose.orientation.w"), 
-                           parameters.get< double >("pose.orientation.x"), 
-                           parameters.get< double >("pose.orientation.y"), 
-                           parameters.get< double >("pose.orientation.z"));
+      Eigen::Quaterniond q(parameters.get< double >("pose_origin.orientation.w"), 
+                           parameters.get< double >("pose_origin.orientation.x"), 
+                           parameters.get< double >("pose_origin.orientation.y"), 
+                           parameters.get< double >("pose_origin.orientation.z"));
       
-      Eigen::Vector3d t(parameters.get< double >("pose.translation.x"), 
-                        parameters.get< double >("pose.translation.y"), 
-                        parameters.get< double >("pose.translation.z"));
+      Eigen::Vector3d t(parameters.get< double >("pose_origin.translation.x"), 
+                        parameters.get< double >("pose_origin.translation.y"), 
+                        parameters.get< double >("pose_origin.translation.z"));
 
       prior_pose = gtsam::Pose3(gtsam::Rot3(q), gtsam::Point3(t));
 
@@ -159,8 +181,15 @@ public:
     tf2::fromMsg(msg->angular_velocity, gyr);
     tf2::fromMsg(msg->linear_acceleration, acc);
     
-    gyr *= -1;
-    acc *= -1;
+    // Eigen::Matrix3d R;
+    // R << 0, 1, 0,
+    //      1, 0, 0,
+    //      0, 0, 1;
+
+    // gyr = R * gyr;
+    // acc = R * acc;
+    // acc.x() *= -1;
+    // acc.y() *= -1;
 
     preintegrated_->integrateMeasurement(acc, gyr, dt_);
 
@@ -192,11 +221,8 @@ public:
     backend_->tryInsertValue(pose_key_to, pred_state_.pose());
     backend_->tryInsertValue(vel_key_to, pred_state_.velocity());
     backend_->tryInsertValue(bias_key_to, prev_bias_);
-    
-    // preintegrated_->print("PREINTEGRATION");
 
-    // backend_->getPoseAt(pose_key_to).print("POSE AT");
-    // pred_state_.pose().print("IMU PREDICT");
+    ROS_INFO_STREAM("IMU VELOCITY: \n" << pred_state_.velocity());
 
     gtsam::CombinedImuFactor imu_factor(pose_key_from, 
                                         vel_key_from,
@@ -208,11 +234,8 @@ public:
 
     backend_->addFactor(imu_factor);
 
-    // backend_->getPoseAt(pose_key_to).print("POSE AT");
-    // backend_->getPose().print("POSE MOST RECENT");
-
-    // ROS_INFO_STREAM("backend_->getVelocity(): " << backend_->getVelocity());
-    // ROS_INFO_STREAM("backend_->getValues().velocity: " << backend_->getValues().at<gtsam::Vector3>(vel_key_to));
+    // prev_state_ = gtsam::NavState(backend_->getPose(),
+    //                               pred_state_.velocity());
 
     // Update states
     gtsam::Vector3 velocity = backend_->getVelocity();
@@ -222,8 +245,22 @@ public:
     prev_state_ = gtsam::NavState(backend_->getPose(),
                                   velocity);
 
+
+    pose_prior_ = backend_->getPose();
+    gtsam::Pose3 pose_diff = pose_prior_.between(pred_state_.pose());
+
+    // ROS_INFO_STREAM("velocity: " << velocity);
+
+    // pose_prior_.print("POSE PRIOR");
+    // pred_state_.pose().print("POSE PREDICT");
+
+    pose_diff.print("IMU PREDICTED POSE DIFF");
+
+    // preintegrated_->print("PREINTEGRATION");
+
     // prev_state_ = gtsam::NavState(backend_->getValues().at<gtsam::Pose3>(pose_key_to),
     //                               backend_->getValues().at<gtsam::Vector3>(vel_key_to));
+
     prev_bias_ = backend_->getValues().at<gtsam::imuBias::ConstantBias>(bias_key_to);
 
     // ROS_INFO_STREAM("updated IMU");

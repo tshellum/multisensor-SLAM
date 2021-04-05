@@ -14,6 +14,9 @@
 #include <pcl/PCLPointCloud2.h>
 #include <pcl_conversions/pcl_conversions.h>
 
+#include <string>
+
+
 
 /***** INPUT *****/
 cv::Mat readGray(const sensor_msgs::ImageConstPtr img_msg)
@@ -105,24 +108,32 @@ vo::VO_msg generateMsg(ros::Time stamp,
 vo::VO_msg generateMsgInBody(ros::Time stamp, 
                              Eigen::Affine3d T_clcr,
                              std::vector<cv::Point3f> world_points,
-                             std::vector<int> world_point_indices)
+                             std::vector<int> world_point_indices,
+                             std::string frame = "")
 {
-  Eigen::Matrix4d T_bc;
-  T_bc << 0, 0, -1, 0,
-          1, 0, 0, 0,
-          0, 1, 0, 0,
-          0, 0, 0, 1;
+  Eigen::Matrix4d T_bc = Eigen::Matrix4d::Identity();
+  if (frame == "NED")
+  {
+    T_bc << 0, 0, 1, 0,
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 0, 1;
+  }
+  
+  if (frame == "ENU")
+  {  
+    T_bc <<  0,  0, 1, 0,
+            -1,  0, 0, 0,
+             0, -1, 0, 0,
+             0,  0, 0, 1;
+  }
   
   Eigen::Matrix4d T_cb = T_bc.transpose();
 
   vo::VO_msg vo_msg;
   vo_msg.header.frame_id = "vo";
   vo_msg.header.stamp = stamp;
-  // vo_msg.pose = tf2::toMsg( Eigen::Affine3d{T_bc * T_clcr * T_cb} );
-
-  Eigen::Affine3d T_r = Eigen::Affine3d{T_bc * T_clcr * T_cb};
-  T_r.translation() *= -1;
-  vo_msg.pose = tf2::toMsg( T_r );
+  vo_msg.pose = tf2::toMsg( Eigen::Affine3d{T_bc * T_clcr * T_cb} );
 
   vo_msg.cloud_size = world_points.size();
   for(int i = 0; i < world_points.size(); i++)
@@ -139,7 +150,6 @@ vo::VO_msg generateMsgInBody(ros::Time stamp,
     pt_id_msg.world_point = pt_msg;
     pt_id_msg.id = world_point_indices[i];
     vo_msg.cloud.push_back(pt_id_msg);
-
   }
 
   return vo_msg;

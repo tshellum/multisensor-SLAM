@@ -28,7 +28,7 @@ private:
   // Nodes
   ros::NodeHandle nh_;
   ros::Publisher  world_pose_pub_;
-  ros::Timer optimize_timer_; 
+  ros::Timer optimize_timer_;  // Spun node
   const int buffer_size_;
 
   // File
@@ -39,6 +39,7 @@ private:
   int num_opt_;
   gtsam::ISAM2 isam2_; 
   gtsam::ISAM2Params isam2_params_; 
+  gtsam::Values current_estimate_; 
 
   // Graph 
   bool updated_; 
@@ -90,20 +91,21 @@ public:
   gtsam::NonlinearFactorGraph& getGraph() { return new_factors_; }
   gtsam::Pose3 getPose()                  { return pose_; }
   gtsam::Pose3 getPoseAt(gtsam::Key key);
+  gtsam::Point3 getPointAt(gtsam::Key key);
   gtsam::Vector3 getVelocity()            { return velocity_; }
   gtsam::ISAM2& getiSAM2()                { return isam2_; }
   bool checkInitialized()                 { return initialized_; }
   bool checkNavStatus()                   { return nav_status_; }
   std::pair<bool, bool> checkIMUStatus()  { return imu_status_; }
 
-  int  incrementPoseID() { return ++pose_id_; }
-  void registerStampedPose(ros::Time stamp, int id) { stamped_pose_ids_[stamp] = id; }
-  void setInitialized(bool status) { initialized_ = status; }
-  void isUpdated() { updated_ = true; }
+  int  incrementPoseID()                                { return ++pose_id_; }
+  void registerStampedPose(ros::Time stamp, int id)     { stamped_pose_ids_[stamp] = id; }
+  void setInitialized(bool status)                      { initialized_ = status; }
+  void isUpdated()                                      { updated_ = true; }
   void updatedPreviousRelativeTimeStamp(ros::Time time) { time_prev_pose_relative_ = time; }
-  void updateNavStatus(bool status) { nav_status_ = status; }
-  void updateIMUOnlineStatus(bool status) { imu_status_.first = status; }
-  void updatePreintegrationStatus(bool status) { imu_status_.second = status; }
+  void updateNavStatus(bool status)                     { nav_status_ = status; }
+  void updateIMUOnlineStatus(bool status)               { imu_status_.first = status; }
+  void updatePreintegrationStatus(bool status)          { imu_status_.second = status; }
 
   geometry_msgs::PoseStamped generateMsg();
   void callback(const ros::TimerEvent& event);
@@ -121,6 +123,7 @@ public:
   template <typename FactorType>
   void addFactor(FactorType factor) { new_factors_.add(factor); }
 
+  void clearOldAssocations(double interval = 1.0);
 };
 
 
@@ -143,10 +146,10 @@ void Backend::callback(const ros::TimerEvent& event)
       isam2_.update(); 
     
     // Get updated values
-    gtsam::Values current_estimate = isam2_.calculateBestEstimate();
-    pose_ = current_estimate.at<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id_));          // Pose
-    if ( current_estimate.exists(gtsam::symbol_shorthand::V(pose_id_)) )
-      velocity_ = current_estimate.at<gtsam::Vector3>(gtsam::symbol_shorthand::V(pose_id_));  // Velocity
+    current_estimate_ = isam2_.calculateBestEstimate();
+    pose_ = current_estimate_.at<gtsam::Pose3>(gtsam::symbol_shorthand::X(pose_id_));          // Pose
+    if ( current_estimate_.exists(gtsam::symbol_shorthand::V(pose_id_)) )
+      velocity_ = current_estimate_.at<gtsam::Vector3>(gtsam::symbol_shorthand::V(pose_id_));  // Velocity
 
     // pose_.print("BACKEND OPTIMIZED");
     world_pose_pub_.publish(generateMsg());
@@ -155,7 +158,8 @@ void Backend::callback(const ros::TimerEvent& event)
     // Reset parameters
     new_factors_.resize(0);
     new_values_.clear();
-    stamped_pose_ids_.clear(); // Alternatively [begin, previous relative pose]
+    // stamped_pose_ids_.clear(); // Alternatively [begin, previous relative pose]
+    clearOldAssocations(); 
 
     ros::Time toc = ros::Time::now();
     ROS_INFO_STREAM("Time per iteration: " <<  (toc - tic) << "\n");
@@ -178,10 +182,23 @@ geometry_msgs::PoseStamped Backend::generateMsg()
 
 gtsam::Pose3 Backend::getPoseAt(gtsam::Key key)
 {
+  if (current_estimate_.exists(key))
+    return current_estimate_.at<gtsam::Pose3>(key);
   if (new_values_.exists(key))
     return new_values_.at<gtsam::Pose3>(key);
   else
     return pose_;
+}
+
+
+gtsam::Point3 Backend::getPointAt(gtsam::Key key)
+{
+  if (current_estimate_.exists(key))
+    return current_estimate_.at<gtsam::Point3>(key);
+  else if (new_values_.exists(key))
+    return new_values_.at<gtsam::Point3>(key);
+  else
+    return gtsam::Point3();
 }
 
 
@@ -192,7 +209,6 @@ bool Backend::valueExist(gtsam::Key key)
 
   return false;
 }
-
 
 
 template <typename Value>
@@ -233,7 +249,7 @@ std::pair<int, bool> Backend::searchAssociatedPose(ros::Time pose_stamp, ros::Ti
     if (pose_stamp < stamped_pose_id->first)
       break;
 
-    prev = stamped_pose_id++;;
+    prev = stamped_pose_id++;
   }
 
   double prev_diff = std::abs((pose_stamp - prev->first).toSec());
@@ -260,6 +276,24 @@ std::pair<int, bool> Backend::searchAssociatedPose(ros::Time pose_stamp, ros::Ti
   // Not associated pose --> Increase pose_id. 
   stamped_pose_ids_[pose_stamp] = ++pose_id_; 
   return std::make_pair(pose_id_, false);                   // New pose at end
+}
+
+
+void Backend::clearOldAssocations(double interval)
+{
+  if (stamped_pose_ids_.empty())
+    return;
+
+  std::map<ros::Time, int>::iterator stamped_pose_id = stamped_pose_ids_.begin();
+  ros::Time newest_stamp = stamped_pose_ids_.rbegin()->first;
+
+  while (stamped_pose_id != stamped_pose_ids_.end())
+  {
+    if (stamped_pose_id->first > (newest_stamp - ros::Duration(interval)) )
+      break;
+    
+    stamped_pose_id = stamped_pose_ids_.erase(stamped_pose_id);
+  }
 }
 
 

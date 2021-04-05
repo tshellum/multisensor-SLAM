@@ -695,14 +695,14 @@ main (int argc, char** argv)
 	std::string config_path = ros::package::getPath("lidar_odometry") + "/../../../config/" + dataset + "/backend/";
 	boost::property_tree::ptree parameters = readConfigFromJsonFile( config_path + "parameters.json" );
 
-  Eigen::Quaternionf q(parameters.get< float >("pose.orientation.w"), 
-                       parameters.get< float >("pose.orientation.x"), 
-                       parameters.get< float >("pose.orientation.y"), 
-                       parameters.get< float >("pose.orientation.z"));
+  Eigen::Quaternionf q(parameters.get< float >("pose_origin.orientation.w"), 
+                       parameters.get< float >("pose_origin.orientation.x"), 
+                       parameters.get< float >("pose_origin.orientation.y"), 
+                       parameters.get< float >("pose_origin.orientation.z"));
   
-  Eigen::Vector3f t(parameters.get< float >("pose.translation.x"), 
-                    parameters.get< float >("pose.translation.y"), 
-                    parameters.get< float >("pose.translation.z"));
+  Eigen::Vector3f t(parameters.get< float >("pose_origin.translation.x"), 
+                    parameters.get< float >("pose_origin.translation.y"), 
+                    parameters.get< float >("pose_origin.translation.z"));
 
   //Disse er hardkodet saa man begynner med samme lokasjon paa GPS og odometri
   since_last_transformation << 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1;

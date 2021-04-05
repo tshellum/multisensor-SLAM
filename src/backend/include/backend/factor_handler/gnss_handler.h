@@ -7,6 +7,7 @@
 #include <sensor_msgs/NavSatFix.h>
 #include "backend/NorthEastHeading.h"
 
+/*** Eigen packages ***/
 #include <Eigen/Dense>
 
 /*** GTSAM packages ***/
@@ -16,6 +17,9 @@
 #include <gtsam/geometry/Rot3.h> 
 #include <gtsam/geometry/Pose3.h> 
 #include <gtsam/inference/Symbol.h> 
+
+/*** Boost packages ***/
+#include <boost/property_tree/ptree.hpp>
 
 // Local 
 #include "backend/factor_handler/factor_handler.h"
@@ -34,7 +38,7 @@ namespace factor_handler
 class GNSSHandler : public FactorHandler<const tf2_msgs::TFMessage&> 
 {
 private:
-  const gtsam::noiseModel::Diagonal::shared_ptr noise_; 
+  gtsam::noiseModel::Diagonal::shared_ptr noise_; 
   int pose_id_;
 
 public:
@@ -42,18 +46,31 @@ public:
     ros::NodeHandle nh, 
     const std::string& topic, 
     uint32_t queue_size, 
-    std::shared_ptr<Backend> backend
-  ) : FactorHandler(nh, topic, queue_size, backend), 
-      noise_( 
-        gtsam::noiseModel::Diagonal::Sigmas( 
-          ( gtsam::Vector6() 
-            << gtsam::Vector3(0.1, 0.1, 0.1), 
-            gtsam::Vector3(0.15, 0.15, 0.1) 
-          ).finished() 
-        ) 
-      ), pose_id_(0)
+    std::shared_ptr<Backend> backend,
+    boost::property_tree::ptree parameters = boost::property_tree::ptree()
+  ) 
+  : FactorHandler(nh, topic, queue_size, backend)
+  , pose_id_(backend_->getPoseID())
   {
     backend->updateNavStatus(ONLINE);
+
+    if ( parameters != boost::property_tree::ptree() )
+    {
+      noise_ = gtsam::noiseModel::Diagonal::Sigmas(
+        ( gtsam::Vector(6) << gtsam::Vector3::Constant(parameters.get< double >("gnss.orientation_sigma")), 
+                              gtsam::Vector3::Constant(parameters.get< double >("gnss.position_sigma"))
+        ).finished()
+      );
+    }
+    else
+    {
+      noise_ = gtsam::noiseModel::Diagonal::Sigmas( 
+        ( gtsam::Vector(6) << gtsam::Vector3::Constant(0.1), 
+                              gtsam::Vector3::Constant(0.15)
+        ).finished()
+      );
+    }
+
   }
   ~GNSSHandler() = default; 
 
@@ -70,7 +87,7 @@ public:
     else
     {
       std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg.transforms[0].header.stamp);
-      pose_id_ = associated_id.first;       
+      pose_id_ = associated_id.first;      
     }
 
     ROS_INFO_STREAM("GNSS - id: " << pose_id_);

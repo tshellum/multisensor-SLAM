@@ -31,7 +31,7 @@ namespace factor_handler
 class LidarOdometryHandler : public FactorHandler<const geometry_msgs::PoseStamped> 
 {
 private:
-  const gtsam::noiseModel::Diagonal::shared_ptr noise_; 
+  gtsam::noiseModel::Diagonal::shared_ptr noise_; 
 
   int       from_id_;
   ros::Time from_time_;
@@ -47,25 +47,45 @@ public:
     boost::property_tree::ptree parameters = boost::property_tree::ptree()
   ) 
   : FactorHandler(nh, topic, queue_size, backend)
-  , noise_(  
-      gtsam::noiseModel::Diagonal::Sigmas( 
-        (gtsam::Vector(6) << 1.0, 1.0, 1.0, 1.0, 1.0, 1.0).finished()  // rad/deg?, rad/deg?, rad/deg?, m, m, m 
-      ) 
-    )
+  // , noise_(  
+  //     gtsam::noiseModel::Diagonal::Sigmas( 
+  //       (gtsam::Vector(6) << 1.0, 1.0, 1.0, 1.0, 1.0, 1.0).finished()  // rad/deg?, rad/deg?, rad/deg?, m, m, m 
+  //     ) 
+  //   )
   , from_id_(0)
   , from_time_(0.0)
   {
+    if ( parameters != boost::property_tree::ptree() )
+    {
+      noise_ = gtsam::noiseModel::Diagonal::Sigmas(
+        ( gtsam::Vector(6) << gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.orientation_sigma")), 
+                              gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.position_sigma"))
+        ).finished()
+      );
+    }
+    else
+    {
+      noise_ = gtsam::noiseModel::Diagonal::Sigmas( 
+        ( gtsam::Vector(6) << gtsam::Vector3::Constant(M_PI/18), 
+                              gtsam::Vector3::Constant(0.3)
+        ).finished()
+      );
+    }
+
+
     pose_initial_ = gtsam::Pose3::identity();
     if (parameters != boost::property_tree::ptree())
     {
-      Eigen::Quaterniond q(parameters.get< double >("pose.orientation.w"), 
-                           parameters.get< double >("pose.orientation.x"), 
-                           parameters.get< double >("pose.orientation.y"), 
-                           parameters.get< double >("pose.orientation.z"));
+      ROS_INFO("LIDAR INSERT");
+      Eigen::Quaterniond q(parameters.get< double >("pose_origin.orientation.w"), 
+                           parameters.get< double >("pose_origin.orientation.x"), 
+                           parameters.get< double >("pose_origin.orientation.y"), 
+                           parameters.get< double >("pose_origin.orientation.z"));
       
-      Eigen::Vector3d t(parameters.get< double >("pose.translation.x"), 
-                        parameters.get< double >("pose.translation.y"), 
-                        parameters.get< double >("pose.translation.z"));
+      Eigen::Vector3d t(parameters.get< double >("pose_origin.translation.x"), 
+                        parameters.get< double >("pose_origin.translation.y"), 
+                        parameters.get< double >("pose_origin.translation.z"));
+      ROS_INFO("LIDAR INSERTED");
 
       pose_initial_ = gtsam::Pose3(gtsam::Rot3(q), gtsam::Point3(t));
       

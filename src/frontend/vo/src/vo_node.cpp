@@ -73,18 +73,17 @@ class VO
     const boost::property_tree::ptree camera_config;
     const boost::property_tree::ptree detector_config;
 
-    double scale_;              // remove
-    double x_tf_, y_tf_, z_tf_; // remove
+    std::string frame_;
   public:
     VO() 
-    : scale_(0.0)                         // remove
-    , x_tf_(0.0), y_tf_(0.0), z_tf_(0.0)  // remove
-    , initialized_(false)
+    : initialized_(false)
     , stereo_(nh_, 10)
     , pose_predictor_(nh_, "imu_topic", 1000)
     , structure_BA_(stereo_.left().K_eig(), stereo_.right().K_eig(), stereo_.getInverseStereoTransformation(), 0.5)
     , motion_BA_(stereo_.left().K_eig(), stereo_.getStereoTransformation(), 0.1, M_PI/9, 1)
     {
+      nh_.getParam("/frame", frame_);
+
       // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
       sub_cam_left_.subscribe(nh_, "cam_left", 1);
       sub_cam_right_.subscribe(nh_, "cam_right", 1);
@@ -245,7 +244,8 @@ class VO
       vo_pub_.publish( generateMsgInBody(cam_left->header.stamp, 
                                          sequencer_.current.T_r,
                                          sequencer_.current.world_points,
-                                         sequencer_.current.indices) );
+                                         sequencer_.current.indices,
+                                         frame_) );
 
 
       sequencer_.updatePreviousFrame();

@@ -38,17 +38,18 @@ int main(int argc, char **argv)
 
 
 	// Global sensor subscribers (if used - shoule be placed first)
-	// backend::factor_handler::GNSSHandler gnss(
-	// 	nh, "gnss_topic", 1000, 
-	// 	backend
-	// );
-
-	// Local/relative sensor subscribers 
-	backend::factor_handler::IMUHandler imu(
-		nh, "imu_topic", 1000, 
+	backend::factor_handler::GNSSHandler gnss(
+		nh, "gnss_topic", 1000, 
 		backend,
 		parameters
 	);
+
+	// Local/relative sensor subscribers 
+	// backend::factor_handler::IMUHandler imu(
+	// 	nh, "imu_topic", 1000, 
+	// 	backend,
+	// 	parameters
+	// );
 
 	backend::factor_handler::VOHandler vo(
 		nh, "vo_topic", 1000, 

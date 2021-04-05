@@ -5,7 +5,7 @@
     <arg name = "cam_right_topic" default = "/kitti/camera_gray_right/image"/>
     <arg name = "imu_topic" default = "/kitti/oxts/imu"/>
 
-    <param name = "frame" type = "string" value = "ENU" />
+    <param name = "frame" type = "string" value = "NED" />
 
     <rosparam file = "$(find vo)/../../../config/kitti/camera.yaml" />
 
