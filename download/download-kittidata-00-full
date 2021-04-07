@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-# command -v sudo > /dev/null 2>&1 || function sudo { eval ${@@Q}; }
-set -euxo pipefail
-
-cd ~/Downloads/
-wget https://s3.eu-central-1.amazonaws.com/avg-kitti/raw_data/2011_10_03_drive_0027/2011_10_03_drive_0027_sync.zip
-wget https://s3.eu-central-1.amazonaws.com/avg-kitti/raw_data/2011_10_03_calib.zip
-unzip 2011_10_03_drive_0027_sync.zip -d ~/Videos/
-unzip 2011_10_03_calib.zip -d ~/Videos/

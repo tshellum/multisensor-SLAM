@@ -202,6 +202,8 @@ target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
   gtsam
+  ${PROJECT_SOURCE_DIR}/include/thirdparty/DBoW2/build/libDBoW2.so
+  # ${PROJECT_SOURCE_DIR}/include/thirdparty/JET/build/src/JET/libJET.so
   # ${CERES_LIBRARIES}
   # ${Sophus_LIBRARIES}
 )

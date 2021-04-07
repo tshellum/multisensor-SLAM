@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+command -v sudo > /dev/null 2>&1 || { apt update && apt install --no-install-recommends -y sudo; }
+
+## Uncomment for newest version
+# sudo apt install -y apt-transport-https ca-certificates gnupg software-properties-common wget
+# wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+# sudo apt-add-repository 'deb https://apt.kitware.com/ubuntu/ bionic main'
+
+# if [[ "${VERSION_ID}" == "20.04" ]]; then
+#     echo "deb http://security.ubuntu.com/ubuntu bionic-security main" | sudo tee -a /etc/apt/sources.list.d/bionic.list
+#     sudo apt update
+#     apt-cache policy libssl1.0-dev
+#     sudo apt-get install -y libssl1.0-dev 
+# fi
+
+sudo apt install -y cmake

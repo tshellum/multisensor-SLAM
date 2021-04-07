@@ -33,6 +33,8 @@
 #include "BA/gtsam/motion-only_BA.h"
 // #include "PYR/PYR.h"
 // #include "JET/jet.h"
+#include "vo/loop_detector.h"
+
 
 class VO
 {
@@ -60,23 +62,25 @@ class VO
     BA::MotionEstimator     motion_BA_;
     // PYR           pyr_;
     // JET jet;
+    LoopDetector            loop_detector_;
 
     // Parameters
     bool initialized_;
     ros::Time stamp_img_k_;
     int tic_, toc_;
 
-    std::vector<cv::KeyPoint> features_;
-    std::vector<cv::KeyPoint> tracked_features_;
-
     const std::string config_path_;
     const boost::property_tree::ptree camera_config;
     const boost::property_tree::ptree detector_config;
 
     std::string frame_;
+
+    Eigen::Affine3d T_kf_;
+
   public:
     VO() 
     : initialized_(false)
+    , T_kf_(Eigen::Affine3d::Identity())
     , stereo_(nh_, 10)
     , pose_predictor_(nh_, "imu_topic", 1000)
     , structure_BA_(stereo_.left().K_eig(), stereo_.right().K_eig(), stereo_.getInverseStereoTransformation(), 0.5)
@@ -94,14 +98,17 @@ class VO
 		  vo_pub_  = nh_.advertise<vo::VO_msg>("/frontend/vo", 1000);
 
       // Construct classes
-      const std::string config_path_ = ros::package::getPath("vo") + "/../../../config/kitti/";
+      const std::string config_path = ros::package::getPath("vo") + "/../../../config/kitti/";
 
-      detector_ = Detector( readConfigFromJsonFile( config_path_ + "feature_management.json" ),
-                            readConfigFromJsonFile( config_path_ + "camera.json" ) );
-      matcher_  = Matcher( readConfigFromJsonFile( config_path_ + "feature_management.json" ) );
+      detector_ = Detector( readConfigFromJsonFile( config_path + "feature_management.json" ),
+                            readConfigFromJsonFile( config_path + "camera.json" ) );
+      matcher_  = Matcher( readConfigFromJsonFile( config_path + "feature_management.json" ) );
       // pyr_ = PYR( readConfigFromJsonFile( config_path_ + "PYR.json" ), stereo_.left().K_cv() );
       // jet_ = JET( readConfigFromJsonFile( config_path_ + "JET.json" ) );
 
+      const std::string vocabulary_path = ros::package::getPath("vo") + "/../../../vocabulary/";
+      // loop_detector_ = LoopDetector(vocabulary_path + "ORBvoc.txt");
+      loop_detector_ = LoopDetector(vocabulary_path + "ORBvoc.bin");
     }
 
     ~VO() {}
@@ -164,6 +171,8 @@ class VO
       
       ROS_INFO_STREAM("detected - kpts_l.size(): " << sequencer_.current.kpts_l.size());
 
+      sequencer_.current.descriptor_l = detector_.computeDescriptor(sequencer_.current.img_l, 
+                                                                    sequencer_.current.kpts_l);
 
       std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> stereo_features = matcher_.circularMatching(sequencer_.current.img_l,
                                                                                                                   sequencer_.current.img_r,
@@ -239,6 +248,16 @@ class VO
         sequencer_.current.scale = scale_cur;
       }
 
+
+      T_kf_ *= sequencer_.current.T_r.matrix();
+      if (isKeyframe(T_kf_))
+      {
+        ROS_INFO("!!!!!!!!!Keyframe!!!!!!!!!");
+        // loop_detector_.searchLoopCandidate(sequencer_.current.descriptor_l);
+        loop_detector_.addDescriptor(sequencer_.current.descriptor_l);
+        // TODO: Add descriptor and check for loop closure
+      }
+
       ROS_INFO_STREAM("VO - calculated pose: \n" << sequencer_.current.T_r.matrix());
 
       vo_pub_.publish( generateMsgInBody(cam_left->header.stamp, 
@@ -254,6 +273,26 @@ class VO
 
       toc_ = cv::getTickCount();
       ROS_INFO_STREAM("Time per iteration: " <<  (toc_ - tic_)/ cv::getTickFrequency() << "\n");
+    }
+
+    // -----------------------------------------------------------------------------------------
+
+    bool isKeyframe(Eigen::Affine3d& T_kf, double scale_thresh = 3, double rot_thresh = M_PI/6)
+    {
+      double scale = T_kf.translation().norm();
+      Eigen::Vector3d euler = T_kf.linear().eulerAngles(0,1,2);
+
+      // Keyframe criteria      
+      if ( (scale > scale_thresh) 
+        || (std::abs(euler.x()) > rot_thresh)  
+        || (std::abs(euler.y()) > rot_thresh)  
+        || (std::abs(euler.z()) > rot_thresh) )
+      {
+        T_kf = Eigen::Affine3d::Identity();
+        return true;
+      }
+
+      return false;
     }
 
 };

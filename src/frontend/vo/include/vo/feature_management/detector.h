@@ -140,6 +140,9 @@ public:
   void bucketedFeatureDetection(cv::Mat image, 
                                 std::vector<cv::KeyPoint>& features);
   
+  cv::Mat computeDescriptor(cv::Mat image,
+                            std::vector<cv::KeyPoint> features);
+
 };
 
 
@@ -208,4 +211,13 @@ void Detector::bucketedFeatureDetection(cv::Mat image, std::vector<cv::KeyPoint>
       it_bucket++;
     }
   }
+}
+
+
+cv::Mat Detector::computeDescriptor(cv::Mat image,
+                                    std::vector<cv::KeyPoint> features)
+{
+  cv::Mat descriptor;
+  descriptor_->compute(image, features, descriptor); 
+  return descriptor;
 }
