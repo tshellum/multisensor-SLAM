@@ -5,9 +5,6 @@
 [submodule "src/evaluation/catkin_simple"]
 	path = src/evaluation/catkin_simple
 	url = https://github.com/catkin/catkin_simple.git
-[submodule "src/frontend/vo/include/thirdparty/DBoW2"]
-	path = src/frontend/vo/include/thirdparty/DBoW2
-	url = https://github.com/tshellum/DBoW2.git
 [submodule "src/frontend/vo/include/thirdparty/DLoopDetector"]
 	path = src/frontend/vo/include/thirdparty/DLoopDetector
-	url = https://github.com/dorian3d/DLoopDetector.git
+	url = https://github.com/tshellum/DLoopDetector.git
