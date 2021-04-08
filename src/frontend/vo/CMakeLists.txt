@@ -168,6 +168,10 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   gtsam
+  ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/src/DBoW2/include/DBoW2/
+  ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/src/DLib/include/DUtils/
+  ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/src/DLib/include/DUtilsCV/
+  ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/src/DLib/include/DVision/
   # ${CERES_INCLUDE_DIRS}
   # ${Sophus_INCLUDE_DIRS}
 )
@@ -202,7 +206,8 @@ target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
   gtsam
-  ${PROJECT_SOURCE_DIR}/include/thirdparty/DBoW2/build/libDBoW2.so
+  ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/install/lib/libDBoW2.so
+  ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/install/lib/libDLib.so
   # ${PROJECT_SOURCE_DIR}/include/thirdparty/JET/build/src/JET/libJET.so
   # ${CERES_LIBRARIES}
   # ${Sophus_LIBRARIES}

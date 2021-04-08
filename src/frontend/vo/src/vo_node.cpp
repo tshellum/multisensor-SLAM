@@ -108,7 +108,11 @@ class VO
 
       const std::string vocabulary_path = ros::package::getPath("vo") + "/../../../vocabulary/";
       // loop_detector_ = LoopDetector(vocabulary_path + "ORBvoc.txt");
-      loop_detector_ = LoopDetector(vocabulary_path + "ORBvoc.bin");
+      loop_detector_ = LoopDetector(vocabulary_path + "ORBvoc.bin",
+                                    stereo_.left().getWidth(),
+                                    stereo_.left().getHeight());
+
+      ROS_INFO("Visual odometry constructed...");
     }
 
     ~VO() {}
