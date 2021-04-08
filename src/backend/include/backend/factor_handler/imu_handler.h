@@ -99,19 +99,19 @@ public:
     else
       params = boost::make_shared<gtsam::PreintegratedCombinedMeasurements::Params>(gtsam::Vector3(0.0, 0.0, 9.81));
     
-    // params->accelerometerCovariance = gtsam::I_3x3 * 0.004;  // acc white noise in continuous
-    // params->integrationCovariance   = gtsam::I_3x3 * 0.002;  // integration uncertainty continuous
-    // params->gyroscopeCovariance     = gtsam::I_3x3 * 0.001;  // gyro white noise in continuous
-    // params->biasAccCovariance       = gtsam::I_3x3 * 0.004;  // acc bias in continuous
-    // params->biasOmegaCovariance     = gtsam::I_3x3 * 0.001;  // gyro bias in continuous
-    // params->biasAccOmegaInt         = gtsam::Matrix::Identity(6, 6) * 1e-4;
-
-    params->accelerometerCovariance = gtsam::I_3x3 * pow(parameters.get< double >("imu.accelerometer_sigma"), 2);       // acc white noise in continuous
-    params->gyroscopeCovariance     = gtsam::I_3x3 * pow(parameters.get< double >("imu.gyroscope_sigma"), 2);           // gyro white noise in continuous
-    params->integrationCovariance   = gtsam::I_3x3 * pow(parameters.get< double >("imu.integration_sigma"), 2);         // integration uncertainty continuous
-    params->biasAccCovariance       = gtsam::I_3x3 * pow(parameters.get< double >("imu.accelerometer_bias_sigma"), 2);  // acc bias in continuous
-    params->biasOmegaCovariance     = gtsam::I_3x3 * pow(parameters.get< double >("imu.gyroscope_bias_sigma"), 2);      // gyro bias in continuous
+    params->accelerometerCovariance = gtsam::I_3x3 * 0.004;  // acc white noise in continuous
+    params->integrationCovariance   = gtsam::I_3x3 * 0.002;  // integration uncertainty continuous
+    params->gyroscopeCovariance     = gtsam::I_3x3 * 0.001;  // gyro white noise in continuous
+    params->biasAccCovariance       = gtsam::I_3x3 * 0.004;  // acc bias in continuous
+    params->biasOmegaCovariance     = gtsam::I_3x3 * 0.001;  // gyro bias in continuous
     params->biasAccOmegaInt         = gtsam::Matrix::Identity(6, 6) * 1e-4;
+
+    // params->accelerometerCovariance = gtsam::I_3x3 * pow(parameters.get< double >("imu.accelerometer_sigma"), 2);       // acc white noise in continuous
+    // params->gyroscopeCovariance     = gtsam::I_3x3 * pow(parameters.get< double >("imu.gyroscope_sigma"), 2);           // gyro white noise in continuous
+    // params->integrationCovariance   = gtsam::I_3x3 * pow(parameters.get< double >("imu.integration_sigma"), 2);         // integration uncertainty continuous
+    // params->biasAccCovariance       = gtsam::I_3x3 * pow(parameters.get< double >("imu.accelerometer_bias_sigma"), 2);  // acc bias in continuous
+    // params->biasOmegaCovariance     = gtsam::I_3x3 * pow(parameters.get< double >("imu.gyroscope_bias_sigma"), 2);      // gyro bias in continuous
+    // params->biasAccOmegaInt         = gtsam::Matrix::Identity(6, 6) * 1e-4;
 
 
     gtsam::Vector3 acc_bias(0.2, -0.2, -0.04);  
@@ -158,11 +158,11 @@ public:
     // ROS_INFO_STREAM("IMU measurement STAMP: " << msg->header.stamp);
 
     // Wait to begin preintegration until graph is initialized by another module 
-    if (backend_->checkInitialized() == false)
+    if (! backend_->checkInitialized() )
       return;
 
     // Initialize by inserting initial priors to the graph
-    if (backend_->checkInitialized() == true && (initialized_ == false) ) 
+    if (backend_->checkInitialized() && (! initialized_) ) 
     {
       from_id_ = backend_->getPoseID();
       ROS_INFO_STREAM("IMU - from_id: " << from_id_);

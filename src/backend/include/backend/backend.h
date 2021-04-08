@@ -204,10 +204,7 @@ gtsam::Point3 Backend::getPointAt(gtsam::Key key)
 
 bool Backend::valueExist(gtsam::Key key)
 {
-  if ( isam2_.valueExists(key) || new_values_.exists(key) )
-    return true;
-
-  return false;
+  return ( isam2_.valueExists(key) || new_values_.exists(key) );
 }
 
 
