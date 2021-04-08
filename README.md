@@ -2,16 +2,14 @@
 
 ## Software installation
 
-Software dependencies and installation procedure are specified in the "Setup"-folder.
+Software dependencies and installation procedure are specified in the "setup/installation"-folder.
 
 ## Download KITTI odometry data
 
 Download either only the 00 sequence of the kitti dataset, or the entire odometry dataset with all sequences.
 ```bash
-$ cd download
+$ cd setup/download
 $ ./download-kittidata-00-full
-or
-$ ./download-kittidata-odometry
 ```
 
 
@@ -22,13 +20,6 @@ $ cd ~/Videos
 $ kitti2bag -t 2011_10_03 -r 0027 raw_sync .
 ```
 
-or 
-
-```bash
-$ cd ~/Videos/dataset
-$ sudo kitti2bag odom -s 00
-```
-
 
 ## Setup
 
@@ -36,19 +27,37 @@ $ sudo kitti2bag odom -s 00
 $ git clone https://github.com/tshellum/multisensor-SLAM.git
 $ cd multisensor-SLAM
 $ git submodule update --init --recursive
+$ cd setup/build
+$ ./build_DLoopDetector
 ```
 
 
 ## Usage
 
-Modify the config files to fit the dataset that is to be used.
+Modify the config files to fit the dataset that is to be used. Then run:
 
 ```bash
 $ roscore
 $ catkin build
-$ roslaunch stereo_frontend kitti.launch
+$ roslaunch vo kitti.launch
 $ roslaunch backend kitti.launch
+```
+
+To visualize the generated point cloud and the motion of the vessel, type:
+
+```bash
 $ roslaunch cloud_viewer viz.launch
+```
+
+To save the motion of the vessel onto a txt file, type:
+
+```bash
+$ roslaunch motion2file eval.launch
+```
+
+Then play the rosbag
+
+```bash
 $ rosbag play /path/to/rosbag
 ```
 
