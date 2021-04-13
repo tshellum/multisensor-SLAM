@@ -84,7 +84,10 @@ class VO
     , stereo_(nh_, 10)
     , pose_predictor_(nh_, "imu_topic", 1000)
     , structure_BA_(stereo_.left().K_eig(), stereo_.right().K_eig(), stereo_.getInverseStereoTransformation(), 0.5)
-    , motion_BA_(stereo_.left().K_eig(), stereo_.getStereoTransformation(), 0.1, M_PI/9, 1)
+    , motion_BA_(stereo_.left().K_eig(), stereo_.getStereoTransformation(), 0.1, M_PI/9, 3)
+    , loop_detector_(ros::package::getPath("vo") + "/../../../vocabulary/ORBvoc.bin",
+                     stereo_.left().getWidth(),
+                     stereo_.left().getHeight())
     {
       nh_.getParam("/frame", frame_);
 
@@ -102,17 +105,18 @@ class VO
 
       detector_ = Detector( readConfigFromJsonFile( config_path + "feature_management.json" ),
                             readConfigFromJsonFile( config_path + "camera.json" ) );
-      matcher_  = Matcher( readConfigFromJsonFile( config_path + "feature_management.json" ) );
+      matcher_  = Matcher( readConfigFromJsonFile( config_path + "feature_management.json" ),
+                           detector_.getDefaultNorm() );
       // pyr_ = PYR( readConfigFromJsonFile( config_path_ + "PYR.json" ), stereo_.left().K_cv() );
       // jet_ = JET( readConfigFromJsonFile( config_path_ + "JET.json" ) );
 
       const std::string vocabulary_path = ros::package::getPath("vo") + "/../../../vocabulary/";
       // loop_detector_ = LoopDetector(vocabulary_path + "ORBvoc.txt");
-      loop_detector_ = LoopDetector(vocabulary_path + "ORBvoc.bin",
-                                    stereo_.left().getWidth(),
-                                    stereo_.left().getHeight());
+      // loop_detector_ = LoopDetector(vocabulary_path + "ORBvoc.bin",
+      //                               stereo_.left().getWidth(),
+      //                               stereo_.left().getHeight());
 
-      ROS_INFO("Visual odometry constructed...");
+      ROS_INFO("Visual odometry constructed...\n");
     }
 
     ~VO() {}
@@ -120,7 +124,7 @@ class VO
 
     void callback(const sensor_msgs::ImageConstPtr &cam_left, const sensor_msgs::ImageConstPtr &cam_right)
     {
-      ROS_INFO("-------------------------------------------------------");
+      // ROS_INFO("-------------------------------------------------------");
 
       tic_ = cv::getTickCount();
       
@@ -147,16 +151,13 @@ class VO
                                                             stereo_.left().K_eig(),
                                                             sequencer_.previous.kpts_l);
 
-      ROS_INFO_STREAM("projected - previous.kpts_l: " << sequencer_.previous.kpts_l.size() << " - current.kpts_l: " << sequencer_.current.kpts_l.size());
+      // ROS_INFO_STREAM("projected - previous.kpts_l: " << sequencer_.previous.kpts_l.size() << " - current.kpts_l: " << sequencer_.current.kpts_l.size());
 
 
       matcher_.track(sequencer_.previous.img_l, 
                      sequencer_.current.img_l, 
                      sequencer_.previous.kpts_l,
                      sequencer_.current.kpts_l);
-
-      ROS_INFO_STREAM("tracked - previous.kpts_l: " << sequencer_.previous.kpts_l.size() << " - current.kpts_l: " << sequencer_.current.kpts_l.size());
-
 
       sequencer_.current.T_r = pose_predictor_.estimatePoseFromFeatures(sequencer_.previous.kpts_l, 
                                                                         sequencer_.current.kpts_l, 
@@ -173,10 +174,9 @@ class VO
       detector_.bucketedFeatureDetection(sequencer_.current.img_l, 
                                          sequencer_.current.kpts_l);
       
-      ROS_INFO_STREAM("detected - kpts_l.size(): " << sequencer_.current.kpts_l.size());
+      std::vector<cv::KeyPoint> kpts_loop_candidate = sequencer_.current.kpts_l;
 
-      sequencer_.current.descriptor_l = detector_.computeDescriptor(sequencer_.current.img_l, 
-                                                                    sequencer_.current.kpts_l);
+      // ROS_INFO_STREAM("detected - kpts_l.size(): " << sequencer_.current.kpts_l.size());
 
       std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> stereo_features = matcher_.circularMatching(sequencer_.current.img_l,
                                                                                                                   sequencer_.current.img_r,
@@ -187,7 +187,7 @@ class VO
 
       sequencer_.storeFeatures(stereo_features.first, stereo_features.second);
 
-      ROS_INFO_STREAM("matched - match_left.size(): " << stereo_features.first.size() << ", match_right.size(): " << stereo_features.second.size());
+      // ROS_INFO_STREAM("matched - match_left.size(): " << stereo_features.first.size() << ", match_right.size(): " << stereo_features.second.size());
 
 
       std::pair<std::vector<cv::Point3f>, std::vector<int>> wrld_pts = matcher_.triangulate(sequencer_.current.kpts_l, 
@@ -254,15 +254,55 @@ class VO
 
 
       T_kf_ *= sequencer_.current.T_r.matrix();
-      if (isKeyframe(T_kf_))
+      if ( isKeyframe(T_kf_, 2, M_PI/2) )
       {
-        ROS_INFO("!!!!!!!!!Keyframe!!!!!!!!!");
-        // loop_detector_.searchLoopCandidate(sequencer_.current.descriptor_l);
-        loop_detector_.addDescriptor(sequencer_.current.descriptor_l);
-        // TODO: Add descriptor and check for loop closure
+        // Check for loop closure
+        cv::Mat desc_loop_candidate = detector_.computeDescriptor(sequencer_.current.img_l, 
+                                                                  kpts_loop_candidate);
+
+        LoopResult loop_result = loop_detector_.searchLoopCandidate(kpts_loop_candidate, 
+                                                                    desc_loop_candidate);
+
+        // If loop - compute transformation
+        if (loop_result.found)
+        {
+          std::vector<cv::KeyPoint> cur_kpts_matched, loop_kpts_matched;
+          std::vector<cv::Point3f> landmarks_matched;
+          matcher_.extractDescriptorMatches(desc_loop_candidate, 
+                                            loop_result.descriptors, 
+                                            kpts_loop_candidate, 
+                                            loop_result.keypoints,
+                                            sequencer_.current.world_points,
+                                            cur_kpts_matched,
+                                            loop_kpts_matched,
+                                            landmarks_matched);
+
+          Eigen::Affine3d T_loop_correspondence = pose_predictor_.estimatePoseFromFeatures(cur_kpts_matched,
+                                                                                           loop_kpts_matched, 
+                                                                                           landmarks_matched,
+                                                                                           stereo_.left().K_cv());
+
+          ROS_INFO_STREAM("Loop detected - Predicted relative: \n" << T_loop_correspondence.matrix());
+
+          std::vector<cv::Point2f> loop_pts_matched;
+          cv::KeyPoint::convert(loop_kpts_matched, loop_pts_matched);
+
+          ROS_INFO_STREAM("Loop detected - loop_pts_matched.size(): " << loop_pts_matched.size() << " - landmarks_matched.size(): " << landmarks_matched.size());
+          T_loop_correspondence = motion_BA_.estimate(T_loop_correspondence,
+                                                      landmarks_matched,
+                                                      loop_pts_matched);
+
+          ROS_INFO_STREAM("Loop closure - T: \n" << T_loop_correspondence.matrix());
+        }
+
+        // printSummary(T_kf_,
+        //              sequencer_.current.world_points.size(),
+        //              loop_result.found);
+
+        T_kf_ = Eigen::Affine3d::Identity();
       }
 
-      ROS_INFO_STREAM("VO - calculated pose: \n" << sequencer_.current.T_r.matrix());
+      // ROS_INFO_STREAM("VO - calculated pose: \n" << sequencer_.current.T_r.matrix());
 
       vo_pub_.publish( generateMsgInBody(cam_left->header.stamp, 
                                          sequencer_.current.T_r,
@@ -276,15 +316,24 @@ class VO
       stamp_img_k_ = cam_left->header.stamp;
 
       toc_ = cv::getTickCount();
-      ROS_INFO_STREAM("Time per iteration: " <<  (toc_ - tic_)/ cv::getTickFrequency() << "\n");
+      // ROS_INFO_STREAM("Time per iteration: " <<  (toc_ - tic_)/ cv::getTickFrequency() << "\n");
     }
 
     // -----------------------------------------------------------------------------------------
 
-    bool isKeyframe(Eigen::Affine3d& T_kf, double scale_thresh = 3, double rot_thresh = M_PI/6)
+    bool isKeyframe(Eigen::Affine3d& T_kf, double scale_thresh = 3, double rot_thresh = M_PI/9)
     {
       double scale = T_kf.translation().norm();
-      Eigen::Vector3d euler = T_kf.linear().eulerAngles(0,1,2);
+      Eigen::Vector3d euler = T_kf.linear().eulerAngles(0,1,2).cwiseAbs();
+
+      if ( euler.x() > M_PI / 2 )
+        euler.x() -= M_PI;
+
+      if ( euler.y() > M_PI / 2 )
+        euler.y() -= M_PI;
+
+      if ( euler.z() > M_PI / 2 )
+        euler.z() -= M_PI;
 
       // Keyframe criteria      
       if ( (scale > scale_thresh) 
@@ -292,7 +341,7 @@ class VO
         || (std::abs(euler.y()) > rot_thresh)  
         || (std::abs(euler.z()) > rot_thresh) )
       {
-        T_kf = Eigen::Affine3d::Identity();
+        // T_kf = Eigen::Affine3d::Identity();
         return true;
       }
 

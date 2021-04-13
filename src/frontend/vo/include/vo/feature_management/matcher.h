@@ -25,15 +25,19 @@ private:
   double match_err_;  // Circular match error threshold
   double reproj_err_; // Reprojection error threshold
 
+	cv::BFMatcher desc_matcher_; // for loop closure descriptor matching
+
 public:
   Matcher() 
   : match_err_(0.5), reproj_err_(0.5)
   {}
 
-  Matcher(boost::property_tree::ptree config)
+  Matcher(boost::property_tree::ptree config, int descriptor_norm = cv::NORM_HAMMING)
   {
     match_err_  = config.get< double >("matcher.match_error");
-    reproj_err_ = config.get< double >("matcher.reprojection_error");;
+    reproj_err_ = config.get< double >("matcher.reprojection_error");
+
+    desc_matcher_ = cv::BFMatcher(descriptor_norm);
   }
 
   ~Matcher() {}
@@ -50,6 +54,16 @@ public:
                                                                                    cv::Mat right_prev_img, 
                                                                                    std::vector<cv::KeyPoint> features_left_cur, 
                                                                                    std::vector<cv::KeyPoint> features_right_cur);
+
+  void extractDescriptorMatches(cv::Mat cur_desc, 
+                                cv::Mat loop_desc, 
+                                std::vector<cv::KeyPoint> cur_kpts, 
+                                std::vector<cv::KeyPoint> loop_kpts,
+                                std::vector<cv::Point3f> cur_landmarks,
+                                std::vector<cv::KeyPoint>& cur_pts_matched,
+                                std::vector<cv::KeyPoint>& loop_pts_matched,
+                                std::vector<cv::Point3f>& cur_landmarks_matched);
+
 
   cv::Mat DLT(cv::Point2f pt_l, 
                   cv::Point2f pt_r,
@@ -205,11 +219,45 @@ std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> Matcher::circula
 
 
 
+void Matcher::extractDescriptorMatches(cv::Mat cur_desc, 
+                                       cv::Mat loop_desc, 
+                                       std::vector<cv::KeyPoint> cur_kpts, 
+                                       std::vector<cv::KeyPoint> loop_kpts,
+                                       std::vector<cv::Point3f> cur_landmarks,
+                                       std::vector<cv::KeyPoint>& cur_pts_matched,
+                                       std::vector<cv::KeyPoint>& loop_pts_matched,
+                                       std::vector<cv::Point3f>& cur_landmarks_matched)
+{
+  // ROS_INFO_STREAM("extractDescriptorMatches() - cur_desc.type(): " << cur_desc.type());
+  // ROS_INFO_STREAM("extractDescriptorMatches() - loop_desc.type(): " << loop_desc.type());
+  // ROS_INFO_STREAM("extractDescriptorMatches() - cur_desc.size(): " << cur_desc.type());
+  // ROS_INFO_STREAM("extractDescriptorMatches() - loop_desc.size(): " << loop_desc.type());
+
+  std::vector<std::vector<cv::DMatch>> matches;
+  desc_matcher_.knnMatch(cur_desc, loop_desc, matches, 2);
+  
+  // Only keep matched points 
+  for (const std::vector<cv::DMatch> match : matches)
+  {
+    if (match[0].distance < match[1].distance * 0.8)
+    {
+      int cur_id = match[0].queryIdx;
+      int loop_id = match[0].trainIdx;
+      
+      cur_pts_matched.push_back(cur_kpts[cur_id]);
+      loop_pts_matched.push_back(loop_kpts[loop_id]);
+      cur_landmarks_matched.push_back(cur_landmarks[cur_id]);
+    }
+  }
+}
+
+
+
 // https://github.com/UZ-SLAMLab/ORB_SLAM3/blob/master/src/CameraModels/KannalaBrandt8.cpp
 cv::Mat Matcher::DLT(cv::Point2f pt_l, 
-                            cv::Point2f pt_r,
-                            cv::Mat P_l,
-                            cv::Mat P_r)
+                     cv::Point2f pt_r,
+                     cv::Mat P_l,
+                     cv::Mat P_r)
 {
   /*********************************************************************
   Compute the 3D position of a single point from 2D correspondences.
@@ -299,7 +347,7 @@ std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::
     indices.push_back(match_left[pt_it].class_id);
     
   }
-  ROS_INFO_STREAM("triangulation() - Correct: " << wrld_pts.size() << ", Erronous: " << n_err);
+  // ROS_INFO_STREAM("triangulation() - Correct: " << wrld_pts.size() << ", Erronous: " << n_err);
 
 
   return std::make_pair(wrld_pts, indices);;

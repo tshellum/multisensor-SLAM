@@ -16,6 +16,7 @@
 #include <pcl/point_types.h>
 
 
+#include <DBoW2/DBoW2.h>
 
 
 class Detector
@@ -119,7 +120,7 @@ public:
 
     // Descriptor                          
     if (descriptor_type == "ORB")
-      descriptor_ = cv::ORB::create(max_features_);
+      descriptor_ = cv::ORB::create(200);
     else 
       descriptor_ = cv::ORB::create();
   
@@ -133,16 +134,18 @@ public:
     n_buckets_ = grid_size_*grid_size_;
   };
 
-
-
   ~Detector() {}
+
+
+  int getDefaultNorm() {return descriptor_->defaultNorm();};
 
   void bucketedFeatureDetection(cv::Mat image, 
                                 std::vector<cv::KeyPoint>& features);
   
   cv::Mat computeDescriptor(cv::Mat image,
-                            std::vector<cv::KeyPoint> features);
+                            std::vector<cv::KeyPoint>& features);
 
+  std::pair< std::vector<cv::KeyPoint>, cv::Mat > detectCompute(cv::Mat image);
 };
 
 
@@ -215,9 +218,20 @@ void Detector::bucketedFeatureDetection(cv::Mat image, std::vector<cv::KeyPoint>
 
 
 cv::Mat Detector::computeDescriptor(cv::Mat image,
-                                    std::vector<cv::KeyPoint> features)
+                                    std::vector<cv::KeyPoint>& features)
 {
   cv::Mat descriptor;
   descriptor_->compute(image, features, descriptor); 
   return descriptor;
+}
+
+
+std::pair< std::vector<cv::KeyPoint>, cv::Mat > Detector::detectCompute(cv::Mat image)
+{
+  std::vector<cv::KeyPoint> kpts;
+  cv::Mat desc;
+  
+  descriptor_->detectAndCompute(image, cv::Mat(), kpts, desc); 
+
+  return std::make_pair(kpts, desc);
 }

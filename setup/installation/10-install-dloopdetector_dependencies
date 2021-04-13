@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+
+command -v sudo > /dev/null 2>&1 || { apt update && apt install --no-install-recommends -y sudo; }
+
+# cd ${SOFTWARE_DIR}
+cd ~/software
+
+
+# Install DBoW2
+if [ ! -d "DBoW2" ] 
+then
+  git clone https://github.com/tshellum/DBoW2.git
+fi
+
+cd DBoW2
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j
+make install
+cd ~/software
+
+
+# Install DLib
+if [ ! -d "DLib" ] 
+then
+  git clone https://github.com/dorian3d/DLib.git
+fi
+
+cd DLib
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j
+make install
+cd ~/software
+
+
+# sudo rm -r DLib
+# sudo rm -r DBoW2

@@ -59,6 +59,9 @@ endif()
 
 find_package(Eigen3 3.3 REQUIRED)
 find_package(GTSAM REQUIRED)
+find_package(DBoW2)
+find_package(DLib)
+
 # find_package(Ceres REQUIRED)
 
 # find_package(Sophus REQUIRED)
@@ -168,10 +171,18 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   gtsam
-  ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/src/DBoW2/include/DBoW2/
-  ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/src/DLib/include/DUtils/
-  ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/src/DLib/include/DUtilsCV/
-  ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/src/DLib/include/DVision/
+  ${DBoW2_INCLUDE_DIRS}
+  ${DLib_INCLUDE_DIRS}
+
+  # ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/
+  # ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/src/DBoW2/include/DBoW2/
+  # ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/src/DLib/include/DUtils/
+  # ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/src/DLib/include/DUtilsCV/
+  # ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/src/DLib/include/DVision/
+
+  # ${PROJECT_SOURCE_DIR}/include/thirdparty/DBoW2/include/DBoW2/
+  # ${PROJECT_SOURCE_DIR}/include/thirdparty/DLib/include/
+
   # ${CERES_INCLUDE_DIRS}
   # ${Sophus_INCLUDE_DIRS}
 )
@@ -206,8 +217,12 @@ target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
   gtsam
-  ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/install/lib/libDBoW2.so
-  ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/install/lib/libDLib.so
+  ${DBoW2_LIBRARIES}
+  ${DLib_LIBRARIES}
+  # ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/install/lib/libDBoW2.so
+  # ${PROJECT_SOURCE_DIR}/include/thirdparty/DLoopDetector/build/dependencies/install/lib/libDLib.so
+  # ${PROJECT_SOURCE_DIR}/include/thirdparty/DBoW2/build/libDBoW2.so
+  # ${PROJECT_SOURCE_DIR}/include/thirdparty/DLib/build/libDLib.so
   # ${PROJECT_SOURCE_DIR}/include/thirdparty/JET/build/src/JET/libJET.so
   # ${CERES_LIBRARIES}
   # ${Sophus_LIBRARIES}

@@ -8,6 +8,9 @@
 
 #include <opencv2/opencv.hpp>
 
+#include <Eigen/Geometry> 
+
+
 #include <sys/stat.h> 
 
 
@@ -177,3 +180,16 @@ void saveImgWithKps(cv::Mat image1, cv::Mat image2, std::vector<cv::KeyPoint> kp
 
 }
 
+
+void printSummary(Eigen::Affine3d T_clcr,
+                  int num_landmarks,
+                  bool loop_detection)
+{
+  Eigen::Vector3d euler = T_clcr.linear().eulerAngles(0, 1, 2);
+  ROS_INFO_STREAM("Keyframe summary (in image frame) : "
+    << "\n\t - Number of landmarks : " << num_landmarks
+    << "\n\t - Rotation : " << "[" << euler.x() << ", " << euler.y() << ", " << euler.z() << "]"
+    << "\n\t - Translation : " << "[" << T_clcr.translation().x() << ", " << T_clcr.translation().y() << ", " << T_clcr.translation().z() << "]"
+    << "\n\t - Loop detection? : " << loop_detection
+    << "\n");
+}
