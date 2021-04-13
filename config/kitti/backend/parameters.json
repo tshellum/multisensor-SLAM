@@ -15,7 +15,7 @@
 
 	"imu" : {
 		"frame"  : "ENU",
-		"dt_avg" : 0.0100395199348279,
+		"dt_avg" : 0.1,
 		"accelerometer_sigma" 	   : 0.01,
 		"gyroscope_sigma" 		   : 0.000175,
 		"integration_sigma" 	   : 0,

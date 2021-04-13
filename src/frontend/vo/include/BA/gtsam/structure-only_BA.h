@@ -165,7 +165,7 @@ std::vector<cv::Point3f> StructureEstimator::estimate(const std::vector<cv::Poin
     z_abs += abs(diff.z);
   }
   
-  ROS_INFO_STREAM( "MAE - x: " << x_abs / world_inlier_points.size() << ", y: " << y_abs / world_inlier_points.size() << ", z: " << z_abs / world_inlier_points.size() );
+  // ROS_INFO_STREAM( "MAE - x: " << x_abs / world_inlier_points.size() << ", y: " << y_abs / world_inlier_points.size() << ", z: " << z_abs / world_inlier_points.size() );
 
   return wrld_pts_optim;
 }

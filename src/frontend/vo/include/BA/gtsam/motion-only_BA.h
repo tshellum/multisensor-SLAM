@@ -91,6 +91,7 @@ Eigen::Affine3d MotionEstimator::estimate(const Eigen::Affine3d T_r,
   gtsam::Values result;
 
   // Add each 3D-2D correspondence to the factor graph.
+
   for (size_t i=0; i<world_points.size(); ++i)
   {
     const cv::Point2f img_pt_l  = image_points_left[i];
@@ -100,7 +101,7 @@ Eigen::Affine3d MotionEstimator::estimate(const Eigen::Affine3d T_r,
                                              gtsam::Point2(img_pt_l.x, img_pt_l.y),
                                              gtsam::Point3(wrld_pt.x, wrld_pt.y, wrld_pt.z));
 
-    if ( isValidStereo() )
+    if ( isValidStereo() && !image_points_right.empty() )
     {
       const cv::Point2f img_pt_r  = image_points_right[i];
       graph.emplace_shared<ResectioningFactor>(feature_noise_, gtsam::Symbol('x', 2), K_,
@@ -116,7 +117,7 @@ Eigen::Affine3d MotionEstimator::estimate(const Eigen::Affine3d T_r,
   graph.emplace_shared<gtsam::PriorFactor<gtsam::Pose3>>(gtsam::Symbol('x', 1), pose_wb, pose_noise_);
 
 
-  if ( isValidStereo() )
+  if ( isValidStereo() && !image_points_right.empty() )
   {
     graph.add(gtsam::BetweenFactor<gtsam::Pose3>(
       gtsam::Symbol('x',1), gtsam::Symbol('x', 2), T_stereo_, pose_noise_
