@@ -67,7 +67,11 @@ public:
 
   Eigen::Affine3d estimatePoseFromFeatures(std::vector<cv::KeyPoint>& kpts_prev, std::vector<cv::KeyPoint>& kpts_cur, cv::Mat K);
   Eigen::Affine3d estimatePoseFromFeatures(std::vector<cv::KeyPoint>& kpts_prev, std::vector<cv::KeyPoint>& kpts_cur, std::vector<cv::Point3f>& landmarks, cv::Mat K);
-
+  Eigen::Affine3d estimatePoseFromFeatures(std::vector<cv::KeyPoint>& points_prev, 
+                                           std::vector<cv::KeyPoint>& points_cur, 
+                                           std::vector<cv::Point3f>& landmarks, 
+                                           std::vector<cv::DMatch> matches, 
+                                           cv::Mat K);
   Eigen::Affine3d cam2body(Eigen::Affine3d T_c);
 
   void updatePredicted(Eigen::Affine3d T);
@@ -113,19 +117,34 @@ Eigen::Affine3d PosePredictor::predict(double dt)
 
 
 
-Eigen::Affine3d PosePredictor::estimatePoseFromFeatures(std::vector<cv::KeyPoint>& points_prev, std::vector<cv::KeyPoint>& points_cur, cv::Mat K)
+Eigen::Affine3d PosePredictor::estimatePoseFromFeatures(std::vector<cv::KeyPoint>& points_prev, 
+                                                        std::vector<cv::KeyPoint>& points_cur, 
+                                                        cv::Mat K)
 {
   T_r_pred_ = feature_estimator_.estimatePoseFromFeatures(points_prev, points_cur, K);
   return T_r_pred_;
 }
 
 
-Eigen::Affine3d PosePredictor::estimatePoseFromFeatures(std::vector<cv::KeyPoint>& points_prev, std::vector<cv::KeyPoint>& points_cur, std::vector<cv::Point3f>& landmarks, cv::Mat K)
+Eigen::Affine3d PosePredictor::estimatePoseFromFeatures(std::vector<cv::KeyPoint>& points_prev, 
+                                                        std::vector<cv::KeyPoint>& points_cur, 
+                                                        std::vector<cv::Point3f>& landmarks, 
+                                                        cv::Mat K)
 {
   T_r_pred_ = feature_estimator_.estimatePoseFromFeatures(points_prev, points_cur, landmarks, K);
   return T_r_pred_;
 }
 
+
+Eigen::Affine3d PosePredictor::estimatePoseFromFeatures(std::vector<cv::KeyPoint>& points_prev, 
+                                                        std::vector<cv::KeyPoint>& points_cur, 
+                                                        std::vector<cv::Point3f>& landmarks, 
+                                                        std::vector<cv::DMatch> matches, 
+                                                        cv::Mat K)
+{
+  T_r_pred_ = feature_estimator_.estimatePoseFromFeatures(points_prev, points_cur, landmarks, matches, K);
+  return T_r_pred_;
+}
 
 
 Eigen::Affine3d PosePredictor::cam2body(Eigen::Affine3d T_clcr)

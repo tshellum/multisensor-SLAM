@@ -7,13 +7,14 @@
 #include <boost/property_tree/ptree.hpp>
 
 #include <opencv2/video.hpp>
-#include "opencv2/features2d.hpp"
+
+#ifdef OPENCV_CUDA_ENABLED
+  #include <opencv2/cudafeatures2d.hpp>
+#else
+  #include "opencv2/features2d.hpp"
+#endif
 
 #include "support.h"
-
-/*** PCL packages ***/
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
 
 /*** Eigen packages ***/
 #include <Eigen/Dense> 
@@ -37,7 +38,8 @@ public:
     match_err_  = config.get< double >("matcher.match_error");
     reproj_err_ = config.get< double >("matcher.reprojection_error");
 
-    desc_matcher_ = cv::BFMatcher(descriptor_norm);
+    // desc_matcher_ = cv::BFMatcher(descriptor_norm);
+    desc_matcher_ = cv::BFMatcher(descriptor_norm, true);
   }
 
   ~Matcher() {}
@@ -55,14 +57,14 @@ public:
                                                                                    std::vector<cv::KeyPoint> features_left_cur, 
                                                                                    std::vector<cv::KeyPoint> features_right_cur);
 
-  void extractDescriptorMatches(cv::Mat cur_desc, 
-                                cv::Mat loop_desc, 
-                                std::vector<cv::KeyPoint> cur_kpts, 
-                                std::vector<cv::KeyPoint> loop_kpts,
-                                std::vector<cv::Point3f> cur_landmarks,
-                                std::vector<cv::KeyPoint>& cur_pts_matched,
-                                std::vector<cv::KeyPoint>& loop_pts_matched,
-                                std::vector<cv::Point3f>& cur_landmarks_matched);
+  std::vector<cv::DMatch> extractDescriptorMatches(cv::Mat cur_desc, 
+                                                   cv::Mat loop_desc, 
+                                                   std::vector<cv::KeyPoint> cur_kpts, 
+                                                   std::vector<cv::KeyPoint> loop_kpts,
+                                                   std::vector<cv::Point3f> cur_landmarks,
+                                                   std::vector<cv::KeyPoint>& cur_pts_matched,
+                                                   std::vector<cv::KeyPoint>& loop_pts_matched,
+                                                   std::vector<cv::Point3f>& cur_landmarks_matched);
 
 
   cv::Mat DLT(cv::Point2f pt_l, 
@@ -219,37 +221,63 @@ std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> Matcher::circula
 
 
 
-void Matcher::extractDescriptorMatches(cv::Mat cur_desc, 
-                                       cv::Mat loop_desc, 
-                                       std::vector<cv::KeyPoint> cur_kpts, 
-                                       std::vector<cv::KeyPoint> loop_kpts,
-                                       std::vector<cv::Point3f> cur_landmarks,
-                                       std::vector<cv::KeyPoint>& cur_pts_matched,
-                                       std::vector<cv::KeyPoint>& loop_pts_matched,
-                                       std::vector<cv::Point3f>& cur_landmarks_matched)
+std::vector<cv::DMatch> Matcher::extractDescriptorMatches(cv::Mat cur_desc, 
+                                                          cv::Mat loop_desc, 
+                                                          std::vector<cv::KeyPoint> cur_kpts, 
+                                                          std::vector<cv::KeyPoint> loop_kpts,
+                                                          std::vector<cv::Point3f> cur_landmarks,
+                                                          std::vector<cv::KeyPoint>& cur_pts_matched,
+                                                          std::vector<cv::KeyPoint>& loop_pts_matched,
+                                                          std::vector<cv::Point3f>& cur_landmarks_matched)
 {
-  // ROS_INFO_STREAM("extractDescriptorMatches() - cur_desc.type(): " << cur_desc.type());
-  // ROS_INFO_STREAM("extractDescriptorMatches() - loop_desc.type(): " << loop_desc.type());
-  // ROS_INFO_STREAM("extractDescriptorMatches() - cur_desc.size(): " << cur_desc.type());
-  // ROS_INFO_STREAM("extractDescriptorMatches() - loop_desc.size(): " << loop_desc.type());
-
-  std::vector<std::vector<cv::DMatch>> matches;
-  desc_matcher_.knnMatch(cur_desc, loop_desc, matches, 2);
+  std::vector<cv::DMatch> matches;
+  desc_matcher_.match(cur_desc, loop_desc, matches);
   
   // Only keep matched points 
-  for (const std::vector<cv::DMatch> match : matches)
+  for (const cv::DMatch match : matches)
   {
-    if (match[0].distance < match[1].distance * 0.8)
-    {
-      int cur_id = match[0].queryIdx;
-      int loop_id = match[0].trainIdx;
-      
-      cur_pts_matched.push_back(cur_kpts[cur_id]);
-      loop_pts_matched.push_back(loop_kpts[loop_id]);
-      cur_landmarks_matched.push_back(cur_landmarks[cur_id]);
-    }
+    int cur_id = match.queryIdx;
+    int loop_id = match.trainIdx;
+    
+    cur_pts_matched.push_back(cur_kpts[loop_id]);
+    loop_pts_matched.push_back(loop_kpts[cur_id]);
+    cur_landmarks_matched.push_back(cur_landmarks[loop_id]);
   }
+
+  return matches;
 }
+
+
+// std::vector<cv::DMatch> Matcher::extractDescriptorMatches(cv::Mat cur_desc, 
+//                                                           cv::Mat loop_desc, 
+//                                                           std::vector<cv::KeyPoint> cur_kpts, 
+//                                                           std::vector<cv::KeyPoint> loop_kpts,
+//                                                           std::vector<cv::Point3f> cur_landmarks,
+//                                                           std::vector<cv::KeyPoint>& cur_pts_matched,
+//                                                           std::vector<cv::KeyPoint>& loop_pts_matched,
+//                                                           std::vector<cv::Point3f>& cur_landmarks_matched)
+// {
+//   std::vector<std::vector<cv::DMatch>> matches;
+//   desc_matcher_.knnMatch(cur_desc, loop_desc, matches, 2);
+  
+//   // Only keep matched points 
+//   std::vector<cv::DMatch> ret_matches;
+//   for (const std::vector<cv::DMatch> match : matches)
+//   {
+//     if (match[0].distance < match[1].distance * 0.8)
+//     {
+//       int cur_id = match[0].queryIdx;
+//       int loop_id = match[0].trainIdx;
+      
+//       cur_pts_matched.push_back(cur_kpts[cur_id]);
+//       loop_pts_matched.push_back(loop_kpts[loop_id]);
+//       cur_landmarks_matched.push_back(cur_landmarks[cur_id]);
+//       ret_matches.push_back(match[0]);
+//     }
+//   }
+
+//   return ret_matches;
+// }
 
 
 

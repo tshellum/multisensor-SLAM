@@ -106,6 +106,7 @@ public:
   void updateNavStatus(bool status)                     { nav_status_ = status; }
   void updateIMUOnlineStatus(bool status)               { imu_status_.first = status; }
   void updatePreintegrationStatus(bool status)          { imu_status_.second = status; }
+  void updateVelocity(gtsam::Vector3 velocity)          { velocity_ = velocity; }
 
   geometry_msgs::PoseStamped generateMsg();
   void callback(const ros::TimerEvent& event);

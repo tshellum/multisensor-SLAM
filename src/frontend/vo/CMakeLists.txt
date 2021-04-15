@@ -63,8 +63,12 @@ find_package(DBoW2)
 find_package(DLib)
 
 # find_package(Ceres REQUIRED)
-
 # find_package(Sophus REQUIRED)
+
+if(OpenCV_CUDA_VERSION)
+  add_definitions(-DOPENCV_CUDA_ENABLED)
+endif()
+
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -100,6 +104,10 @@ add_message_files(
   FILES
   VO_msg.msg
   PointID_msg.msg
+
+  VO_loop_msg.msg
+  IDPoint3D_msg.msg
+  IDPoint2D_msg.msg
 )
 
 ## Generate services in the 'srv' folder

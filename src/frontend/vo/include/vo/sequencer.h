@@ -34,6 +34,7 @@ struct Sequencer
 {
   Frame current;
   Frame previous;
+  std::vector<cv::Mat> keyframes;
 
   void storeImagePair(cv::Mat img_left, 
                       cv::Mat img_right);

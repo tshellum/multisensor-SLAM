@@ -54,6 +54,14 @@ public:
                               std::vector<cv::KeyPoint>& kpts_prev, 
                               std::vector<cv::KeyPoint>& kpts_cur,
                               std::vector<cv::Point3f>& landmarks);
+    
+    void removeRANSACoutliers(cv::Mat inliers, 
+                              std::vector<cv::Point2f>& points1, 
+                              std::vector<cv::Point2f>& points2, 
+                              std::vector<cv::KeyPoint>& kpts1, 
+                              std::vector<cv::KeyPoint>& kpts2,
+                              std::vector<cv::Point3f>& landmarks,
+                              std::vector<cv::DMatch>& matches);
 
     Eigen::Affine3d estimatePoseFromFeatures(std::vector<cv::KeyPoint>& kpts_prev, 
                                              std::vector<cv::KeyPoint>& kpts_cur, 
@@ -62,6 +70,12 @@ public:
     Eigen::Affine3d estimatePoseFromFeatures(std::vector<cv::KeyPoint>& kpts_prev, 
                                              std::vector<cv::KeyPoint>& kpts_cur,
                                              std::vector<cv::Point3f>& landmarks, 
+                                             cv::Mat K);
+
+    Eigen::Affine3d estimatePoseFromFeatures(std::vector<cv::KeyPoint>& kpts_prev, 
+                                             std::vector<cv::KeyPoint>& kpts_cur, 
+                                             std::vector<cv::Point3f>& landmarks,
+                                             std::vector<cv::DMatch>& matches, 
                                              cv::Mat K);
 
     Eigen::Affine3d cv2eigen(cv::Mat R, cv::Mat t);
@@ -143,6 +157,40 @@ void PosePredictionFeatures::removeRANSACoutliers(cv::Mat inliers,
 
 
 
+void PosePredictionFeatures::removeRANSACoutliers(cv::Mat inliers, 
+                                                  std::vector<cv::Point2f>& points1, 
+                                                  std::vector<cv::Point2f>& points2, 
+                                                  std::vector<cv::KeyPoint>& kpts1, 
+                                                  std::vector<cv::KeyPoint>& kpts2,
+                                                  std::vector<cv::Point3f>& landmarks,
+                                                  std::vector<cv::DMatch>& matches)
+{        
+    std::vector<cv::Point2f> inlier_match_points1, inlier_match_points2;
+    std::vector<cv::KeyPoint> inlier_kpts1, inlier_kpts2;
+    std::vector<cv::Point3f> inlier_landmarks;
+    std::vector<cv::DMatch> inlier_matches;
+
+    for(int i = 0; i < inliers.rows;i++) 
+    {
+        if(inliers.at<unsigned char>(i))
+        {
+            inlier_match_points1.push_back(points1[i]);
+            inlier_match_points2.push_back(points2[i]);
+            inlier_kpts1.push_back(kpts1[i]);
+            inlier_kpts2.push_back(kpts2[i]);
+            inlier_landmarks.push_back(landmarks[i]);
+            inlier_matches.push_back(matches[i]);
+        }
+    }
+    points1 = inlier_match_points1;
+    points2 = inlier_match_points2;
+    kpts1 = inlier_kpts1;
+    kpts2 = inlier_kpts2;
+    landmarks = inlier_landmarks;
+    matches = inlier_matches;
+}
+
+
 Eigen::Affine3d PosePredictionFeatures::estimatePoseFromFeatures(std::vector<cv::KeyPoint>& kpts_prev, 
                                                                  std::vector<cv::KeyPoint>& kpts_cur, 
                                                                  cv::Mat K)
@@ -191,6 +239,38 @@ Eigen::Affine3d PosePredictionFeatures::estimatePoseFromFeatures(std::vector<cv:
 
         E = cv::findEssentialMat(pts_prev, pts_cur, K, cv::RANSAC, 0.999, 1.0, inliers); 
         removeRANSACoutliers(inliers, pts_prev, pts_cur, kpts_prev, kpts_cur, landmarks);	// Track + match
+        cv::recoverPose(E, pts_prev, pts_cur, K, R_b1b2, t_b1b2); // z = viewer direction, x and y follows camera frame
+
+        T_b1b2 = cv2eigen(R_b1b2, t_b1b2);
+        T_b1b2(2,3) *= -1;
+
+        return T_b1b2; 
+    }
+
+    return T_b1b2;
+}
+    
+
+
+Eigen::Affine3d PosePredictionFeatures::estimatePoseFromFeatures(std::vector<cv::KeyPoint>& kpts_prev, 
+                                                                 std::vector<cv::KeyPoint>& kpts_cur, 
+                                                                 std::vector<cv::Point3f>& landmarks,
+                                                                 std::vector<cv::DMatch>& matches, 
+                                                                 cv::Mat K)
+{
+    std::vector<cv::Point2f> pts_prev, pts_cur;
+    cv::KeyPoint::convert(kpts_prev, pts_prev);
+    cv::KeyPoint::convert(kpts_cur, pts_cur);
+
+    Eigen::Affine3d T_b1b2 = Eigen::Affine3d::Identity();
+
+    if ((kpts_prev.size() >= 5) || (kpts_cur.size() >= 5)) // 5 for Essential, 8 for fundamental
+    {
+        cv::Mat E, F, inliers; 
+        cv::Mat R_b1b2, t_b1b2;
+
+        E = cv::findEssentialMat(pts_prev, pts_cur, K, cv::RANSAC, 0.999, 1.0, inliers); 
+        removeRANSACoutliers(inliers, pts_prev, pts_cur, kpts_prev, kpts_cur, landmarks, matches);	// Track + match
         cv::recoverPose(E, pts_prev, pts_cur, K, R_b1b2, t_b1b2); // z = viewer direction, x and y follows camera frame
 
         T_b1b2 = cv2eigen(R_b1b2, t_b1b2);

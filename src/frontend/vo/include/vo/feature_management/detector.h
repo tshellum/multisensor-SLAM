@@ -7,16 +7,12 @@
 #include <boost/property_tree/ptree.hpp>
 
 #include <opencv2/video.hpp>
-#include "opencv2/features2d.hpp"
 
-#include "support.h"
-
-/*** PCL packages ***/
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-
-
-#include <DBoW2/DBoW2.h>
+#ifdef OPENCV_CUDA_ENABLED
+  #include <opencv2/cudafeatures2d.hpp>
+#else
+  #include "opencv2/features2d.hpp"
+#endif
 
 
 class Detector
@@ -104,25 +100,16 @@ public:
     int img_width_full  = camera_config.get< int >("camera_left.image_width");
     int img_height_full = camera_config.get< int >("camera_left.image_height");	
 
-    // Extractor
-    if (extractor_type == "GFFT")
-      extractor_ = cv::GFTTDetector::create(max_features_, // maximum number of features
-                                            0.01,         // quality level
-                                            10);          // minimum allowed distance
-    else if (extractor_type == "FAST")
+    // Construct detector
+    #ifdef OPENCV_CUDA_ENABLED
+      extractor_ = cv::cuda::FastFeatureDetector::create(threshold, // threshold
+                                                   true);     // NMS
+      descriptor_ = cv::cuda::ORB::create(max_features_);
+    #else
       extractor_ = cv::FastFeatureDetector::create(threshold, // threshold
-                                                     true);      // NMS
-    else if (extractor_type == "ORB")
-      extractor_ = cv::ORB::create();
-    else
-      extractor_ = cv::FastFeatureDetector::create();
-                      
-
-    // Descriptor                          
-    if (descriptor_type == "ORB")
-      descriptor_ = cv::ORB::create(200);
-    else 
-      descriptor_ = cv::ORB::create();
+                                                   true);     // NMS
+      descriptor_ = cv::ORB::create(max_features_);
+    #endif
   
 
     width_ = img_width_full - (img_width_full % grid_size_);
@@ -149,6 +136,7 @@ public:
 };
 
 
+// TODO: Dynamisk threshold
 void Detector::bucketedFeatureDetection(cv::Mat image, std::vector<cv::KeyPoint>& features)
 {
   // Place tracked features from previous frame in buckets

@@ -8,6 +8,11 @@
 #include "vo/VO_msg.h"
 #include "vo/PointID_msg.h"
 
+#include "vo/VO_loop_msg.h"
+#include "vo/IDPoint3D_msg.h"
+#include "vo/IDPoint2D_msg.h"
+
+
 /*** PCL packages ***/
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -154,6 +159,88 @@ vo::VO_msg generateMsgInBody(ros::Time stamp,
 
   return vo_msg;
 }
+
+
+vo::IDPoint3D_msg toPt3DMsg(cv::Point3f pt, int id)
+{
+  vo::IDPoint3D_msg msg;
+  msg.x = pt.x;
+  msg.y = pt.y;
+  msg.z = pt.z;
+  msg.id = id;
+
+  return msg;
+}
+
+
+vo::IDPoint2D_msg toPt2DMsg(cv::Point2f pt, int id)
+{
+  vo::IDPoint2D_msg msg;
+  msg.x = pt.x;
+  msg.y = pt.y;
+  msg.id = id;
+
+  return msg;
+}
+
+
+
+vo::VO_loop_msg generateMsgInBody(ros::Time stamp,
+                                  int sequence_id,
+                                  Eigen::Affine3d T_r,
+                                  bool is_keyframe,
+                                  int keyframe_id,
+                                  bool loop_found,
+                                  int match_id,
+                                  Eigen::Affine3d T_loop,
+                                  std::vector<cv::KeyPoint> image_points,
+                                  std::vector<cv::Point3f> world_points,
+                                  std::vector<int> world_point_indices,
+                                  std::string frame = "")
+{
+  Eigen::Matrix4d T_bc = Eigen::Matrix4d::Identity();
+  if (frame == "NED")
+  {
+    T_bc << 0, 0, 1, 0,
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 0, 1;
+  }
+  
+  if (frame == "ENU")
+  {  
+    T_bc <<  0,  0, 1, 0,
+            -1,  0, 0, 0,
+             0, -1, 0, 0,
+             0,  0, 0, 1;
+  }
+  
+  Eigen::Matrix4d T_cb = T_bc.transpose();
+
+  vo::VO_loop_msg vo_msg;
+  vo_msg.header.frame_id = "vo";
+  vo_msg.header.stamp = stamp;
+  vo_msg.header.seq = sequence_id;
+  vo_msg.pose = tf2::toMsg( Eigen::Affine3d{T_bc * T_r * T_cb} );
+
+  vo_msg.is_keyframe.data = is_keyframe;
+  vo_msg.keyframe_id = keyframe_id;
+
+  vo_msg.loop_found.data = loop_found;
+  vo_msg.match_id = match_id;
+  vo_msg.pose_loop = tf2::toMsg( Eigen::Affine3d{T_bc * T_loop * T_cb} );
+
+
+  vo_msg.landmark_size = world_points.size();
+  for(int i = 0; i < world_points.size(); i++)
+  {
+    vo_msg.landmarks.push_back( toPt3DMsg(world_points[i], world_point_indices[i]) );
+    vo_msg.features.push_back( toPt2DMsg(image_points[i].pt, image_points[i].class_id) );
+  }
+
+  return vo_msg;
+}
+
 
 
 

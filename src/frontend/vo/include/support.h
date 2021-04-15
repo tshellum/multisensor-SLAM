@@ -10,8 +10,9 @@
 
 #include <Eigen/Geometry> 
 
-
 #include <sys/stat.h> 
+#include <iostream>
+#include <iomanip>
 
 
 void NotImplementedError(std::string function_name, std::string filename) // call by NotImplementedError(__func__, __FILE__);
@@ -88,6 +89,20 @@ void displayWindowFeatures
     cv::drawKeypoints(image2, kps2, img_kps2, cv::Scalar(0, 255, 255), cv::DrawMatchesFlags::DEFAULT);
   
   displayWindow(img_kps1, img_kps2, name, resizeWidth, resizeHeight, key);
+}
+
+
+void displayWindowMatches
+(
+  cv::Mat image1, std::vector<cv::KeyPoint> kps1, 
+  cv::Mat image2, std::vector<cv::KeyPoint> kps2,
+  std::vector<cv::DMatch> matches,
+  std::string name="Matches", int resizeWidth=1920, int resizeHeight=1080, int key=3
+)
+{
+  cv::Mat im_match; 
+  cv::drawMatches(image1, kps1, image2, kps2, matches, im_match); 
+  displayWindow(im_match, cv::Mat(), name, resizeWidth, resizeHeight, key);
 }
 
 
@@ -181,15 +196,37 @@ void saveImgWithKps(cv::Mat image1, cv::Mat image2, std::vector<cv::KeyPoint> kp
 }
 
 
-void printSummary(Eigen::Affine3d T_clcr,
+
+void printSummary(ros::Time stamp,
+                  double tpf,
+                  Eigen::Affine3d T_clcr,
                   int num_landmarks,
                   bool loop_detection)
 {
   Eigen::Vector3d euler = T_clcr.linear().eulerAngles(0, 1, 2);
-  ROS_INFO_STREAM("Keyframe summary (in image frame) : "
-    << "\n\t - Number of landmarks : " << num_landmarks
-    << "\n\t - Rotation : " << "[" << euler.x() << ", " << euler.y() << ", " << euler.z() << "]"
-    << "\n\t - Translation : " << "[" << T_clcr.translation().x() << ", " << T_clcr.translation().y() << ", " << T_clcr.translation().z() << "]"
-    << "\n\t - Loop detection? : " << loop_detection
-    << "\n");
+  Eigen::Vector3d euler_abs = euler.cwiseAbs();
+
+  if ( euler_abs.x() > M_PI / 2 )
+    euler.x() = euler_abs.x() - M_PI;
+
+  if ( euler_abs.y() > M_PI / 2 )
+    euler.y() = euler_abs.y() - M_PI;
+
+  if ( euler_abs.z() > M_PI / 2 )
+    euler.z() = euler_abs.z() - M_PI;
+  
+  euler *= (180.0/M_PI);
+
+  std::cout << '\r' << std::fixed << std::setprecision(2)
+            << "\033[1;33mSUMMARY\033[0m \033[3m(C frame)\033[0m: "
+            << "FPS=" << std::setw(4) << std::setfill(' ') << 1/tpf << "; "
+            << "R=" << "["  << std::setw(6) << std::setfill(' ') << euler.x() 
+                    << "," << std::setw(6) << std::setfill(' ') << euler.y() 
+                    << "," << std::setw(6) << std::setfill(' ') << euler.z() << "]" << "; "
+            << "t=" << "["  << std::setw(5) << std::setfill(' ') << T_clcr.translation().x() 
+                    << "," << std::setw(5) << std::setfill(' ') << T_clcr.translation().y() 
+                    << "," << std::setw(5) << std::setfill(' ') << T_clcr.translation().z() << "]" << "; "
+            << "Landmarks=" << std::setw(3) << std::setfill(' ') << num_landmarks << "; "
+            << "Loop="      << loop_detection 
+            << std::flush;
 }

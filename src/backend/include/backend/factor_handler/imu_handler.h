@@ -114,8 +114,11 @@ public:
     // params->biasAccOmegaInt         = gtsam::Matrix::Identity(6, 6) * 1e-4;
 
 
-    gtsam::Vector3 acc_bias(0.2, -0.2, -0.04);  
-    gtsam::Vector3 gyro_bias(0.005, 0.0006, 0.024);
+    // gtsam::Vector3 acc_bias(0.2, -0.2, -0.04);  
+    // gtsam::Vector3 gyro_bias(0.005, 0.0006, 0.024);
+    gtsam::Vector3 acc_bias(0.0, 0.0, 0.0);  
+    gtsam::Vector3 gyro_bias(0.0, 0.0, 0.0);
+
     gtsam::imuBias::ConstantBias prior_imu_bias = gtsam::imuBias::ConstantBias(acc_bias, gyro_bias);
 
     // body to IMU: rotation, translation [meters]
@@ -137,11 +140,16 @@ public:
                         parameters.get< double >("pose_origin.translation.z"));
 
       prior_pose = gtsam::Pose3(gtsam::Rot3(q), gtsam::Point3(t));
+      // prior_pose = gtsam::Pose3::identity();
 
       prior_velocity = gtsam::Vector3(parameters.get< double >("imu.velocity.x"), 
                                       parameters.get< double >("imu.velocity.y"), 
                                       parameters.get< double >("imu.velocity.z"));
     }
+
+    backend->updateVelocity(prior_velocity);
+
+    prior_pose.print();
 
     prev_state_ = gtsam::NavState(prior_pose, prior_velocity);
     pred_state_ = prev_state_;
@@ -185,6 +193,11 @@ public:
     // R << 0, 1, 0,
     //      1, 0, 0,
     //      0, 0, 1;
+
+    // Eigen::Matrix3d R;
+    // R << 1, 0, 0,
+    //      0, -1, 0,
+    //      0, 0, -1;
 
     // gyr = R * gyr;
     // acc = R * acc;
@@ -239,17 +252,15 @@ public:
 
     // Update states
     gtsam::Vector3 velocity = backend_->getVelocity();
-    if ( velocity == gtsam::Vector3(0.0, 0.0, 0.0) )
-      velocity = backend_->getValues().at<gtsam::Vector3>(vel_key_to);
 
     prev_state_ = gtsam::NavState(backend_->getPose(),
-                                  velocity);
+                                  backend_->getVelocity());
 
 
     pose_prior_ = backend_->getPose();
     gtsam::Pose3 pose_diff = pose_prior_.between(pred_state_.pose());
 
-    // ROS_INFO_STREAM("velocity: " << velocity);
+    ROS_INFO_STREAM("velocity: " << velocity);
 
     // pose_prior_.print("POSE PRIOR");
     // pred_state_.pose().print("POSE PREDICT");
