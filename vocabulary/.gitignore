@@ -4,3 +4,6 @@
 # But not these files...
 !.gitignore
 !ORBvoc.txt.tar.gz
+!convert
+!convert/CMakeLists.txt
+!convert/convert_txt2bin.cc

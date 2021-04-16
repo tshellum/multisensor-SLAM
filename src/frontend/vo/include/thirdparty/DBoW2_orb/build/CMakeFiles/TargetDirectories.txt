@@ -1,3 +1,0 @@
-/home/tshellum/slam/multisensor-SLAM/src/frontend/vo/include/thirdparty/DBoW2_orb/build/CMakeFiles/rebuild_cache.dir
-/home/tshellum/slam/multisensor-SLAM/src/frontend/vo/include/thirdparty/DBoW2_orb/build/CMakeFiles/edit_cache.dir
-/home/tshellum/slam/multisensor-SLAM/src/frontend/vo/include/thirdparty/DBoW2_orb/build/CMakeFiles/DBoW2.dir
