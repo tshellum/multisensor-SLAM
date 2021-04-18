@@ -72,11 +72,10 @@ public:
         double t_diff = (double)(std::clock() - t_start)/CLOCKS_PER_SEC ;
 
         if (! b_loaded)
-            ROS_ERROR("Wrong path to vocabulary");
+            std::cout << "Wrong path to vocabulary" << std::endl;
         else
-            ROS_INFO_STREAM("Loaded vocabulary with " << filetype << " extension in " << t_diff << "s");
+            std::cout << "Loaded vocabulary with " << filetype << " extension in " << t_diff << "s" << std::endl;
             
-        
         OrbLoopDetector::Parameters params(image_w, image_h);
         params.use_nss = true;
         params.alpha = 0.9;

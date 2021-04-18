@@ -112,7 +112,7 @@ public:
                 stereo_cameras_.T_rl(), 
                 0.1, 
                 M_PI/9, 
-                1 )
+                0.2 )
   , loop_detector_( base_path_ + "vocabulary/ORBvoc.bin",
                     stereo_cameras_.getImageWidth(),
                     stereo_cameras_.getImageHeight() )
@@ -131,12 +131,12 @@ public:
 
     
     #ifdef OPENCV_CUDA_ENABLED
-      ROS_INFO("CUDA for OpenCV=ON");
+      std::cout << "CUDA for OpenCV=ON" << std::endl;
     #else
-      ROS_INFO("CUDA for OpenCV=OFF");
+      std::cout << "CUDA for OpenCV=OFF" << std::endl;
     #endif
 
-    ROS_INFO("Frontend of visual odometry constructed...\n");
+    std::cout << "Frontend of visual odometry constructed...\n" << std::endl;
   }
 
   ~VO() {}
@@ -225,16 +225,21 @@ public:
     double scale_cur = pose_predictor_.calculateScale(T_r_opt.translation(), 
                                                       sequencer_.previous.scale);
 
-
+    if ( T_kf_.translation().norm() > 10)
+    {
+      ROS_INFO("\n");
+      ROS_INFO_STREAM("prev scale: " << sequencer_.previous.scale);
+      ROS_INFO_STREAM("prev T_r: \n" << sequencer_.previous.T_r.matrix());
+      ROS_INFO_STREAM("cur scale: " << sequencer_.current.scale);
+      ROS_INFO_STREAM("cur T_r_opt: \n" << T_r_opt.matrix());
+    }
 
     /***** End of iteration processes *****/
     displayWindowFeatures(sequencer_.current.img_l, 
                           stereo_features.first,
                           sequencer_.current.img_r,
                           stereo_features.second,
-                          "Stereo matches",
-                          1920,
-                          1080); 
+                          "Stereo features" ); 
     
     // Rejecting bad pose optimization --> Setting equal to previous
     if ( (T_r_opt.matrix() == Eigen::Matrix4d::Identity()) // motion-BA actually produces an estimate
@@ -251,7 +256,8 @@ public:
       sequencer_.current.scale = scale_cur;
     }
 
-
+    /***** Loop closure *****/
+    Eigen::Affine3d T_loop_closure;
     T_kf_ *= sequencer_.current.T_r.matrix();
     LoopResult loop_result;
     is_keyframe_ = isKeyframe(T_kf_, 2, M_PI/2);
@@ -260,47 +266,41 @@ public:
       sequencer_.keyframes.push_back(sequencer_.current.img_l);
 
       // Check for loop closure
-      std::vector<cv::KeyPoint> kpts_loop_candidate = sequencer_.current.kpts_l;
+      std::vector<cv::KeyPoint> kpts_cur_loop_candidate = sequencer_.current.kpts_l;
       cv::Mat desc_loop_candidate = detector_.computeDescriptor(sequencer_.current.img_l, 
-                                                                kpts_loop_candidate);
+                                                                kpts_cur_loop_candidate);
 
-      loop_result = loop_detector_.searchLoopCandidate(kpts_loop_candidate, 
-                                                        desc_loop_candidate);
+      loop_result = loop_detector_.searchLoopCandidate(kpts_cur_loop_candidate, 
+                                                       desc_loop_candidate);
       
       // If loop - compute transformation
       if (loop_result.found)
       {
-        std::vector<cv::KeyPoint> cur_kpts_matched, loop_kpts_matched;
-        std::vector<cv::Point3f> landmarks_matched;
-        std::vector<cv::DMatch> matches = matcher_.extractDescriptorMatches(desc_loop_candidate, loop_result.descriptors, 
-                                                                            kpts_loop_candidate, loop_result.keypoints,
-                                                                            sequencer_.current.world_points,
-                                                                            cur_kpts_matched, loop_kpts_matched, landmarks_matched);
+        std::vector<cv::KeyPoint> kpts_loop_match = loop_result.keypoints;
+        matcher_.forwardBackwardLKMatch(sequencer_.current.img_l,
+                                        kpts_cur_loop_candidate,
+                                        sequencer_.keyframes[loop_result.match_id],
+                                        kpts_loop_match);
 
-        Eigen::Affine3d T_loop = pose_predictor_.estimatePoseFromFeatures(cur_kpts_matched,
-                                                                          loop_kpts_matched, 
-                                                                          landmarks_matched,
-                                                                          matches,
+        // displayWindowFeatures(sequencer_.keyframes[loop_result.match_id], 
+        //                       kpts_loop_match,
+        //                       sequencer_.current.img_l,
+        //                       kpts_cur_loop_candidate,
+        //                       "Loop matched features" ); 
+
+        std::vector<cv::Point2f> pts_loop_match;
+        cv::KeyPoint::convert(kpts_loop_match, pts_loop_match);
+        std::pair<std::vector<cv::Point3f>, std::vector<cv::Point2f>> matches3D2D_loop = find3D2DCorrespondences(sequencer_.current.world_points,
+                                                                                                                 sequencer_.current.indices,
+                                                                                                                 kpts_cur_loop_candidate);
+
+        Eigen::Affine3d T_loop = pose_predictor_.estimatePoseFromFeatures(kpts_cur_loop_candidate,
+                                                                          kpts_loop_match, 
                                                                           stereo_cameras_.K_cv());
-        T_loop.translation() *= 0;
 
-        // displayWindowFeatures(sequencer_.keyframes[loop_result.match_id], loop_kpts_matched,
-        //                       sequencer_.current.img_l, cur_kpts_matched,
-        //                       "Loop features", 1920, 1080); 
-
-        displayWindowMatches(sequencer_.keyframes[loop_result.match_id], kpts_loop_candidate, 
-                              sequencer_.current.img_l, loop_result.keypoints,
-                              matches,
-                              "Loop matches", 1920, 1080);
-
-        std::vector<cv::Point2f> loop_pts_matched;
-        cv::KeyPoint::convert(loop_kpts_matched, loop_pts_matched);
-
-        T_loop = motion_BA_.estimate(T_loop,
-                                      landmarks_matched,
-                                      loop_pts_matched);
-
-        ROS_INFO_STREAM("Loop closure - T: \n" << T_loop.matrix());
+        T_loop_closure = motion_BA_.estimate(T_loop,
+                                             matches3D2D_loop.first,
+                                             pts_loop_match);
       }
 
       toc_ = cv::getTickCount();
@@ -312,11 +312,13 @@ public:
         loop_result.found
       );
 
+      if (loop_result.found)
+        std::cout << std::endl;
+
       T_kf_ = Eigen::Affine3d::Identity();
       keyframe_id_++;
     }
 
-    // ROS_INFO_STREAM("VO - calculated pose: \n" << sequencer_.current.T_r.matrix());
 
     vo_pub_.publish( generateMsgInBody(cam_left->header.stamp,
                                         sequence_id_, 
@@ -325,7 +327,7 @@ public:
                                         keyframe_id_,
                                         loop_result.found,
                                         loop_result.match_id,
-                                        Eigen::Affine3d::Identity(),
+                                        T_loop_closure,
                                         sequencer_.current.kpts_l,
                                         sequencer_.current.world_points,
                                         sequencer_.current.indices,
@@ -374,7 +376,7 @@ public:
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "stereo_frontend");
-	ROS_INFO("\n\n\n ----- Starting VO frontend ----- \n");
+	std::cout << "\n\n\n ----- Starting VO frontend ----- \n" << std::endl;
 
 	VO vo;
 

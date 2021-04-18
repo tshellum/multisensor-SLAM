@@ -67,6 +67,10 @@ public:
                                                    std::vector<cv::KeyPoint>& loop_pts_matched,
                                                    std::vector<cv::Point3f>& cur_landmarks_matched);
 
+  void forwardBackwardLKMatch(cv::Mat prev_img,
+                              std::vector<cv::KeyPoint>& prev_kpts, 
+                              cv::Mat cur_img,
+                              std::vector<cv::KeyPoint>& cur_kpts);
 
   cv::Mat DLT(cv::Point2f pt_l, 
                   cv::Point2f pt_r,
@@ -172,11 +176,11 @@ void Matcher::track(cv::Mat prev_img, cv::Mat cur_img, std::vector<cv::KeyPoint>
 
 
 std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> Matcher::circularMatching(cv::Mat left_cur_img, 
-                                                                                                 cv::Mat right_cur_img, 
-                                                                                                 cv::Mat left_prev_img, 
-                                                                                                 cv::Mat right_prev_img, 
-                                                                                                 std::vector<cv::KeyPoint> features_left_cur, 
-                                                                                                 std::vector<cv::KeyPoint> features_right_cur)
+                                                                                          cv::Mat right_cur_img, 
+                                                                                          cv::Mat left_prev_img, 
+                                                                                          cv::Mat right_prev_img, 
+                                                                                          std::vector<cv::KeyPoint> features_left_cur, 
+                                                                                          std::vector<cv::KeyPoint> features_right_cur)
 {
   std::vector<cv::KeyPoint> matched_left, matched_right;
   std::vector<cv::KeyPoint> original_left = features_left_cur;
@@ -197,7 +201,6 @@ std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> Matcher::circula
     // track(left_prev_img, left_cur_img, features_left_prev, features_left_cur);
 
     // Ensure that features hasn't moved
-    int match_nr = 1;
     for(unsigned int i = 0; i < features_left_cur.size(); i++)
     {
       for (cv::KeyPoint& original_feature : original_left)
@@ -214,7 +217,6 @@ std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> Matcher::circula
           break;
         }
       }
-      match_nr++;
     }
   }
   return std::make_pair(matched_left, matched_right);
@@ -231,22 +233,30 @@ std::vector<cv::DMatch> Matcher::extractDescriptorMatches(cv::Mat cur_desc,
                                                           std::vector<cv::KeyPoint>& loop_pts_matched,
                                                           std::vector<cv::Point3f>& cur_landmarks_matched)
 {
-  std::vector<cv::DMatch> matches;
+  std::vector<cv::DMatch> matches, matches_filtered;
   desc_matcher_.match(cur_desc, loop_desc, matches);
   
   // Only keep matched points 
-  for (const cv::DMatch match : matches)
+  for (int i = 0; i < matches.size(); i++)
   {
-    int cur_id = match.queryIdx;
-    int loop_id = match.trainIdx;
+    int cur_id = matches[i].queryIdx;
+    int loop_id = matches[i].trainIdx;
     
-    cur_pts_matched.push_back(cur_kpts[loop_id]);
-    loop_pts_matched.push_back(loop_kpts[cur_id]);
-    cur_landmarks_matched.push_back(cur_landmarks[loop_id]);
+    ROS_INFO_STREAM("Vertical match diff: " << std::abs(cur_kpts[cur_id].pt.y - loop_kpts[loop_id].pt.y));
+
+    if ( std::abs(cur_kpts[cur_id].pt.y - loop_kpts[loop_id].pt.y) < 5 )
+    {
+      ROS_INFO("added");
+      cur_pts_matched.push_back(cur_kpts[cur_id]);
+      loop_pts_matched.push_back(loop_kpts[loop_id]);
+      cur_landmarks_matched.push_back(cur_landmarks[cur_id]);
+      matches_filtered.push_back(matches[i]);
+    }
   }
 
   return matches;
 }
+
 
 
 // std::vector<cv::DMatch> Matcher::extractDescriptorMatches(cv::Mat cur_desc, 
@@ -278,6 +288,100 @@ std::vector<cv::DMatch> Matcher::extractDescriptorMatches(cv::Mat cur_desc,
 //   }
 
 //   return ret_matches;
+// }
+
+
+
+void Matcher::forwardBackwardLKMatch(cv::Mat prev_img,
+                                     std::vector<cv::KeyPoint>& prev_kpts, 
+                                     cv::Mat cur_img,
+                                     std::vector<cv::KeyPoint>& cur_kpts)
+{
+  std::vector<cv::KeyPoint> prev_tracked, cur_tracked, prev_matches, cur_matches;
+  track(prev_img, cur_img, prev_kpts, cur_tracked);
+  track(cur_img, prev_img, cur_tracked, prev_tracked);
+
+  for(unsigned int i = 0; i < prev_tracked.size(); i++)
+  {
+    for(unsigned int j = 0; j < prev_kpts.size(); j++)
+    {
+      if (prev_tracked[i].class_id != prev_kpts[j].class_id)
+        continue;
+
+      if ( pow((prev_tracked[i].pt.x - prev_kpts[j].pt.x), 2) 
+          + pow((prev_tracked[i].pt.y - prev_kpts[j].pt.y), 2) < pow(match_err_, 2) )
+      {
+        prev_matches.push_back(prev_tracked[i]);
+        cur_matches.push_back(cur_tracked[i]);
+
+        break;
+      }
+    }
+  }
+
+  prev_kpts = prev_matches;
+  cur_kpts = cur_matches;
+}
+
+
+
+// void Matcher::forwardBackwardLKMatch(cv::Mat prev_img,
+//                                      std::vector<cv::KeyPoint>& prev_kpts, 
+//                                      cv::Mat cur_img,
+//                                      std::vector<cv::KeyPoint>& cur_kpts)
+// {
+//   std::vector<cv::KeyPoint> prev_tracked, cur_tracked, prev_matches, cur_matches;
+  
+//   track(prev_img, cur_img, prev_kpts, cur_tracked);
+  
+//   for(unsigned int i = 0; i < cur_tracked.size(); i++)
+//   {
+//     double distance_best = -1;
+//     cv::KeyPoint best_match;
+//     for(unsigned int j = 0; j < cur_kpts.size(); j++)
+//     {
+//       double distance = pow((cur_tracked[i].pt.x - cur_kpts[j].pt.x), 2) + pow((cur_tracked[i].pt.y - cur_kpts[j].pt.y), 2);
+//       if ( distance < pow(match_err_, 2) )
+//       {
+//         if ( (distance_best == -1) || (distance < distance_best) )
+//         {
+//           distance_best = distance;
+//           best_match = cur_kpts[j];
+//         }
+//       }
+//     }
+
+//     if (distance_best != -1)
+//       cur_matches.push_back(best_match);
+//   }
+
+//   track(cur_img, prev_img, cur_matches, prev_tracked);
+//   for(unsigned int i = 0; i < prev_tracked.size(); i++)
+//   {
+//     double distance_best = -1;
+//     cv::KeyPoint best_match;
+//     for(unsigned int j = 0; j < prev_kpts.size(); j++)
+//     {
+//       double distance = pow((prev_tracked[i].pt.x - prev_kpts[j].pt.x), 2) + pow((prev_tracked[i].pt.y - prev_kpts[j].pt.y), 2);
+//       if ( distance < pow(match_err_, 2) )
+//       {
+//         if ( (distance_best == -1) || (distance < distance_best) )
+//         {
+//           distance_best = distance;
+//           best_match = prev_kpts[j];
+//         }
+//       }
+//     }
+
+//     if (distance_best != -1)
+//     {
+//       prev_matches.push_back(best_match);
+
+//     }  
+//   }
+  
+//   prev_kpts = prev_matches;
+//   cur_kpts = cur_matches;
 // }
 
 
