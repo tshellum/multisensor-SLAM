@@ -47,8 +47,6 @@ private:
     const gtsam::SharedNoiseModel point_noise_;   // Set static - Pose should not change
 
 public:
-    StructureEstimator(){}
-    
     // Stereo with different calibraiton
     StructureEstimator(const Eigen::Matrix3d K_cl,        // Camera matrix for left camera
                        const Eigen::Matrix3d K_cr,        // If stereo: Camera matrix for right camera

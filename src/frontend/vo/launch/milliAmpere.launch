@@ -6,6 +6,7 @@
     <arg name = "imu_topic" default = "/xsens/imu"/>
 
     <param name = "frame" type = "string" value = "NED" />
+    <param name = "dataset" type = "string" value = "milliAmpere" />
 
     <rosparam file = "$(find vo)/../../../config/kitti/camera.yaml" />
 

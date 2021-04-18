@@ -23,7 +23,6 @@ class MotionEstimator
 {
 private:
   gtsam::Cal3_S2::shared_ptr K_;
-  gtsam::Cal3_S2Stereo::shared_ptr K_stereo_;
 
   gtsam::Pose3 T_stereo_;
 
@@ -41,7 +40,6 @@ public:
                   const double rot_std_dev = M_PI/9,  // 20 degrees
                   const double trans_std_dev = 2)     // 2 meters
   : K_( new gtsam::Cal3_S2(K(0,0), K(1,1), K(0,1), K(0,2), K(1,2)) )
-  , K_stereo_( new gtsam::Cal3_S2Stereo(K(0,0), K(1,1), K(0,1), K(0,2), K(1,2), 0.537) )
   , T_stereo_( gtsam::Pose3(T_stereo.matrix()) )
   , feature_noise_( gtsam::noiseModel::Robust::Create(
       gtsam::noiseModel::mEstimator::Huber::Create(1.345),

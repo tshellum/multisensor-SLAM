@@ -97,8 +97,8 @@ public:
     std::string extractor_type  = detector_config.get< std::string >("detector.extractor_type");
     std::string descriptor_type = detector_config.get< std::string >("detector.descriptor_type");
 
-    int img_width_full  = camera_config.get< int >("camera_left.image_width");
-    int img_height_full = camera_config.get< int >("camera_left.image_height");	
+    int img_width_full  = camera_config.get< int >("image_width");
+    int img_height_full = camera_config.get< int >("image_height");	
 
     // Construct detector
     #ifdef OPENCV_CUDA_ENABLED

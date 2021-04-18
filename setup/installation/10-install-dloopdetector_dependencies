@@ -14,11 +14,7 @@ then
 fi
 
 cd DBoW2
-if [ ! -d "build" ] 
-then
-  mkdir build
-fi
-cd build
+mkdir -p build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j
 sudo make install
@@ -32,11 +28,7 @@ then
 fi
 
 cd DLib
-if [ ! -d "build" ] 
-then
-  mkdir build
-fi
-cd build
+mkdir -p build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j
 sudo make install

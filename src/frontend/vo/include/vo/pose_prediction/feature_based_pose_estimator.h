@@ -19,6 +19,9 @@
 #include <Eigen/Geometry> 
 #include <Eigen/Dense>
 
+/*** OpenCV packages ***/
+#include "opencv2/core/eigen.hpp"
+
 /*** Classes ***/
 #include "support.h"
 

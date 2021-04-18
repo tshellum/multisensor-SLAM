@@ -7,6 +7,7 @@
 #include <boost/property_tree/ptree.hpp>
 
 #include <opencv2/video.hpp>
+#include "opencv2/core/eigen.hpp"
 
 #ifdef OPENCV_CUDA_ENABLED
   #include <opencv2/cudafeatures2d.hpp>

@@ -24,13 +24,15 @@
 /*** Classes ***/
 #include "support.h"
 #include "inputOutput.h"
-// #include "vo/pinhole_model.h"
+#include "vo/pinhole_model.h"
 #include "vo/pose_prediction/pose_predictor.h"
 #include "vo/feature_management/detector.h"
 #include "vo/feature_management/matcher.h"
 #include "vo/sequencer.h"
 #include "BA/gtsam/structure-only_BA.h"
 #include "BA/gtsam/motion-only_BA.h"
+// #include "PYR/PYR.h"
+// #include "JET/jet.h"
 #include "vo/loop_detector.h"
 #include "vo/stereo_pinhole_model.h"
 
@@ -78,13 +80,18 @@ private:
 
   // Classes
   Sequencer               sequencer_;
-  StereoPinholeModel      stereo_cameras_;
+  StereoCameras           stereo_;
+  StereoPinholeModel      stereo_model_;
   Detector                detector_;
   Matcher                 matcher_;
   PosePredictor           pose_predictor_;
   BA::StructureEstimator  structure_BA_;
   BA::MotionEstimator     motion_BA_;
+  // PYR           pyr_;
+  // JET jet;
   LoopDetector            loop_detector_;
+
+
 
 public:
   VO() 
@@ -92,30 +99,29 @@ public:
   , is_keyframe_(false)
   , sequence_id_(0)
   , keyframe_id_(0)
-  , T_kf_( Eigen::Affine3d::Identity() )
+  , T_kf_(Eigen::Affine3d::Identity())
   , base_path_( ros::package::getPath("vo") + "/../../../" )
   , config_path_( base_path_ + "config/" + getParam(nh_, "/dataset") + "/" )
-  , stereo_cameras_( readConfigFromJsonFile( config_path_ + "camera.json" ),
-                     readConfigFromJsonFile( config_path_ + "feature_management.json" ) )
-  , detector_( readConfigFromJsonFile( config_path_ + "feature_management.json" ),
-               readConfigFromJsonFile( config_path_ + "camera.json" ) )
-  , matcher_( readConfigFromJsonFile( config_path_ + "feature_management.json" ),
-              detector_.getDefaultNorm() )
-  , pose_predictor_( nh_, 
-                     "imu_topic", 
-                     1000 )
-  , structure_BA_( stereo_cameras_.l().K_eig, 
-                   stereo_cameras_.r().K_eig, 
-                   stereo_cameras_.T_lr(), 
-                   0.5 ) 
-  , motion_BA_( stereo_cameras_.K_eig(), 
-                stereo_cameras_.T_rl(), 
-                0.1, 
-                M_PI/9, 
-                1 )
-  , loop_detector_( base_path_ + "vocabulary/ORBvoc.bin",
-                    stereo_cameras_.getImageWidth(),
-                    stereo_cameras_.getImageHeight() )
+  , camera_config( readConfigFromJsonFile( config_path_ + "camera.json" ) )
+  , stereo_(nh_, 
+            10)
+  , stereo_model_( readConfigFromJsonFile( config_path_ + "camera.json" ),
+                   readConfigFromJsonFile( config_path_ + "feature_management.json" ) )
+  , pose_predictor_(nh_, 
+                    "imu_topic", 
+                    1000)
+  , structure_BA_(stereo_.left().K_eig(), 
+                  stereo_.right().K_eig(), 
+                  stereo_.getInverseStereoTransformation(), 
+                  0.5)
+  , motion_BA_(stereo_.left().K_eig(), 
+               stereo_.getStereoTransformation(), 
+               0.1, 
+               M_PI/9, 
+               1)
+  , loop_detector_(ros::package::getPath("vo") + "/../../../vocabulary/ORBvoc.bin",
+                   stereo_.left().getWidth(),
+                   stereo_.left().getHeight())
   {
     // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
     sub_cam_left_.subscribe(nh_, "cam_left", 1);
@@ -129,6 +135,18 @@ public:
     // Read base parameters
     nh_.getParam("/frame", frame_);
 
+
+    // Construct classes
+    std::string dataset;
+    nh_.getParam("/dataset", dataset);
+    const std::string base_path = ros::package::getPath("vo") + "/../../../";
+    const std::string config_path = base_path + "config/" + dataset + "/";
+
+    detector_ = Detector( readConfigFromJsonFile( config_path_ + "feature_management.json" ),
+                          readConfigFromJsonFile( config_path_ + "camera.json" ) );
+    matcher_  = Matcher( readConfigFromJsonFile( config_path_ + "feature_management.json" ),
+                          detector_.getDefaultNorm() );
+
     
     #ifdef OPENCV_CUDA_ENABLED
       ROS_INFO("CUDA for OpenCV=ON");
@@ -136,7 +154,7 @@ public:
       ROS_INFO("CUDA for OpenCV=OFF");
     #endif
 
-    ROS_INFO("Frontend of visual odometry constructed...\n");
+    ROS_INFO("Visual odometry constructed...\n");
   }
 
   ~VO() {}
@@ -147,28 +165,34 @@ public:
     tic_ = cv::getTickCount();
 
     /***** Preprocess and store image *****/
-    std::pair<cv::Mat, cv::Mat> images = stereo_cameras_.preprocessImagePair(readGray(cam_left), 
-                                                                             readGray(cam_right));
+    stereo_model_.preprocessImagePair(readGray(cam_left), 
+                                      readGray(cam_right));
+
+    std::pair<cv::Mat, cv::Mat> images = stereo_.preprocessImages(readGray(cam_left), 
+                                                                  readGray(cam_right));
 
     sequencer_.storeImagePair(images.first, 
                               images.second);
     
-
+    
 
     /***** Track features and estimate relative pose *****/
     sequencer_.current.kpts_l = matcher_.projectLandmarks(sequencer_.previous.world_points,
                                                           pose_predictor_.getPoseRelative(),
-                                                          stereo_cameras_.K_eig(),
+                                                          stereo_.left().K_eig(),
                                                           sequencer_.previous.kpts_l);
 
+    // ROS_INFO_STREAM("projected - previous.kpts_l: " << sequencer_.previous.kpts_l.size() << " - current.kpts_l: " << sequencer_.current.kpts_l.size());
+
+
     matcher_.track(sequencer_.previous.img_l, 
-                   sequencer_.current.img_l, 
-                   sequencer_.previous.kpts_l,
-                   sequencer_.current.kpts_l);
+                    sequencer_.current.img_l, 
+                    sequencer_.previous.kpts_l,
+                    sequencer_.current.kpts_l);
 
     sequencer_.current.T_r = pose_predictor_.estimatePoseFromFeatures(sequencer_.previous.kpts_l, 
                                                                       sequencer_.current.kpts_l, 
-                                                                      stereo_cameras_.K_cv());
+                                                                      stereo_.left().K_cv());
 
     if ( ! pose_predictor_.evaluateValidity(sequencer_.current.T_r, sequencer_.previous.T_r) )
       sequencer_.current.T_r = sequencer_.previous.T_r;
@@ -179,8 +203,12 @@ public:
 
     /***** Manage new features *****/
     detector_.bucketedFeatureDetection(sequencer_.current.img_l, 
-                                       sequencer_.current.kpts_l);
+                                        sequencer_.current.kpts_l);
     
+    // std::vector<cv::KeyPoint> kpts_loop_candidate = sequencer_.current.kpts_l;
+
+    // ROS_INFO_STREAM("detected - kpts_l.size(): " << sequencer_.current.kpts_l.size());
+
     std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> stereo_features = matcher_.circularMatching(sequencer_.current.img_l,
                                                                                                                 sequencer_.current.img_r,
                                                                                                                 sequencer_.previous.img_l,
@@ -190,10 +218,13 @@ public:
 
     sequencer_.storeFeatures(stereo_features.first, stereo_features.second);
 
+    // ROS_INFO_STREAM("matched - match_left.size(): " << stereo_features.first.size() << ", match_right.size(): " << stereo_features.second.size());
+
+
     std::pair<std::vector<cv::Point3f>, std::vector<int>> wrld_pts = matcher_.triangulate(sequencer_.current.kpts_l, 
                                                                                           sequencer_.current.kpts_r, 
-                                                                                          stereo_cameras_.lProjMat(), 
-                                                                                          stereo_cameras_.rProjMat());
+                                                                                          stereo_.leftProjMat(), 
+                                                                                          stereo_.rightProjMat());
     sequencer_.storeCloud(wrld_pts.first,
                           wrld_pts.second);
 
@@ -222,9 +253,10 @@ public:
                                                   features_cur_l,
                                                   features_cur_r);
 
+    // ROS_INFO_STREAM("Motion-BA using " << landmarks_prev.size() << " points - Optimized pose: \n" << T_r_opt.matrix());
+
     double scale_cur = pose_predictor_.calculateScale(T_r_opt.translation(), 
                                                       sequencer_.previous.scale);
-
 
 
     /***** End of iteration processes *****/
@@ -281,7 +313,7 @@ public:
                                                                           loop_kpts_matched, 
                                                                           landmarks_matched,
                                                                           matches,
-                                                                          stereo_cameras_.K_cv());
+                                                                          stereo_.left().K_cv());
         T_loop.translation() *= 0;
 
         // displayWindowFeatures(sequencer_.keyframes[loop_result.match_id], loop_kpts_matched,
