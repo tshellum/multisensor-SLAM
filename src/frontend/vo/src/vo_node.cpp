@@ -98,7 +98,8 @@ public:
   , stereo_cameras_( readConfigFromJsonFile( config_path_ + "camera.json" ),
                      readConfigFromJsonFile( config_path_ + "feature_management.json" ) )
   , detector_( readConfigFromJsonFile( config_path_ + "feature_management.json" ),
-               readConfigFromJsonFile( config_path_ + "camera.json" ) )
+               stereo_cameras_.getImageWidth(),
+               stereo_cameras_.getImageHeight() )
   , matcher_( readConfigFromJsonFile( config_path_ + "feature_management.json" ),
               detector_.getDefaultNorm() )
   , pose_predictor_( nh_, 
@@ -176,19 +177,39 @@ public:
     sequencer_.current.T_r.translation() *= sequencer_.previous.scale;
 
 
-
     /***** Manage new features *****/
-    detector_.bucketedFeatureDetection(sequencer_.current.img_l, 
-                                       sequencer_.current.kpts_l);
-    
-    std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> stereo_features = matcher_.circularMatching(sequencer_.current.img_l,
-                                                                                                                sequencer_.current.img_r,
-                                                                                                                sequencer_.previous.img_l,
-                                                                                                                sequencer_.previous.img_r, 
-                                                                                                                sequencer_.current.kpts_l, 
-                                                                                                                sequencer_.current.kpts_r);
+    detector_.detect(sequencer_.current.img_l, 
+                     sequencer_.current.kpts_l);
+
+    if ( matcher_.getMatchMethod() == DESCRIPTOR )
+    {
+      detector_.detect(sequencer_.current.img_r, 
+                      sequencer_.current.kpts_r);
+
+      sequencer_.current.descriptor_l = detector_.computeDescriptor(sequencer_.current.img_l, 
+                                                                      sequencer_.current.kpts_l);
+
+      sequencer_.current.descriptor_r = detector_.computeDescriptor(sequencer_.current.img_r, 
+                                                                    sequencer_.current.kpts_r);
+    }
+
+    std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> stereo_features = matcher_.matchStereoFeatures(sequencer_.current.img_l,
+                                                                                                                   sequencer_.current.img_r,
+                                                                                                                   sequencer_.previous.img_l,
+                                                                                                                   sequencer_.previous.img_r, 
+                                                                                                                   sequencer_.current.kpts_l, 
+                                                                                                                   sequencer_.current.kpts_r,
+                                                                                                                   sequencer_.current.descriptor_l,
+                                                                                                                   sequencer_.current.descriptor_r);
 
     sequencer_.storeFeatures(stereo_features.first, stereo_features.second);
+
+
+    displayWindowFeatures(sequencer_.current.img_l,
+                          sequencer_.current.kpts_l,
+                          sequencer_.current.img_r,
+                          sequencer_.current.kpts_r,
+                          "Stereo Matched Features" ); 
 
     std::pair<std::vector<cv::Point3f>, std::vector<int>> wrld_pts = matcher_.triangulate(sequencer_.current.kpts_l, 
                                                                                           sequencer_.current.kpts_r, 
@@ -236,9 +257,9 @@ public:
 
     /***** End of iteration processes *****/
     displayWindowFeatures(sequencer_.current.img_l, 
-                          stereo_features.first,
+                          sequencer_.current.kpts_l,
                           sequencer_.current.img_r,
-                          stereo_features.second,
+                          sequencer_.current.kpts_r,
                           "Stereo features" ); 
     
     // Rejecting bad pose optimization --> Setting equal to previous

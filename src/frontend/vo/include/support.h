@@ -100,9 +100,11 @@ void displayWindowMatches
   std::string name="Matches", int resizeWidth=1920, int resizeHeight=1080, int key=3
 )
 {
-  cv::Mat im_match; 
-  cv::drawMatches(image1, kps1, image2, kps2, matches, im_match); 
-  displayWindow(im_match, cv::Mat(), name, resizeWidth, resizeHeight, key);
+  {
+    cv::Mat im_match; 
+    cv::drawMatches(image1, kps1, image2, kps2, matches, im_match); 
+    displayWindow(im_match, cv::Mat(), name, resizeWidth, resizeHeight, key);
+  }
 }
 
 

@@ -120,7 +120,7 @@ public:
     gtsam::Key pose_key_from = gtsam::symbol_shorthand::X(from_id_); 
     gtsam::Key pose_key_to   = gtsam::symbol_shorthand::X(to_id); 
 
-    ROS_INFO_STREAM("VO - from_id: " << from_id_ << ", to_id: " << to_id);
+    // ROS_INFO_STREAM("VO - from_id: " << from_id_ << ", to_id: " << to_id);
     // pose_relative.print("VO BETWEEN");
 
     backend_->tryInsertValue(pose_key_to, pose_relative);  

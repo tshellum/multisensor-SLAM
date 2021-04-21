@@ -79,6 +79,9 @@ public:
     Eigen::Isometry3d T_w = tf2::transformToEigen(msg.transforms[0].transform); 
     gtsam::Pose3 pose(T_w.matrix()); 
 
+    // gtsam::Pose3 delta(gtsam::Rot3::Rodrigues(0.1, 0.1, 0.0), gtsam::Point3(1.0, 1.0, 0.0));
+
+
     if (backend_->checkInitialized() == false) 
     {
       pose_id_ = backend_->getPoseID();  
@@ -90,10 +93,10 @@ public:
       pose_id_ = associated_id.first;      
     }
 
-    ROS_INFO_STREAM("GNSS - id: " << pose_id_);
+    // ROS_INFO_STREAM("GNSS - id: " << pose_id_);
 
     gtsam::Key pose_key = gtsam::symbol_shorthand::X(pose_id_);       
-
+    // pose = pose.compose(delta);
     backend_->tryInsertValue(pose_key, pose);
     backend_->addFactor(
       gtsam::PriorFactor<gtsam::Pose3>(

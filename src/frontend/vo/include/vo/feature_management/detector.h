@@ -15,12 +15,22 @@
 #endif
 
 
+// enum ExtractorType 
+// {
+  
+// };
+
+
 class Detector
 {
 private:
   // Detector
   cv::Ptr<cv::Feature2D> extractor_;
   cv::Ptr<cv::Feature2D> descriptor_; 
+
+  bool use_bucketed_procedure_;
+  bool use_nms_;
+  bool use_provided_features_;
 
   // Function parameters
   int grid_size_;
@@ -36,84 +46,101 @@ private:
 public:
   Detector(){}
 
-  Detector(ros::NodeHandle nh) 
-  : n_id_(0)
-  {
-    // Detector parameters
-    int threshold;
-    nh.getParam("/detector/feature_threshold", threshold);
-    nh.getParam("/detector/max_number_of_features", max_features_);
-    nh.getParam("/detector/grid_size", grid_size_);
-    nh.getParam("/detector/nms_distance", nms_distance_);
-    
-    std::string extractor_type, descriptor_type;
-    nh.getParam("/detector/extractor_type", extractor_type);
-    nh.getParam("/detector/descriptor_type", descriptor_type);
-
-    int img_width_full, img_height_full;
-    nh.getParam("/camera_left/image_width", img_width_full);
-    nh.getParam("/camera_left/image_height", img_height_full);
-
-    // Extractor
-    if (extractor_type == "GFFT")
-      extractor_ = cv::GFTTDetector::create(max_features_, // maximum number of features
-                                            0.01,         // quality level
-                                            10);          // minimum allowed distance
-    else if (extractor_type == "FAST")
-      extractor_ = cv::FastFeatureDetector::create(threshold, // threshold
-                                                     true);      // NMS
-    else if (extractor_type == "ORB")
-      extractor_ = cv::ORB::create();
-    else
-      extractor_ = cv::FastFeatureDetector::create();
-                      
-
-    // Descriptor                          
-    if (descriptor_type == "ORB")
-      descriptor_ = cv::ORB::create(max_features_);
-    else 
-      descriptor_ = cv::ORB::create();
-  
-
-    width_ = img_width_full - (img_width_full % grid_size_);
-    height_ = img_height_full - (img_height_full % grid_size_);
-
-    patch_w_ = width_ / grid_size_;
-    patch_h_ = height_ / grid_size_;
-
-    n_buckets_ = grid_size_*grid_size_;
-  }
-
   Detector(boost::property_tree::ptree detector_config,
-           boost::property_tree::ptree camera_config)
+           int image_width, 
+           int image_height)
   : n_id_(0)
   {
+    use_bucketed_procedure_ = detector_config.get< bool >("detector.use_buckets");
+    use_nms_ = detector_config.get< bool >("detector.use_nms");
+    use_provided_features_ = detector_config.get< bool >("detector.use_provided_features");
+
     // Detector parameters
-    int threshold = detector_config.get< int >("detector.feature_threshold");
-    max_features_ = detector_config.get< int >("detector.max_number_of_features");
+    max_features_ = detector_config.get< int >("detector.patch_feature_limit");
     grid_size_    = detector_config.get< int >("detector.grid_size");
     nms_distance_ = detector_config.get< int >("detector.nms_distance");
 
     std::string extractor_type  = detector_config.get< std::string >("detector.extractor_type");
     std::string descriptor_type = detector_config.get< std::string >("detector.descriptor_type");
 
-    int img_width_full  = camera_config.get< int >("image_width");
-    int img_height_full = camera_config.get< int >("image_height");	
 
     // Construct detector
     #ifdef OPENCV_CUDA_ENABLED
-      extractor_ = cv::cuda::FastFeatureDetector::create(threshold, // threshold
-                                                   true);     // NMS
+      if (extractor_type == "FAST")
+        extractor_ = cv::cuda::FastFeatureDetector::create( detector_config.get< int >("detector.FAST.threshold"),
+                                                            detector_config.get< bool >("detector.FAST.nonmax_suppression") );  
+      else if (extractor_type == "ORB")
+        extractor_ = cv::cuda::ORB::create( detector_config.get< int >("detector.ORB.nfeatures"),
+                                            detector_config.get< float >("detector.ORB.scale_factor"),
+                                            detector_config.get< int >("detector.ORB.nlevels"),
+                                            detector_config.get< int >("detector.ORB.edge_threshold"),
+                                            detector_config.get< int >("detector.ORB.first_level"),
+                                            detector_config.get< int >("detector.ORB.WTA_K"),
+                                            cv::ORB::ScoreType( detector_config.get< int >("detector.ORB.score_type") ),
+                                            detector_config.get< int >("detector.ORB.patch_size"),
+                                            detector_config.get< int >("detector.ORB.fast_threshold") );
+      
+      else if (extractor_type == "GFFT")
+        extractor_ = cv::cuda::GFTTDetector::create( detector_config.get< int >("detector.GFFT.max_corners"),
+                                                     detector_config.get< float >("detector.GFFT.quality_level"),
+                                                     detector_config.get< int >("detector.GFFT.min_distance"),
+                                                     detector_config.get< int >("detector.GFFT.block_size"),
+                                                     detector_config.get< bool >("detector.GFFT.use_harris_detector"),
+                                                     detector_config.get< float >("detector.GFFT.k") );         
+      else if (extractor_type == "AKAZE")
+        extractor_ = cv::cuda::AKAZE::create( cv::AKAZE::DescriptorType( detector_config.get< int >("detector.AKAZE.descriptor_type") ),
+                                              detector_config.get< int >("detector.AKAZE.descriptor_size"),
+                                              detector_config.get< int >("detector.AKAZE.descriptor_channels"),
+                                              detector_config.get< int >("detector.AKAZE.threshold"),
+                                              detector_config.get< int >("detector.AKAZE.nOctaves"),
+                                              detector_config.get< int >("detector.AKAZE.nOctave_layers"),
+                                              cv::KAZE::DiffusivityType( detector_config.get< int >("detector.AKAZE.diffusivity") ) );
+
+      else
+        extractor_ = cv::cuda::FastFeatureDetector::create();
+
       descriptor_ = cv::cuda::ORB::create(max_features_);
+
     #else
-      extractor_ = cv::FastFeatureDetector::create(threshold, // threshold
-                                                   true);     // NMS
-      descriptor_ = cv::ORB::create(max_features_);
+      if (extractor_type == "FAST")
+        extractor_ = cv::FastFeatureDetector::create( detector_config.get< int >("detector.FAST.threshold"),
+                                                      detector_config.get< bool >("detector.FAST.nonmax_suppression") );  
+      else if (extractor_type == "ORB")
+        extractor_ = cv::ORB::create( detector_config.get< int >("detector.ORB.nfeatures"),
+                                      detector_config.get< float >("detector.ORB.scale_factor"),
+                                      detector_config.get< int >("detector.ORB.nlevels"),
+                                      detector_config.get< int >("detector.ORB.edge_threshold"),
+                                      detector_config.get< int >("detector.ORB.first_level"),
+                                      detector_config.get< int >("detector.ORB.WTA_K"),
+                                      cv::ORB::ScoreType( detector_config.get< int >("detector.ORB.score_type") ),
+                                      detector_config.get< int >("detector.ORB.patch_size"),
+                                      detector_config.get< int >("detector.ORB.fast_threshold") );
+      
+      else if (extractor_type == "GFFT")
+        extractor_ = cv::GFTTDetector::create( detector_config.get< int >("detector.GFFT.max_corners"),
+                                               detector_config.get< float >("detector.GFFT.quality_level"),
+                                               detector_config.get< int >("detector.GFFT.min_distance"),
+                                               detector_config.get< int >("detector.GFFT.block_size"),
+                                               detector_config.get< bool >("detector.GFFT.use_harris_detector"),
+                                               detector_config.get< float >("detector.GFFT.k") );         
+      else if (extractor_type == "AKAZE")
+        extractor_ = cv::AKAZE::create( cv::AKAZE::DescriptorType( detector_config.get< int >("detector.AKAZE.descriptor_type") ),
+                                        detector_config.get< int >("detector.AKAZE.descriptor_size"),
+                                        detector_config.get< int >("detector.AKAZE.descriptor_channels"),
+                                        detector_config.get< int >("detector.AKAZE.threshold"),
+                                        detector_config.get< int >("detector.AKAZE.nOctaves"),
+                                        detector_config.get< int >("detector.AKAZE.nOctave_layers"),
+                                        cv::KAZE::DiffusivityType( detector_config.get< int >("detector.AKAZE.diffusivity") ) );
+
+      else
+        extractor_ = cv::FastFeatureDetector::create();
+
+      descriptor_ = cv::ORB::create();
     #endif
   
 
-    width_ = img_width_full - (img_width_full % grid_size_);
-    height_ = img_height_full - (img_height_full % grid_size_);
+    width_ = image_width - (image_width % grid_size_);
+    height_ = image_height - (image_height % grid_size_);
 
     patch_w_ = width_ / grid_size_;
     patch_h_ = height_ / grid_size_;
@@ -126,6 +153,9 @@ public:
 
   int getDefaultNorm() {return descriptor_->defaultNorm();};
 
+  void detect(cv::Mat image, 
+              std::vector<cv::KeyPoint>& features);
+
   void bucketedFeatureDetection(cv::Mat image, 
                                 std::vector<cv::KeyPoint>& features);
   
@@ -134,6 +164,48 @@ public:
 
   std::pair< std::vector<cv::KeyPoint>, cv::Mat > detectCompute(cv::Mat image);
 };
+
+
+
+void Detector::detect(cv::Mat image, 
+                      std::vector<cv::KeyPoint>& features)
+{
+  if (use_bucketed_procedure_)
+    bucketedFeatureDetection(image, features);
+
+  else
+  { 
+    std::vector<cv::KeyPoint> features_new;
+    extractor_->detect(image, features_new, cv::Mat());  
+
+    std::vector<cv::KeyPoint> features_concatenated;
+    if (use_provided_features_)
+      features_concatenated = features;
+
+    for(unsigned int i = 0; i < features_new.size(); i++)
+    {
+      bool add_pt = true;
+      if (use_nms_)
+      {
+        for(unsigned int j = 0; j < features_concatenated.size(); j++)
+        {
+          // NMS
+          if ( pow((features_new[i].pt.x - features_concatenated[j].pt.x), 2) 
+            + pow((features_new[i].pt.y - features_concatenated[j].pt.y), 2) < pow(nms_distance_, 2) )
+          {
+            add_pt = false;
+            break;
+          }
+        }
+      }
+
+      features_new[i].class_id = n_id_++;
+      if (add_pt)
+        features_concatenated.push_back(features_new[i]);
+    }
+    features = features_concatenated;
+  }
+}
 
 
 // TODO: Dynamisk threshold

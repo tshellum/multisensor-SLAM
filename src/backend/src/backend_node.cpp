@@ -25,13 +25,22 @@ int main(int argc, char **argv)
 	ros::init(argc, argv, "backend_node");
 	ROS_INFO("\n\n\n ----- Starting backend ----- \n");
 
+	// Read parameters
 	ros::NodeHandle nh; 
 
 	// Read initial parameter values
 	std::string filename, dataset;
 	nh.getParam("/dataset", dataset);
+	nh.getParam("/filename", filename);
+	if ( (dataset == "") || (filename == "") || argc > 5)
+	{
+		dataset = argv[1];
+		filename = argv[2];
+	}
+
 	std::string config_path = ros::package::getPath("backend") + "/../../config/" + dataset + "/backend/";
-	boost::property_tree::ptree parameters = readConfigFromJsonFile( config_path + "parameters.json" );
+	boost::property_tree::ptree parameters = readConfigFromJsonFile( config_path + filename + ".json" );
+
 
 	// Initialize backend node
 	std::shared_ptr<backend::Backend> backend = std::make_shared<backend::Backend>(); 

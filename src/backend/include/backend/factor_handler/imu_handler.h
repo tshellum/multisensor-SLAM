@@ -149,7 +149,7 @@ public:
 
     backend->updateVelocity(prior_velocity);
 
-    prior_pose.print();
+    // prior_pose.print();
 
     prev_state_ = gtsam::NavState(prior_pose, prior_velocity);
     pred_state_ = prev_state_;
@@ -210,7 +210,7 @@ public:
     int to_id = backend_->getPoseID();
     if (to_id > from_id_)
     {
-      ROS_INFO_STREAM("IMU - from_id: " << from_id_ << ", to_id: " << to_id);
+      // ROS_INFO_STREAM("IMU - from_id: " << from_id_ << ", to_id: " << to_id);
 
       addPreintegratedFactor(to_id);
       backend_->updatePreintegrationStatus(true);
@@ -235,7 +235,7 @@ public:
     backend_->tryInsertValue(vel_key_to, pred_state_.velocity());
     backend_->tryInsertValue(bias_key_to, prev_bias_);
 
-    ROS_INFO_STREAM("IMU VELOCITY: \n" << pred_state_.velocity());
+    // ROS_INFO_STREAM("IMU VELOCITY: \n" << pred_state_.velocity());
 
     gtsam::CombinedImuFactor imu_factor(pose_key_from, 
                                         vel_key_from,
@@ -260,12 +260,12 @@ public:
     pose_prior_ = backend_->getPose();
     gtsam::Pose3 pose_diff = pose_prior_.between(pred_state_.pose());
 
-    ROS_INFO_STREAM("velocity: " << velocity);
+    // ROS_INFO_STREAM("velocity: " << velocity);
 
     // pose_prior_.print("POSE PRIOR");
     // pred_state_.pose().print("POSE PREDICT");
 
-    pose_diff.print("IMU PREDICTED POSE DIFF");
+    // pose_diff.print("IMU PREDICTED POSE DIFF");
 
     // preintegrated_->print("PREINTEGRATION");
 

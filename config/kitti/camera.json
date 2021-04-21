@@ -2,6 +2,16 @@
 	"image_width"  : 1241,
 	"image_height" : 376,
 
+	"preprocess" : {
+		"crop" : {
+			"x0" 	 : -1,
+			"y0" 	 : -1,
+			"width"  : -1,
+			"height" : -1
+		},
+		"brightness_gamma_correction" : 1.0
+	},
+
 	"camera_left" : {
 		"distortion" 		: [0.0, 0.0, 0.0, 0.0, 0.0],
 		"intrinsics" 		: [718.8560, 	  0.0, 607.1928, 

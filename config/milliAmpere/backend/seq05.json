@@ -1,0 +1,41 @@
+{
+	"pose_origin" : {
+		"translation" : {
+			"x" : -524.8952908040462,  
+			"y" : -301.701414680771,
+			"z" : -1.5985665933457973
+		},
+		"orientation" : {
+			"w" : 0.9966422132281961,
+			"x" : 0.00018037761339681773,  
+			"y" : -0.009645567753081258,
+			"z" : -0.08130946622774195
+		}
+	},
+
+	"imu" : {
+		"frame"  : "NED",
+		"dt_avg" : 0.01,
+		"accelerometer_sigma" 	   : 0.01,
+		"gyroscope_sigma" 		   : 0.000175,
+		"integration_sigma" 	   : 0,
+		"accelerometer_bias_sigma" : 0.000167,
+		"gyroscope_bias_sigma" 	   : 2.91e-006,
+		"velocity" : {
+			"x" : 0.0,  
+			"y" : 0.0,
+			"z" : 0.0
+		}
+	},
+
+	"gnss" : {
+		"frame"  			: "NED",
+		"orientation_sigma" : 0.1,
+		"position_sigma" 	: 0.15
+	},
+
+	"visual_odometry" : {
+		"orientation_sigma" : 0.3, 
+		"position_sigma" 	: 0.175
+	}
+}

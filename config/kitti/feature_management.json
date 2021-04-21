@@ -1,14 +1,61 @@
 {
 	"detector" : {
-		"extractor_type"      	 : "FAST",
-		"descriptor_type"      	 : "ORB",
-		"feature_threshold"      : 25,
-		"grid_size"            	 : 10,
-		"max_number_of_features" : 2,
-		"nms_distance"           : 10
+		"extractor_type"      	: "FAST",
+		"descriptor_type"     	: "ORB",
+		"use_buckets"     	  	: true,
+		"use_nms"     	  	  	: true,
+		"use_provided_features" : true,
+		"grid_size"           	: 10,
+		"patch_feature_limit" 	: 3,
+		"nms_distance"     	  	: 5,
+		
+		"FAST" : {
+			"threshold"  		: 10,
+			"nonmax_suppression" : true
+		},
+
+		"ORB" : {
+			"nfeatures"		 : 500,
+			"scale_factor"	 : 1.2,
+			"nlevels"		 : 8,
+			"edge_threshold" : 31,
+			"first_level"	 : 0,
+			"WTA_K"			 : 2,
+			"score_type"	 : 1,
+			"patch_size"	 : 31,
+			"fast_threshold" : 20
+		},
+
+		"GFFT" : {
+			"max_corners" 		  : 1000,
+			"quality_level" 	  : 0.01,
+			"min_distance"		  : 1,
+			"block_size" 		  : 3,
+			"use_harris_detector" : false,
+			"k"					  : 0.04
+		},
+
+		"AKAZE" : {
+			"descriptor_type" 	  : 5,
+			"descriptor_size" 	  : 0,
+			"descriptor_channels" : 3,
+			"threshold"	  		  : 0.001,
+			"nOctaves"	  		  : 4,
+			"nOctave_layers" 	  : 4,
+			"diffusivity"		  : 1
+		}
+
 	},
   	"matcher" : {
-		"match_error" 		 : 0.5,
-		"reprojection_error" : 0.5
+		"match_error" 		   : 0.5,
+		"reprojection_error"   : 0.5,
+		"LKtracker_eig_thresh" : 1e-4,
+		"stereo_match_method"  : 2,
+
+		"descriptor" : {
+			"method" 	  : "FLANN",
+			"knn_match"	  : false,
+			"cross_check" : true
+		}
 	}
 }

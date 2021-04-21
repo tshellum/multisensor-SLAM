@@ -4,9 +4,10 @@
     <arg name = "vo_topic"             default = "/frontend/vo"/>
     <arg name = "lidar_odometry_topic" default = "/frontend/lidar_odometry/pose_relative"/>
     <arg name = "gnss_topic"           default = "/tf"/>
-    <arg name = "imu_topic"            default = "/kitti/oxts/imu"/>
+    <arg name = "imu_topic"            default = "/xsens/imu"/>
 
-    <param name = "dataset" type = "string" value = "kitti" />
+    <param name = "dataset"  type = "string" value = "milliAmpere" />
+    <param name = "filename" type = "string" value = "seq03" />
 
     <node 
         name   = "backend"

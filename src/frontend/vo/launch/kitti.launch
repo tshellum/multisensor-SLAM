@@ -8,8 +8,6 @@
     <param name = "frame" type = "string" value = "ENU" />
     <param name = "dataset" type = "string" value = "kitti" />
 
-    <rosparam file = "$(find vo)/../../../config/kitti/camera.yaml" />
-
     <node 
         name   = "vo"
         pkg    = "vo"

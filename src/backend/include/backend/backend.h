@@ -16,8 +16,12 @@
 #include <gtsam/inference/Symbol.h>
 #include <gtsam/slam/BetweenFactor.h>
 
+/*** Local ***/ 
+#include "support.h"
+
 /*** Standard library ***/ 
 #include <fstream>
+#include <time.h>
 
 namespace backend
 {
@@ -132,7 +136,7 @@ void Backend::callback(const ros::TimerEvent& event)
 {
   if (updated_)
   {
-    ROS_INFO("-------------------------------------------------");
+    // ROS_INFO("-------------------------------------------------");
     updated_ = false;
     imu_status_.second = false;
 
@@ -163,7 +167,9 @@ void Backend::callback(const ros::TimerEvent& event)
     clearOldAssocations(); 
 
     ros::Time toc = ros::Time::now();
-    ROS_INFO_STREAM("Time per iteration: " <<  (toc - tic) << "\n");
+    // ROS_INFO_STREAM("Time per iteration: " <<  (toc - tic) << "\n");
+    printSummary((toc - tic).toSec(),
+                  Eigen::Affine3d{pose_.matrix()} );
   }
 }
 
