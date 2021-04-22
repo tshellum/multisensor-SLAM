@@ -1,0 +1,41 @@
+
+rc: '/rc_state'
+actuator_1_setpoint: '/actuator_ref_1'
+actuator_1_motor_state: '/actuators/actuator_1/thruster/motor_state'
+actuator_1_angle: '/actuators/actuator_1/azimuth_angle'
+actuator_2_setpoint: '/actuator_ref_2'
+actuator_2_motor_state: '/actuators/actuator_2/thruster/motor_state'
+actuator_2_angle: '/actuators/actuator_2/azimuth_angle'
+navigation_pose: '/navigation/pose'
+navigation_twist_body: '/navigation/twist_body'
+navigation_twist_ned: '/navigation/twist_ned'
+nav_est: '/navigation/nav_estimate'  # Stamped navigation information
+docking_mpc_parameters: '/docking_mpc_parameters'
+waypoint: '/guidance/waypoint'
+desired_pose: '/guidance/reference/pose'
+desired_pose_rate: '/guidance/reference/velocity'
+desired_pose_acceleration: '/guidance/reference/acceleration'
+control_action_reference: '/dynamic_positioning/control_action'
+mode: '/supervisor/mode'
+
+# Docking hatch system topics
+docking_hatch_control_fore: "/docking_hatch/control_fore"
+docking_hatch_control_aft: "/docking_hatch/control_aft"
+docking_hatch_manual_operation: "/docking_hatch/manual_operation"
+docking_hatch_ack_alarms: "/docking_hatch/ack_alarms"
+docking_hatch_distance_fore: "/docking_hatch/distance_fore"
+docking_hatch_distance_aft: "/docking_hatch/distance_aft"
+docking_hatch_status: "/docking_hatch/status"
+docking_hatch_alarms: "/docking_hatch/alarms"
+
+vector_fix: '/vectorVS330/fix'
+vector_velocity: '/vectorVS330/velocity'
+vector_heading: '/vectorVS330/heading'
+vector_raw: '/vectorVS330/GPGGA'
+
+xsens_imu: '/xsens/imu'
+
+sim_tau: '/sim/tau'
+sim_wind_velocity: '/sim/wind_velocity'
+sim_tau_wind: '/sim/tau_wind'
+sim_vessel_state: '/sim/vessel_state'
