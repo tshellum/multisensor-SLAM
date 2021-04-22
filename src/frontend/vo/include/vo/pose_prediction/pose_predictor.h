@@ -36,7 +36,16 @@ private:
   double scale_;
 
 public:
-  PosePredictor(){}
+  PosePredictor()
+  : scale_(1.0)
+  {
+    T_bc_ << 0, 0, 1, 0,
+             1, 0, 0, 0,
+             0, 1, 0, 0,
+             0, 0, 0, 1;
+
+    T_cb_ = T_bc_.transpose();
+  }
   
   PosePredictor(
     ros::NodeHandle nh, 
@@ -107,7 +116,7 @@ Eigen::Affine3d PosePredictor::predict(double dt)
     // T_r_pred_.linear()      = model_.predictRotation(dt, T_r_pred_.linear(), ang_rate_k_);
   }
 
-  ROS_INFO_STREAM("T_r_pred_: \n" << T_r_pred_.matrix());
+  // ROS_INFO_STREAM("T_r_pred_: \n" << T_r_pred_.matrix());
   // ROS_INFO_STREAM("Angles: \n" << T_r_pred_.linear().eulerAngles(0,1,2);
   // ROS_INFO_STREAM("Translation: \n" << T_r_pred_.translation();
 

@@ -30,6 +30,7 @@ private:
   double reproj_thresh_; // Reprojection error threshold
   double eig_thresh_; // Reprojection error threshold
   StereoMatchMethod stereo_match_method_;
+  bool display_;
 
   bool use_knn_procedure_;
 	cv::BFMatcher desc_matcher_loop_; // for loop closure descriptor matching
@@ -45,10 +46,12 @@ public:
     match_thresh_  = config.get< double >("matcher.match_error");
     reproj_thresh_ = config.get< double >("matcher.reprojection_error");
     eig_thresh_    = config.get< double >("matcher.LKtracker_eig_thresh");
+    eig_thresh_    = config.get< double >("matcher.LKtracker_eig_thresh");
 
     stereo_match_method_ = StereoMatchMethod( config.get< int >("matcher.stereo_match_method") );
     use_knn_procedure_ = config.get< bool >("matcher.descriptor.knn_match");
-
+    display_ = StereoMatchMethod( config.get< bool >("matcher.display") );
+    
     desc_matcher_loop_ = cv::BFMatcher(descriptor_norm, true);
 
     if (config.get< std::string >("matcher.descriptor.method") == "FLANN")
@@ -82,6 +85,10 @@ public:
                                                                                       cv::Mat desc_prev = cv::Mat(), 
                                                                                       cv::Mat desc_cur = cv::Mat());
 
+  std::vector<cv::DMatch> matchDescriptors(cv::Mat desc_prev, 
+                                           cv::Mat desc_cur, 
+                                           std::vector<cv::KeyPoint>& kpts_prev, 
+                                           std::vector<cv::KeyPoint>& kpts_cur);
 
   std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> circularMatching(cv::Mat left_cur_img, 
                                                                                    cv::Mat right_cur_img, 
@@ -230,37 +237,75 @@ std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> Matcher::matchSt
   switch (stereo_match_method_)
   {
   case DESCRIPTOR:
-    if (use_knn_procedure_) 
-      extractKNNDescriptorMatches(desc_prev, 
-                                  desc_cur, 
-                                  features_left_cur, 
-                                  features_right_cur);
-    else 
-      extractDescriptorMatches(desc_prev, 
-                               desc_cur, 
-                               features_left_cur, 
-                               features_right_cur);
+  {
+    std::vector<cv::KeyPoint> kpts_display_l = features_left_cur;
+    std::vector<cv::KeyPoint> kpts_display_r = features_right_cur;
+    std::vector<cv::DMatch> matches = matchDescriptors(desc_prev, 
+                                                       desc_cur, 
+                                                       features_left_cur, 
+                                                       features_right_cur);
     
+    if (display_)
+      displayWindowMatches(
+          left_cur_img, kpts_display_l, 
+          right_cur_img, kpts_display_r,
+          matches,
+          "Matched Features");
+
     return std::make_pair(features_left_cur, features_right_cur);
-  
+  }
+
   case FORWARDBACKWARD:
+  {
     forwardBackwardLKMatch(left_cur_img,
                            features_left_cur,
                            right_cur_img,
                            features_right_cur);
-    return std::make_pair(features_left_cur, features_right_cur);
+    if (display_)
+      displayWindowFeatures(left_cur_img,
+                            features_left_cur,
+                            right_cur_img,
+                            features_right_cur,
+                            "Matched Features" ); 
 
+    return std::make_pair(features_left_cur, features_right_cur);
+  }
+  
   case CIRCULAR:
   default:
-    return circularMatching(left_cur_img,
+    std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> matches = circularMatching(left_cur_img,
                             right_cur_img,
                             left_prev_img,
                             right_prev_img, 
                             features_left_cur, 
                             features_right_cur);
+    if (display_)
+      displayWindowFeatures(left_cur_img,
+                            matches.first,
+                            right_cur_img,
+                            matches.second,
+                            "Matched Features" );
+    return matches;
   }
 }                                                                                      
 
+std::vector<cv::DMatch> Matcher::matchDescriptors(cv::Mat desc_prev, 
+                                                  cv::Mat desc_cur, 
+                                                  std::vector<cv::KeyPoint>& kpts_prev, 
+                                                  std::vector<cv::KeyPoint>& kpts_cur)
+{
+  if (use_knn_procedure_) 
+      return extractKNNDescriptorMatches(desc_prev, 
+                                         desc_cur, 
+                                         kpts_prev, 
+                                         kpts_cur);
+    
+    else
+      return extractDescriptorMatches(desc_prev, 
+                                      desc_cur, 
+                                      kpts_prev, 
+                                      kpts_cur);
+}
 
 
 std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> Matcher::circularMatching(cv::Mat left_cur_img, 
@@ -330,7 +375,7 @@ std::vector<cv::DMatch> Matcher::extractDescriptorMatches(cv::Mat desc_prev,
     int prev_idx = matches[i].queryIdx;
     int cur_idx = matches[i].trainIdx;
     
-    if ( std::abs(kpts_prev[prev_idx].pt.y - kpts_cur[cur_idx].pt.y) < 5 )
+    if ( std::abs(kpts_prev[prev_idx].pt.y - kpts_cur[cur_idx].pt.y) < 20 )
     {
       cv::KeyPoint pt_r = kpts_cur[cur_idx];
       pt_r.class_id = kpts_prev[prev_idx].class_id;
@@ -360,12 +405,12 @@ std::vector<cv::DMatch> Matcher::extractKNNDescriptorMatches(cv::Mat desc_prev,
   std::vector<cv::KeyPoint> kpts_prev_matched, kpts_cur_matched;
   for (const std::vector<cv::DMatch> match : matches)
   {
-    if (match[0].distance < match[1].distance * 0.8)
+    if (match[0].distance < match[1].distance * 0.7)
     {
       int prev_idx = match[0].queryIdx;
       int cur_idx = match[0].trainIdx;
       
-      if ( std::abs(kpts_prev[prev_idx].pt.y - kpts_cur[cur_idx].pt.y) < 5 )
+      // if ( std::abs(kpts_prev[prev_idx].pt.y - kpts_cur[cur_idx].pt.y) < 100 )
       {
         cv::KeyPoint pt_r = kpts_cur[cur_idx];
         pt_r.class_id = kpts_prev[prev_idx].class_id;
@@ -402,8 +447,6 @@ std::vector<cv::DMatch> Matcher::extractDescriptorMatchesLoop(cv::Mat cur_desc,
     int cur_id = matches[i].queryIdx;
     int loop_id = matches[i].trainIdx;
     
-    ROS_INFO_STREAM("Vertical match diff: " << std::abs(cur_kpts[cur_id].pt.y - loop_kpts[loop_id].pt.y));
-
     if ( std::abs(cur_kpts[cur_id].pt.y - loop_kpts[loop_id].pt.y) < 5 )
     {
       ROS_INFO("added");
@@ -523,8 +566,10 @@ std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::
     cv::Point2f proj_l = project(pt3D, P_l);
     cv::Point2f proj_r = project(pt3D, P_r);
 
+    // ROS_INFO_STREAM("triangulation() pt3D: " << pt3D);
+
     if ( (pt3D.at<double>(2) < 0)                              // Point is not in front of camera
-      || (pt3D.at<double>(2) > 100)                           // Point is more than ..m away from camera
+      || (pt3D.at<double>(2) > 200)                           // Point is more than ..m away from camera
       || (match_left[i].class_id != match_right[i].class_id)   // Not matched
       || ( pow((match_left[pt_it].pt.x - proj_l.x), 2)  + pow((match_left[pt_it].pt.y - proj_l.y), 2)  > reproj_thresh_ ) // To large reprojection error in left cam
       || ( pow((match_right[pt_it].pt.x - proj_r.x), 2) + pow((match_right[pt_it].pt.y - proj_r.y), 2) > reproj_thresh_ ) // To large reprojection error in right cam

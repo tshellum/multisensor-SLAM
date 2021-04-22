@@ -51,6 +51,7 @@
 		"reprojection_error"   : 0.5,
 		"LKtracker_eig_thresh" : 1e-4,
 		"stereo_match_method"  : 2,
+		"display"			   : false,
 
 		"descriptor" : {
 			"method" 	  : "FLANN",

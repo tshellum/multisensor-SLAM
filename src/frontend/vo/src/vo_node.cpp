@@ -10,7 +10,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseStamped.h>
-#include "vo/VO_msg.h"
+#include "vo/VSLAM_msg.h"
 
 
 /*** OpenCV packages ***/
@@ -102,9 +102,9 @@ public:
                stereo_cameras_.getImageHeight() )
   , matcher_( readConfigFromJsonFile( config_path_ + "feature_management.json" ),
               detector_.getDefaultNorm() )
-  , pose_predictor_( nh_, 
-                     "imu_topic", 
-                     1000 )
+  // , pose_predictor_( nh_, 
+  //                    "imu_topic", 
+  //                    1000 )
   , structure_BA_( stereo_cameras_.l().K_eig, 
                    stereo_cameras_.r().K_eig, 
                    stereo_cameras_.T_lr(), 
@@ -157,19 +157,41 @@ public:
 
 
     /***** Track features and estimate relative pose *****/
-    sequencer_.current.kpts_l = matcher_.projectLandmarks(sequencer_.previous.world_points,
-                                                          pose_predictor_.getPoseRelative(),
-                                                          stereo_cameras_.K_eig(),
-                                                          sequencer_.previous.kpts_l);
+    if ( matcher_.getMatchMethod() == DESCRIPTOR )
+    {
+      detector_.detect(sequencer_.current.img_l, 
+                       sequencer_.current.kpts_l);
+      
+      sequencer_.current.descriptor_l = detector_.computeDescriptor(sequencer_.current.img_l, 
+                                                                    sequencer_.current.kpts_l);
 
-    matcher_.track(sequencer_.previous.img_l, 
-                   sequencer_.current.img_l, 
-                   sequencer_.previous.kpts_l,
-                   sequencer_.current.kpts_l);
+      matcher_.matchDescriptors(sequencer_.previous.descriptor_l,
+                                sequencer_.current.descriptor_l, 
+                                sequencer_.previous.kpts_l, 
+                                sequencer_.current.kpts_l);
+    }
+    else // LK Tracker
+    {
+      sequencer_.current.kpts_l = matcher_.projectLandmarks(sequencer_.previous.world_points,
+                                                            pose_predictor_.getPoseRelative(),
+                                                            stereo_cameras_.K_eig(),
+                                                            sequencer_.previous.kpts_l);
+
+      matcher_.track(sequencer_.previous.img_l, 
+                     sequencer_.current.img_l, 
+                     sequencer_.previous.kpts_l,
+                     sequencer_.current.kpts_l);
+    }
 
     sequencer_.current.T_r = pose_predictor_.estimatePoseFromFeatures(sequencer_.previous.kpts_l, 
                                                                       sequencer_.current.kpts_l, 
                                                                       stereo_cameras_.K_cv());
+
+    // displayWindowFeatures(sequencer_.previous.img_l,
+    //                       sequencer_.previous.kpts_l,
+    //                       sequencer_.current.img_l,
+    //                       sequencer_.current.kpts_l,
+    //                       "Matched Features: Previous-->Current" ); 
 
     if ( ! pose_predictor_.evaluateValidity(sequencer_.current.T_r, sequencer_.previous.T_r) )
       sequencer_.current.T_r = sequencer_.previous.T_r;
@@ -187,7 +209,7 @@ public:
                       sequencer_.current.kpts_r);
 
       sequencer_.current.descriptor_l = detector_.computeDescriptor(sequencer_.current.img_l, 
-                                                                      sequencer_.current.kpts_l);
+                                                                    sequencer_.current.kpts_l);
 
       sequencer_.current.descriptor_r = detector_.computeDescriptor(sequencer_.current.img_r, 
                                                                     sequencer_.current.kpts_r);
@@ -204,13 +226,6 @@ public:
 
     sequencer_.storeFeatures(stereo_features.first, stereo_features.second);
 
-
-    displayWindowFeatures(sequencer_.current.img_l,
-                          sequencer_.current.kpts_l,
-                          sequencer_.current.img_r,
-                          sequencer_.current.kpts_r,
-                          "Stereo Matched Features" ); 
-
     std::pair<std::vector<cv::Point3f>, std::vector<int>> wrld_pts = matcher_.triangulate(sequencer_.current.kpts_l, 
                                                                                           sequencer_.current.kpts_r, 
                                                                                           stereo_cameras_.lProjMat(), 
@@ -218,7 +233,7 @@ public:
     sequencer_.storeCloud(wrld_pts.first,
                           wrld_pts.second);
 
-
+    // ROS_INFO_STREAM("landmarks size: " << sequencer_.current.world_points.size() );
 
     /***** Refine results using BA *****/
     std::pair<std::vector<cv::Point2f>, std::vector<cv::Point2f>> img_pts = convert(sequencer_.current.kpts_l, 

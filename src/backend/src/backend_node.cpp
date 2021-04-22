@@ -46,14 +46,14 @@ int main(int argc, char **argv)
 	std::shared_ptr<backend::Backend> backend = std::make_shared<backend::Backend>(); 
 
 
-	// Global sensor subscribers (if used - shoule be placed first)
+	// // Global sensor subscribers (if used - shoule be placed first)
 	// backend::factor_handler::GNSSHandler gnss(
 	// 	nh, "gnss_topic", 1000, 
 	// 	backend,
 	// 	parameters
 	// );
 
-	// Local/relative sensor subscribers 
+	// // Local/relative sensor subscribers 
 	// backend::factor_handler::IMUHandler imu(
 	// 	nh, "imu_topic", 1000, 
 	// 	backend,

@@ -57,6 +57,10 @@ private:
 
   gtsam::Pose3 pose_prior_;
 
+  Eigen::Vector3d s;
+  Eigen::Vector3d v;
+  Eigen::Vector3d a;
+
 public:
   IMUHandler(
     ros::NodeHandle nh, 
@@ -93,9 +97,9 @@ public:
 	
     boost::shared_ptr<gtsam::PreintegratedCombinedMeasurements::Params> params;
     if (parameters.get< std::string >("imu.frame") == "ENU")
-      params = gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedU(9.81); // ENU
+      params = gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedU(); // ENU
     else if (parameters.get< std::string >("imu.frame") == "NED")
-      params = gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedD(9.81); // NED
+      params = gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedD(); // NED
     else
       params = boost::make_shared<gtsam::PreintegratedCombinedMeasurements::Params>(gtsam::Vector3(0.0, 0.0, 9.81));
     
@@ -145,8 +149,16 @@ public:
       prior_velocity = gtsam::Vector3(parameters.get< double >("imu.velocity.x"), 
                                       parameters.get< double >("imu.velocity.y"), 
                                       parameters.get< double >("imu.velocity.z"));
+
+      s = Eigen::Vector3d(0.0, 0.0, 0.0);
+      v = Eigen::Vector3d(parameters.get< double >("imu.velocity.x"), 
+                          parameters.get< double >("imu.velocity.y"), 
+                          parameters.get< double >("imu.velocity.z"));
     }
 
+    // prior_pose.print();
+    // ROS_INFO_STREAM("prior_velocity: " << prior_velocity);
+    
     backend->updateVelocity(prior_velocity);
 
     // prior_pose.print();
@@ -189,6 +201,15 @@ public:
     tf2::fromMsg(msg->angular_velocity, gyr);
     tf2::fromMsg(msg->linear_acceleration, acc);
     
+    a = acc;
+    a.z() -= 9.81;
+    s = s + (v*dt_) + (a * pow(dt_, 2)); 
+    v = v + (a*dt_); 
+
+    // ROS_INFO_STREAM("s: " << s);
+    // ROS_INFO_STREAM("v: " << v);
+    // ROS_INFO_STREAM("a: " << a);
+
     // Eigen::Matrix3d R;
     // R << 0, 1, 0,
     //      1, 0, 0,
