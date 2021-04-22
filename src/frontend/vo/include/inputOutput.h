@@ -8,7 +8,7 @@
 #include "vo/VO_msg.h"
 #include "vo/PointID_msg.h"
 
-#include "vo/VO_loop_msg.h"
+#include "vo/VSLAM_msg.h"
 #include "vo/IDPoint3D_msg.h"
 #include "vo/IDPoint2D_msg.h"
 
@@ -202,7 +202,7 @@ vo::IDPoint2D_msg toPt2DMsg(cv::Point2f pt, int id)
 
 
 
-vo::VO_loop_msg generateMsgInBody(ros::Time stamp,
+vo::VSLAM_msg generateMsgInBody(ros::Time stamp,
                                   int sequence_id,
                                   Eigen::Affine3d T_r,
                                   bool is_keyframe,
@@ -210,7 +210,8 @@ vo::VO_loop_msg generateMsgInBody(ros::Time stamp,
                                   bool loop_found,
                                   int match_id,
                                   Eigen::Affine3d T_loop,
-                                  std::vector<cv::KeyPoint> image_points,
+                                  std::vector<cv::KeyPoint> image_points_left,
+                                  std::vector<cv::KeyPoint> image_points_right,
                                   std::vector<cv::Point3f> world_points,
                                   std::vector<int> world_point_indices,
                                   std::string frame = "")
@@ -234,7 +235,7 @@ vo::VO_loop_msg generateMsgInBody(ros::Time stamp,
   
   Eigen::Matrix4d T_cb = T_bc.transpose();
 
-  vo::VO_loop_msg vo_msg;
+  vo::VSLAM_msg vo_msg;
   vo_msg.header.frame_id = "vo";
   vo_msg.header.stamp = stamp;
   vo_msg.header.seq = sequence_id;
@@ -252,7 +253,8 @@ vo::VO_loop_msg generateMsgInBody(ros::Time stamp,
   for(int i = 0; i < world_points.size(); i++)
   {
     vo_msg.landmarks.push_back( toPt3DMsg(world_points[i], world_point_indices[i]) );
-    vo_msg.features.push_back( toPt2DMsg(image_points[i].pt, image_points[i].class_id) );
+    vo_msg.lfeatures.push_back( toPt2DMsg(image_points_left[i].pt, image_points_left[i].class_id) );
+    vo_msg.rfeatures.push_back( toPt2DMsg(image_points_right[i].pt, image_points_right[i].class_id) );
   }
 
   return vo_msg;

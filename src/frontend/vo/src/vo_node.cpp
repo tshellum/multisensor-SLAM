@@ -125,7 +125,7 @@ public:
     sync_->registerCallback(boost::bind(&VO::callback, this, _1, _2));
 
     // Publish
-    vo_pub_  = nh_.advertise<vo::VO_loop_msg>("/frontend/vo", 1000);
+    vo_pub_  = nh_.advertise<vo::VSLAM_msg>("/frontend/vo", 1000);
 
     // Read base parameters
     nh_.getParam("/frame", frame_);
@@ -350,6 +350,7 @@ public:
                                         loop_result.match_id,
                                         T_loop_closure,
                                         sequencer_.current.kpts_l,
+                                        sequencer_.current.kpts_r,
                                         sequencer_.current.world_points,
                                         sequencer_.current.indices,
                                         frame_) );

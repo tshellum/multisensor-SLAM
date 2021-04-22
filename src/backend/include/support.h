@@ -1,6 +1,10 @@
 #pragma once
 
 #include <ros/package.h>
+#include "backend/IDPoint3D_msg.h"
+#include "backend/IDPoint2D_msg.h"
+
+#include <Eigen/Dense>
 
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -34,6 +38,28 @@ boost::property_tree::ptree readConfigFromJsonFile(const std::string& filename)
 
 	return pt;
 }
+
+
+std::pair<Eigen::Vector3d, int> fromPt3DMsg(backend::IDPoint3D_msg msg)
+{
+  Eigen::Vector3d pt;
+  pt.x() = msg.x;
+  pt.y() = msg.y;
+  pt.z() = msg.z;
+
+  return std::make_pair(pt, msg.id);
+}
+
+
+std::pair<Eigen::Vector2d, int> fromPt2DMsg(backend::IDPoint2D_msg msg)
+{
+  Eigen::Vector2d pt;
+  pt.x() = msg.x;
+  pt.y() = msg.y;
+
+  return std::make_pair(pt, msg.id);
+}
+
 
 void printSummary(double tpf,
                   Eigen::Affine3d T_clcr)

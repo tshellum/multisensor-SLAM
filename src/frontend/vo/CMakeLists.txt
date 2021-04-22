@@ -105,7 +105,7 @@ add_message_files(
   VO_msg.msg
   PointID_msg.msg
 
-  VO_loop_msg.msg
+  VSLAM_msg.msg
   IDPoint3D_msg.msg
   IDPoint2D_msg.msg
 )

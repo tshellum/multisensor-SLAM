@@ -38,8 +38,8 @@ int main(int argc, char **argv)
 		filename = argv[2];
 	}
 
-	std::string config_path = ros::package::getPath("backend") + "/../../config/" + dataset + "/backend/";
-	boost::property_tree::ptree parameters = readConfigFromJsonFile( config_path + filename + ".json" );
+	std::string config_path = ros::package::getPath("backend") + "/../../config/" + dataset + "/";
+	boost::property_tree::ptree parameters = readConfigFromJsonFile( config_path + "backend/" + filename + ".json" );
 
 
 	// Initialize backend node
@@ -63,7 +63,8 @@ int main(int argc, char **argv)
 	backend::factor_handler::VOHandler vo(
 		nh, "vo_topic", 1000, 
 		backend,
-		parameters
+		parameters,
+		readConfigFromJsonFile( config_path + "camera.json" )
 	);
 
 	// backend::factor_handler::LidarOdometryHandler lidar_odometry(
