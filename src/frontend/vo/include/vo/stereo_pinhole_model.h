@@ -53,15 +53,55 @@ struct PinholeModel
       intrinsics[3], intrinsics[4], intrinsics[5],
       intrinsics[6], intrinsics[7], intrinsics[8]);
 
+    cv::cv2eigen(K_cv, K_eig);
+
     P = (cv::Mat_<double>(3,4) << 
       proj_params[0], proj_params[1],  proj_params[2],  proj_params[3],
       proj_params[4], proj_params[5],  proj_params[6],  proj_params[7],
       proj_params[8], proj_params[9], proj_params[10], proj_params[11]);
 
+    // if (placement == "right")
+    //   P.at<double>(0, 3) = -2152.4398853199;
+
+    // std::cout << placement << " P: \n" << P << std::endl;
+
+    // double t_params[3]; 
+    // double R_params[9]; 
+
+    // try
+    // {
+    //   int i = 0;
+    //   BOOST_FOREACH(boost::property_tree::ptree::value_type &v, params.get_child("stereo.rotation"))
+    //     R_params[i++] = v.second.get_value<double>(); 
+
+    //   i = 0;
+    //   BOOST_FOREACH(boost::property_tree::ptree::value_type &v, params.get_child("stereo.translation"))
+    //     t_params[i++] = v.second.get_value<double>(); 
+    // }
+    // catch (std::exception const& e)
+    // {
+    //     std::cerr << e.what() << std::endl;
+    // }
+
+
+    // P = cv::Mat::eye(cv::Size(4,3), CV_64F);
+
+    // if (placement == "right")
+    // {
+    //   cv::Mat R(3, 3, CV_64F, R_params);
+    //   cv::Mat t(3, 1, CV_64F, t_params);
+  
+    //   R.copyTo(P(cv::Rect(0, 0, 3, 3))); 
+    //   t.copyTo(P(cv::Rect(3, 0, 1, 3)));
+    // }
+
+    // std::cout << placement << " P: \n" << P << std::endl;
+
+    // P = K_cv * P;
+    // std::cout << placement << " P: \n" << P << std::endl;
+
     // K_cv = cv::Mat(3, 3, CV_64F, intrinsics);
     // P    = cv::Mat(3, 4, CV_64F, proj_params);
-
-    cv::cv2eigen(K_cv, K_eig);
   }
 };
 

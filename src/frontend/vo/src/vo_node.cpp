@@ -34,6 +34,8 @@
 #include "vo/loop_detector.h"
 #include "vo/stereo_pinhole_model.h"
 
+// #include <JET.hpp>
+
 
 std::string getParam(ros::NodeHandle nh, std::string param)
 {
@@ -85,6 +87,8 @@ private:
   BA::StructureEstimator  structure_BA_;
   BA::MotionEstimator     motion_BA_;
   LoopDetector            loop_detector_;
+  // JET::CeresJET           jet_;
+
 
 public:
   VO() 
@@ -147,6 +151,8 @@ public:
   {
     tic_ = cv::getTickCount();
 
+    // ROS_INFO_STREAM(cam_left->header.stamp);
+
     /***** Preprocess and store image *****/
     std::pair<cv::Mat, cv::Mat> images = stereo_cameras_.preprocessImagePair(readGray(cam_left), 
                                                                              readGray(cam_right));
@@ -169,6 +175,7 @@ public:
                                 sequencer_.current.descriptor_l, 
                                 sequencer_.previous.kpts_l, 
                                 sequencer_.current.kpts_l);
+
     }
     else // LK Tracker
     {
@@ -215,6 +222,11 @@ public:
                                                                     sequencer_.current.kpts_r);
     }
 
+    // displayWindowFeatures(sequencer_.current.img_l,
+    //                       sequencer_.current.kpts_l,
+    //                       sequencer_.current.img_r, 
+    //                       sequencer_.current.kpts_r); 
+
     std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> stereo_features = matcher_.matchStereoFeatures(sequencer_.current.img_l,
                                                                                                                    sequencer_.current.img_r,
                                                                                                                    sequencer_.previous.img_l,
@@ -225,6 +237,11 @@ public:
                                                                                                                    sequencer_.current.descriptor_r);
 
     sequencer_.storeFeatures(stereo_features.first, stereo_features.second);
+
+    // saveImgWithKps(sequencer_.current.img_l,
+    //                sequencer_.current.img_r, 
+    //                sequencer_.current.kpts_l, 
+    //                sequencer_.current.kpts_r);
 
     std::pair<std::vector<cv::Point3f>, std::vector<int>> wrld_pts = matcher_.triangulate(sequencer_.current.kpts_l, 
                                                                                           sequencer_.current.kpts_r, 
@@ -355,20 +372,23 @@ public:
       keyframe_id_++;
     }
 
+    if ( ! sequencer_.current.T_r.isApprox(Eigen::Affine3d::Identity()) ) // Check not first frame - or standing still
+      vo_pub_.publish( generateMsgInBody(cam_left->header.stamp,
+                                          sequence_id_, 
+                                          sequencer_.current.T_r,
+                                          is_keyframe_,
+                                          keyframe_id_,
+                                          loop_result.found,
+                                          loop_result.match_id,
+                                          T_loop_closure,
+                                          sequencer_.current.kpts_l,
+                                          sequencer_.current.kpts_r,
+                                          sequencer_.current.world_points,
+                                          sequencer_.current.indices,
+                                          frame_) );
 
-    vo_pub_.publish( generateMsgInBody(cam_left->header.stamp,
-                                        sequence_id_, 
-                                        sequencer_.current.T_r,
-                                        is_keyframe_,
-                                        keyframe_id_,
-                                        loop_result.found,
-                                        loop_result.match_id,
-                                        T_loop_closure,
-                                        sequencer_.current.kpts_l,
-                                        sequencer_.current.kpts_r,
-                                        sequencer_.current.world_points,
-                                        sequencer_.current.indices,
-                                        frame_) );
+    // if ( ! sequencer_.current.T_r.isApprox(Eigen::Affine3d::Identity()) ) // Check not first frame - or standing still
+    //   ROS_INFO("Publish");
 
     sequence_id_++;
     sequencer_.updatePreviousFrame();

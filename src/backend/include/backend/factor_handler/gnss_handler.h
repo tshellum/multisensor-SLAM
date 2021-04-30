@@ -40,6 +40,7 @@ class GNSSHandler : public FactorHandler<const tf2_msgs::TFMessage&>
 private:
   gtsam::noiseModel::Diagonal::shared_ptr noise_; 
   int pose_id_;
+  ros::Time prev_stamp_;
 
 public:
   GNSSHandler(
@@ -76,24 +77,41 @@ public:
 
   void callback(const tf2_msgs::TFMessage& msg)
   {
+    if (msg.transforms[0].header.stamp < ros::Time(1317639337, 634870052) )
+      return;
+
     Eigen::Isometry3d T_w = tf2::transformToEigen(msg.transforms[0].transform); 
     gtsam::Pose3 pose(T_w.matrix()); 
 
-    // gtsam::Pose3 delta(gtsam::Rot3::Rodrigues(0.1, 0.1, 0.0), gtsam::Point3(1.0, 1.0, 0.0));
-
-
+    gtsam::Pose3 delta;
+    bool assocated = true;
     if (backend_->checkInitialized() == false) 
     {
       pose_id_ = backend_->getPoseID();  
-      backend_->setInitialized(true);     
+      backend_->setInitialized(true);  
+
+      backend_->registerStampedPose(msg.transforms[0].header.stamp, pose_id_);
     }
     else
     {
+      return; 
+      if ( (msg.transforms[0].header.stamp - prev_stamp_).toSec() < 0.1 )
+        return;
+
       std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg.transforms[0].header.stamp);
-      pose_id_ = associated_id.first;      
+      pose_id_ = associated_id.first;  
+      assocated = associated_id.second;
+
+      // double fMin = -4.0;
+      // double fMax = 4.0;
+      // // double f = (double)rand() / RAND_MAX;
+      // double x = fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
+      // double y = fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
+      // delta = gtsam::Pose3(gtsam::Rot3::Rodrigues(0.0, 0.0, 0.0), gtsam::Point3(x, y, 0.0));
     }
 
-    // ROS_INFO_STREAM("GNSS - id: " << pose_id_);
+
+    // ROS_INFO_STREAM("GNSS() - ID: " << pose_id_ << ", stamp: " << msg.transforms[0].header.stamp );
 
     gtsam::Key pose_key = gtsam::symbol_shorthand::X(pose_id_);       
     // pose = pose.compose(delta);
@@ -104,6 +122,9 @@ public:
       )
     );
 
+    // backend_->insertMeasurementStamp( pose_key, msg.transforms[0].header.stamp.toSec() );
+
+    prev_stamp_ = msg.transforms[0].header.stamp;
     backend_->isUpdated();
   }
 

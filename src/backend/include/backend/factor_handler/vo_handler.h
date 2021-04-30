@@ -58,10 +58,12 @@ private:
   gtsam::Pose3 pose_initial_;
   gtsam::noiseModel::Diagonal::shared_ptr noise_; 
   const gtsam::SharedNoiseModel feature_noise_; // uncertainty of feature pos
+  gtsam::Pose3 pose_world_;
 
   // Between factor from-values
   int       from_id_;
   ros::Time from_time_;
+  int       from_keyframe_id_;
 
   // Loop correspondences
   std::map<int, int> keyframe2graphID_correspondence_; // <vo keyframe id, graph pose id>
@@ -85,6 +87,7 @@ public:
   ) 
   : FactorHandler(nh, topic, queue_size, backend)
   , from_id_(backend_->getPoseID())
+  , from_keyframe_id_(from_id_)
   , from_time_(0.0)
   , feature_noise_( 
       gtsam::noiseModel::Isotropic::Sigma(2, 0.5)
@@ -98,9 +101,14 @@ public:
   {
     if ( parameters != boost::property_tree::ptree() )
     {
+      // noise_ = gtsam::noiseModel::Diagonal::Sigmas(
+      //   ( gtsam::Vector(6) << gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.orientation_sigma")), 
+      //                         gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.position_sigma"))
+      //   ).finished()
+      // );
       noise_ = gtsam::noiseModel::Diagonal::Sigmas(
-        ( gtsam::Vector(6) << gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.orientation_sigma")), 
-                              gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.position_sigma"))
+        ( gtsam::Vector(6) << gtsam::Vector3::Constant(M_PI/32), 
+                              gtsam::Vector3::Constant(0.1)
         ).finished()
       );
     }
@@ -181,8 +189,15 @@ public:
     tf2::fromMsg(msg.pose, T_b1b2);
     gtsam::Pose3 pose_relative(T_b1b2.matrix()); 
 
+    // ROS_INFO_STREAM("VO Callback() - Pose relative: \n" << T_b1b2.matrix() );
+
+    // pose_relative.print("VO: ");
+
     std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg.header.stamp, from_time_);
     int to_id = associated_id.first;
+
+    // ROS_INFO_STREAM("VO() - ID: " << to_id << ", stamp: " << msg.header.stamp );
+
 
     gtsam::Key pose_key_from = gtsam::symbol_shorthand::X(from_id_); 
     gtsam::Key pose_key_to   = gtsam::symbol_shorthand::X(to_id); 
@@ -190,14 +205,20 @@ public:
     // ROS_INFO_STREAM("VO - from_id: " << from_id_ << ", to_id: " << to_id);
     // pose_relative.print("VO BETWEEN");
 
-    backend_->tryInsertValue(pose_key_to, pose_relative);  
+    pose_world_ = backend_->getPoseAt(pose_key_from);
+    // pose_world_.print("VO() - world pose from: ");
+    pose_world_ = pose_world_.compose(pose_relative);
+    // pose_world_.print("VO() - world pose to: ");
+
+    backend_->tryInsertValue(pose_key_to, pose_world_);  
     backend_->addFactor(
       gtsam::BetweenFactor<gtsam::Pose3>(
         pose_key_from, pose_key_to, pose_relative, noise_
       )
     );
+    
 
-    backend_->updatedPreviousRelativeTimeStamp(msg.header.stamp);
+    // backend_->updatedPreviousRelativeTimeStamp(msg.header.stamp);
 
 
     // Update keyframe --> pose id in graph
@@ -224,22 +245,22 @@ public:
     }
 
     // // Add landmarks
-    // gtsam::Key pose_key_from_r = gtsam::symbol_shorthand::R(from_id_); 
-    // gtsam::Key pose_key_to_r   = gtsam::symbol_shorthand::R(to_id); 
-
-    // gtsam::Pose3 pose_prev_l = backend_->getPoseAt(pose_key_from);
-    // gtsam::Pose3 pose_prev_r = backend_->getPoseAt(pose_key_from_r);
-    // gtsam::Pose3 pose_cur_l = pose_prev_l.compose(pose_relative);
-
-    // backend_->tryInsertValue(pose_key_to_r, T_lr_);  
-    // backend_->addFactor(
-    //   gtsam::BetweenFactor<gtsam::Pose3>(
-    //     pose_key_to, pose_key_to_r, T_lr_, noise_
-    //   )
-    // );
-
-    // if (msg.is_keyframe.data)
+    // if (msg.is_keyframe.data || (from_keyframe_id_ == 0))
     // {
+    //   gtsam::Key pose_key_from_r = gtsam::symbol_shorthand::R(from_keyframe_id_); 
+    //   gtsam::Key pose_key_to_r   = gtsam::symbol_shorthand::R(to_id); 
+
+    //   gtsam::Pose3 pose_prev_l = backend_->getPoseAt(pose_key_from);
+    //   gtsam::Pose3 pose_prev_r = backend_->getPoseAt(pose_key_from_r);
+    //   gtsam::Pose3 pose_cur_l = pose_prev_l.compose(pose_relative);
+
+    //   backend_->tryInsertValue(pose_key_to_r, T_lr_);  
+    //   backend_->addFactor(
+    //     gtsam::BetweenFactor<gtsam::Pose3>(
+    //       pose_key_to, pose_key_to_r, T_lr_, noise_
+    //     )
+    //   );
+
     //   std::map<int, StereoMeasurement> cur_stereo_measurements; // <landmark id, stereo measurement>
 
     //   for(int idx = 0; idx < msg.landmark_size; idx++)
@@ -258,8 +279,6 @@ public:
 
     //     if ( prev_stereo_measurements_.find(landmark_id) != prev_stereo_measurements_.end() ) 
     //     {
-    //       ROS_INFO_STREAM("landmark_id: " << landmark_id);
-
     //       backend_->tryInsertValue(landmark_key, prev_stereo_measurements_[landmark_id].landmark); // Previous should be more accurate than current because the current pose has uncertainties
     //       backend_->addFactor(
     //         gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3>(
@@ -287,6 +306,7 @@ public:
     //     }
     //   }
     //   prev_stereo_measurements_ = cur_stereo_measurements;
+    //   from_keyframe_id_ = to_id;
     // }
     
     

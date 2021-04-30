@@ -157,9 +157,9 @@ void writePointToImg(cv::Mat& image1, cv::Mat& image2, std::vector<cv::KeyPoint>
 {
   cv::Mat img_kps1; cv::Mat img_kps2;
   if (! kps1.empty())
-    cv::drawKeypoints(image1, kps1, img_kps1, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
+    cv::drawKeypoints(image1, kps1, img_kps1, cv::Scalar(0, 255, 255), cv::DrawMatchesFlags::DEFAULT);
   if (! kps2.empty())
-    cv::drawKeypoints(image2, kps2, img_kps2, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
+    cv::drawKeypoints(image2, kps2, img_kps2, cv::Scalar(0, 255, 255), cv::DrawMatchesFlags::DEFAULT);
   
   image1 = img_kps1;
   image2 = img_kps2;
@@ -172,7 +172,7 @@ void saveImgWithKps(cv::Mat image1, cv::Mat image2, std::vector<cv::KeyPoint> kp
   compression_params.push_back(cv::IMWRITE_PNG_COMPRESSION);
   compression_params.push_back(9);
 
-  std::string result_path = ros::package::getPath("stereo_frontend") + "/../../results/img_kpts/";
+  std::string result_path = ros::package::getPath("vo") + "/../../../results/img_kpts/";
   // Create directory
   mkdir(result_path.c_str(), 0777);
 

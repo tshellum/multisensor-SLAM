@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+
+command -v sudo > /dev/null 2>&1 || { apt update && apt install --no-install-recommends -y sudo; }
+
+# cd ${SOFTWARE_DIR}
+cd ~/software
+export topdir=$(pwd)
+
+echo "Cloning JET"
+
+# Install DBoW2
+if [ ! -d "JET" ] 
+then
+  git clone https://github.com/tshellum/JET.git
+fi
+
+
+echo "Configuring and building JET ..."
+cd JET
+mkdir -p build
+cd build
+cmake .. -DWITH_PYTHON=OFF
+make -j
+sudo make install 
+
+cd ${topdir}

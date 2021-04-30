@@ -375,7 +375,7 @@ std::vector<cv::DMatch> Matcher::extractDescriptorMatches(cv::Mat desc_prev,
     int prev_idx = matches[i].queryIdx;
     int cur_idx = matches[i].trainIdx;
     
-    if ( std::abs(kpts_prev[prev_idx].pt.y - kpts_cur[cur_idx].pt.y) < 20 )
+    if ( std::abs(kpts_prev[prev_idx].pt.y - kpts_cur[cur_idx].pt.y) < 50 )
     {
       cv::KeyPoint pt_r = kpts_cur[cur_idx];
       pt_r.class_id = kpts_prev[prev_idx].class_id;
@@ -566,7 +566,16 @@ std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::
     cv::Point2f proj_l = project(pt3D, P_l);
     cv::Point2f proj_r = project(pt3D, P_r);
 
-    // ROS_INFO_STREAM("triangulation() pt3D: " << pt3D);
+    bool positive = pt3D.at<double>(2) < 0;
+    bool less_than_200 = pt3D.at<double>(2) > 200;
+    bool same_id = match_left[i].class_id != match_right[i].class_id;
+
+    // ROS_INFO_STREAM("pt3D[" << i << "] : " << pt3D.t());
+    // ROS_INFO_STREAM("z < 0: " << positive);
+    // ROS_INFO_STREAM("z > 200: " << less_than_200);
+    // ROS_INFO_STREAM("left.class_id: " << match_left[i].class_id << ", right.class_id: " << match_right[i].class_id << " - is equal: "  << same_id);
+    // ROS_INFO_STREAM("reproj left error: " << pow((match_left[pt_it].pt.x - proj_l.x), 2)  + pow((match_left[pt_it].pt.y - proj_l.y), 2));
+    // ROS_INFO_STREAM("Reproj right error: " << pow((match_right[pt_it].pt.x - proj_r.x), 2) + pow((match_right[pt_it].pt.y - proj_r.y), 2) << "\n");
 
     if ( (pt3D.at<double>(2) < 0)                              // Point is not in front of camera
       || (pt3D.at<double>(2) > 200)                           // Point is more than ..m away from camera

@@ -51,7 +51,7 @@
 		"reprojection_error"   : 1.0,
 		"LKtracker_eig_thresh" : 1e-4,
 		"stereo_match_method"  : 0,
-		"display"			   : false,
+		"display"			   : true,
 
 		"descriptor" : {
 			"method" 	  : "BF",

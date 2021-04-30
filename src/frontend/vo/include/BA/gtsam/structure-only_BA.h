@@ -29,6 +29,9 @@
 
 #include "objective_functions/reprojection_error.h"
 
+// #include <gtsam/slam/ProjectionFactor.h>
+// #include <gtsam/slam/BetweenFactor.h>
+
 
 namespace BA
 {
@@ -100,6 +103,7 @@ std::vector<cv::Point3f> StructureEstimator::estimate(const std::vector<cv::Poin
   gtsam::Values initial;
   gtsam::Values result;
 
+  // gtsam::NonlinearFactorGraph graph_out;
 
   // Insert features using ReprojectionFactor and an initial estimate of the 3D location of the landmark
   for (size_t i = 0; i < world_inlier_points.size(); i++) 
@@ -135,8 +139,23 @@ std::vector<cv::Point3f> StructureEstimator::estimate(const std::vector<cv::Poin
 
     initial.insert<gtsam::Point3>(gtsam::Symbol('l', i), wrld_pt); 
     graph.emplace_shared<gtsam::PriorFactor<gtsam::Point3>>(gtsam::Symbol('l', i), wrld_pt, point_noise_);
+
+    // if (i < 20)
+    // {
+    //   graph_out.emplace_shared<gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3>>(
+    //     img_pt_l, feature_noise_, gtsam::Symbol('x', 0), gtsam::Symbol('l', i), K_l_);
+
+    //   graph_out.emplace_shared<gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3>>(
+    //     img_pt_r, feature_noise_, gtsam::Symbol('x', 1), gtsam::Symbol('l', i), K_l_);
+    // }
   }
 
+  // graph_out.addPrior<gtsam::Pose3>(gtsam::Symbol('x', 0), gtsam::Pose3::identity(), pose_noise_);
+
+  // graph_out.add(gtsam::BetweenFactor<gtsam::Pose3>(
+  //   gtsam::Symbol('x',0), gtsam::Symbol('x', 1), T_stereo_, pose_noise_
+  // ));
+  
 
   // Optimize  
   try
@@ -148,6 +167,7 @@ std::vector<cv::Point3f> StructureEstimator::estimate(const std::vector<cv::Poin
     result = initial;
   }
 
+  // graph_out.saveGraph(ros::package::getPath("vo") + "/../../../results/BA.dot");
 
   // Update world points
   std::vector<cv::Point3f> wrld_pts_optim;

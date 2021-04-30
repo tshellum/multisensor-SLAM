@@ -61,9 +61,11 @@ find_package(Eigen3 3.3 REQUIRED)
 find_package(GTSAM REQUIRED)
 find_package(DBoW2)
 find_package(DLib)
+# find_package(JET)
 
 # find_package(Ceres REQUIRED)
 # find_package(Sophus REQUIRED)
+
 
 if(OpenCV_CUDA_VERSION)
   add_definitions(-DOPENCV_CUDA_ENABLED)
@@ -181,6 +183,7 @@ include_directories(
   gtsam
   ${DBoW2_INCLUDE_DIRS}
   ${DLib_INCLUDE_DIRS}
+  # ${JET_INCLUDE_DIRS}
 
   # ${CERES_INCLUDE_DIRS}
   # ${Sophus_INCLUDE_DIRS}
@@ -218,7 +221,8 @@ target_link_libraries(${PROJECT_NAME}_node
   gtsam
   ${DBoW2_LIBRARIES}
   ${DLib_LIBRARIES}
-  
+  # ${JET_LIBRARIES}
+
   # ${CERES_LIBRARIES}
   # ${Sophus_LIBRARIES}
 )
