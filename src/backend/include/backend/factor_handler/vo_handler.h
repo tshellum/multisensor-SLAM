@@ -101,14 +101,9 @@ public:
   {
     if ( parameters != boost::property_tree::ptree() )
     {
-      // noise_ = gtsam::noiseModel::Diagonal::Sigmas(
-      //   ( gtsam::Vector(6) << gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.orientation_sigma")), 
-      //                         gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.position_sigma"))
-      //   ).finished()
-      // );
       noise_ = gtsam::noiseModel::Diagonal::Sigmas(
-        ( gtsam::Vector(6) << gtsam::Vector3::Constant(M_PI/32), 
-                              gtsam::Vector3::Constant(0.1)
+        ( gtsam::Vector(6) << gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.orientation_sigma")), 
+                              gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.position_sigma"))
         ).finished()
       );
     }
@@ -189,8 +184,6 @@ public:
     tf2::fromMsg(msg.pose, T_b1b2);
     gtsam::Pose3 pose_relative(T_b1b2.matrix()); 
 
-    // ROS_INFO_STREAM("VO Callback() - Pose relative: \n" << T_b1b2.matrix() );
-
     // pose_relative.print("VO: ");
 
     std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg.header.stamp, from_time_);
@@ -206,9 +199,7 @@ public:
     // pose_relative.print("VO BETWEEN");
 
     pose_world_ = backend_->getPoseAt(pose_key_from);
-    // pose_world_.print("VO() - world pose from: ");
     pose_world_ = pose_world_.compose(pose_relative);
-    // pose_world_.print("VO() - world pose to: ");
 
     backend_->tryInsertValue(pose_key_to, pose_world_);  
     backend_->addFactor(
@@ -232,6 +223,13 @@ public:
       tf2::fromMsg(msg.pose_loop, T_loop);
       gtsam::Pose3 pose_loop(T_loop.matrix()); 
 
+      if ( ( (std::abs(pose_loop.rotation().yaw()) > M_PI / 9) 
+          || (std::abs(pose_loop.rotation().roll()) > M_PI / 18) 
+          || (std::abs(pose_loop.rotation().pitch()) > M_PI / 18) )
+        && ( pose_loop.translation().norm() > 5 )
+      )
+        pose_loop = gtsam::Pose3::identity();
+
       int loop_to_id = keyframe2graphID_correspondence_[msg.match_id];
       gtsam::Key loop_key_from = gtsam::symbol_shorthand::X(to_id); 
       gtsam::Key loop_key_to   = gtsam::symbol_shorthand::X(loop_to_id); 
@@ -242,6 +240,7 @@ public:
         )
       );
 
+      backend_->markUpdateWithLoop();
     }
 
     // // Add landmarks
