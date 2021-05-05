@@ -17,31 +17,25 @@
 		"frame"  : "ENU",
 		"dt_avg" : 0.01,
 		"uncertainty" : {
-			"accelerometer_sigma" 	   : 1.0,
+			"accelerometer_sigma" 	   : 0.5,
 			"gyroscope_sigma" 		   : 0.1,
-			"integration_sigma" 	   : 1.0,
+			"integration_sigma" 	   : 0.5,
 			"accelerometer_bias_sigma" : 0.1,
 			"gyroscope_bias_sigma" 	   : 0.1,
 			"preintegration_bias" 	   : 0.1
 		},
 
-		"priors" : {
-			"velocity" : {
-				"x" :    8.9800666354344,  
-				"y" : -0.080196005926315,
-				"z" :  0.056655078483203
-			},
-			
+		"priors" : {	
 			"accelerometer" : {
 				"x" : 0.0,
-				"y" : -0.05,
+				"y" : 0.0,
 				"z" : 0.0
 			},
 			
 			"gyroscope" : {
 				"roll_rate"  : 0.0,
 				"pitch_rate" : 0.0,
-				"yaw_rate"   : -0.015
+				"yaw_rate"   : -0.02
 			}
 		},
 

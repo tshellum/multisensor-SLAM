@@ -161,20 +161,6 @@ public:
 
   void callback(const backend::VSLAM_msg msg)
   { 
-    // Insert initial
-    // if ( (backend_->checkNavStatus() == false) && (backend_->checkInitialized() == false) ) // GNSS is offline and the graph is not yet initialized by any module --> initialize
-    // {
-    //   backend_->tryInsertValue(gtsam::symbol_shorthand::X(backend_->getPoseID()), pose_initial_);
-    //   backend_->addFactor(
-    //     gtsam::PriorFactor<gtsam::Pose3>(
-    //       gtsam::symbol_shorthand::X(backend_->getPoseID()), pose_initial_, noise_
-    //     )
-    //   );
-    //   backend_->setInitialized(true);
-
-    //   return;
-    // }
-
     if (backend_->checkInitialized() == false)
       return;
     
@@ -184,19 +170,14 @@ public:
     tf2::fromMsg(msg.pose, T_b1b2);
     gtsam::Pose3 pose_relative(T_b1b2.matrix()); 
 
-    // pose_relative.print("VO: ");
-
     std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg.header.stamp, from_time_);
     int to_id = associated_id.first;
 
-    // ROS_INFO_STREAM("VO() - ID: " << to_id << ", stamp: " << msg.header.stamp );
+    // ROS_INFO_STREAM("VO() - from_id: " << from_id_ << ", to_id: " << to_id << ", stamp: " << msg.header.stamp );
 
 
     gtsam::Key pose_key_from = gtsam::symbol_shorthand::X(from_id_); 
     gtsam::Key pose_key_to   = gtsam::symbol_shorthand::X(to_id); 
-
-    // ROS_INFO_STREAM("VO - from_id: " << from_id_ << ", to_id: " << to_id);
-    // pose_relative.print("VO BETWEEN");
 
     pose_world_ = backend_->getPoseAt(pose_key_from);
     pose_world_ = pose_world_.compose(pose_relative);
@@ -207,10 +188,6 @@ public:
         pose_key_from, pose_key_to, pose_relative, noise_
       )
     );
-    
-
-    // backend_->updatedPreviousRelativeTimeStamp(msg.header.stamp);
-
 
     // Update keyframe --> pose id in graph
     if ( msg.is_keyframe.data )
@@ -222,13 +199,6 @@ public:
       Eigen::Isometry3d T_loop;
       tf2::fromMsg(msg.pose_loop, T_loop);
       gtsam::Pose3 pose_loop(T_loop.matrix()); 
-
-      // if ( ( (std::abs(pose_loop.rotation().yaw()) > M_PI / 9) 
-      //     || (std::abs(pose_loop.rotation().roll()) > M_PI / 18) 
-      //     || (std::abs(pose_loop.rotation().pitch()) > M_PI / 18) )
-      //   && ( pose_loop.translation().norm() > 5 )
-      // )
-      //   pose_loop = gtsam::Pose3::identity();
 
       int loop_to_id = keyframe2graphID_correspondence_[msg.match_id];
       gtsam::Key loop_key_from = gtsam::symbol_shorthand::X(to_id); 

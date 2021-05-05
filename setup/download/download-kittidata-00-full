@@ -3,7 +3,41 @@
 set -euxo pipefail
 
 cd ~/Downloads/
+
+# Download syncronized data
+echo "--- Downloading syncronized 10hz data for 00 sequence ---"
 wget https://s3.eu-central-1.amazonaws.com/avg-kitti/raw_data/2011_10_03_drive_0027/2011_10_03_drive_0027_sync.zip
 wget https://s3.eu-central-1.amazonaws.com/avg-kitti/raw_data/2011_10_03_calib.zip
+
+echo "Extracting data..."
 unzip 2011_10_03_drive_0027_sync.zip -d ~/Videos/
 unzip 2011_10_03_calib.zip -d ~/Videos/
+
+echo "Removing .zip-files..."
+rm 2011_10_03_drive_0027_sync.zip
+rm 2011_10_03_calib.zip
+
+
+# Download original data
+echo "--- Downloading unsyncronized 100Hz data for 00 sequence ---"
+wget https://s3.eu-central-1.amazonaws.com/avg-kitti/raw_data/2011_10_03_drive_0027/2011_10_03_drive_0027_extract.zip
+
+echo "Extracting data..."
+unzip 2011_10_03_drive_0027_extract.zip -d ~/Videos/
+
+echo "Removing .zip-files..."
+rm 2011_10_03_drive_0027_extract.zip
+
+
+# Rename oxts_sync with 10Hz measurements as it should not be used
+echo "--- Renaming and moving uncalibrated IMU data ---"
+mv ~/Videos/2011_10_03/2011_10_03_drive_0027_sync/oxts/ ~/Videos/2011_10_03/2011_10_03_drive_0027_sync/oxts_sync/
+# Move unsynced measurements at 100Hz to sync folder
+mv ~/Videos/2011_10_03/2011_10_03_drive_0027_extract/oxts/ ~/Videos/2011_10_03/2011_10_03_drive_0027_sync/
+
+
+echo "--- Generating rosbag from kitti data ---"
+mkdir -p ~/Videos/kitti/
+cd ~/Videos/kitti/
+kitti2bag -t 2011_10_03 -r 0027 raw_sync ..
+echo "rosbag for 00 sequence saved at ~/Videos/kitti/kitti_2011_10_03_drive_0027_sync.bag"
