@@ -16,15 +16,33 @@
 	"imu" : {
 		"frame"  : "ENU",
 		"dt_avg" : 0.01,
-		"accelerometer_sigma" 	   : 0.01,
-		"gyroscope_sigma" 		   : 0.000175,
-		"integration_sigma" 	   : 0,
-		"accelerometer_bias_sigma" : 0.000167,
-		"gyroscope_bias_sigma" 	   : 2.91e-006,
-		"velocity" : {
-			"x" :    8.9800666354344,  
-			"y" : -0.080196005926315,
-			"z" :  0.056655078483203
+		"uncertainty" : {
+			"accelerometer_sigma" 	   : 0.5,
+			"gyroscope_sigma" 		   : 0.1,
+			"integration_sigma" 	   : 0.5,
+			"accelerometer_bias_sigma" : 0.1,
+			"gyroscope_bias_sigma" 	   : 0.1,
+			"preintegration_bias" 	   : 0.1
+		},
+
+		"priors" : {
+			"velocity" : {
+				"x" :    8.9800666354344,  
+				"y" : -0.080196005926315,
+				"z" :  0.056655078483203
+			},
+			
+			"accelerometer" : {
+				"x" : 0.0,
+				"y" : 0.0,
+				"z" : 0.0
+			},
+			
+			"gyroscope" : {
+				"roll_rate"  : 0.0,
+				"pitch_rate" : 0.0,
+				"yaw_rate"   : 0.0
+			}
 		},
 
 		"bodyTimu" : {
