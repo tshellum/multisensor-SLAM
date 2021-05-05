@@ -47,10 +47,12 @@ int main(int argc, char **argv)
 
 
 	// Global sensor subscribers (if used - shoule be placed first)
+	bool use_gnss = false; // If false: Only used for initialization
 	backend::factor_handler::GNSSHandler gnss(
 		nh, "gnss_topic", 1000, 
 		backend,
-		parameters
+		parameters,
+		use_gnss
 	);
 
 	// Local/relative sensor subscribers 

@@ -29,7 +29,7 @@
 #include <time.h>
 
 
-enum { NONE = 0, REMOVE_IMU = 1, INVALID_MOTION = 2 };
+enum { NONE = 0, REMOVE_IMU = 1, INVALID_MOTION = 2, INDETERMINANT_LINEAR_SYSTEM = 3 };
 
 
 namespace backend
@@ -163,6 +163,7 @@ public:
 
   void clearOldAssocations(double interval = 1.0);
   ros::Time findPoseStamp(int pose_id);
+  bool isValidMotion(gtsam::Pose3 pose_relative, double x_thresh=-0.5, double yaw_thresh=M_PI/9, double pitch_thresh=M_PI/18, double roll_thresh=M_PI/18);
 };
 
 
@@ -186,11 +187,13 @@ void Backend::callback(const ros::TimerEvent& event)
     int error_correction = NONE;
     gtsam::ISAM2 isam2_error_prone = isam2_; // Save before optimize graph
     gtsam::Values result;
+    int indeterminant_index;
+    gtsam::FactorIndices remove_indices;
     while (invalid_optimization)
     {
       try
       {
-        isam2_.update(new_factors_, new_values_);
+        isam2_.update(new_factors_, new_values_, remove_indices);
         for (int i = 0; i < num_opt_; ++i)
           isam2_.update(); 
 
@@ -203,35 +206,25 @@ void Backend::callback(const ros::TimerEvent& event)
         // Ensure valid motion if all conditions are met
         gtsam::Pose3 pose_relative = pose_previous.between(pose_current);
 
-        // std::cout << "\nvalidation paramters" << std::endl;
-        // std::cout << (pose_relative.translation().norm() < 5) << std::endl;
-        // std::cout << (pose_relative.x() >= pose_relative.y()) << std::endl;
-        // std::cout << (pose_relative.x() >= pose_relative.z()) << std::endl;
-        // std::cout << (std::abs(pose_relative.rotation().yaw()) < M_PI / 18)  << std::endl;
-        // std::cout << (std::abs(pose_relative.rotation().roll()) < M_PI / 36) << std::endl;
-        // std::cout << (std::abs(pose_relative.rotation().pitch()) < M_PI / 36) << std::endl;
-        // std::cout << (! update_contains_loop_) << std::endl;
-
-        if ( (pose_relative.x() >= pose_relative.y())
-          && (pose_relative.x() >= pose_relative.z())
-          && (std::abs(pose_relative.rotation().yaw()) < M_PI / 9) 
-          && (std::abs(pose_relative.rotation().roll()) < M_PI / 36) 
-          && (std::abs(pose_relative.rotation().pitch()) < M_PI / 36)
-          && (! update_contains_loop_) )
+        if ( isValidMotion(pose_relative, -0.5, M_PI / 9, M_PI / 18, M_PI / 18) )
           error_correction = NONE;
         else
         {
-          std::cout << "\nINVALID MOTION" << std::endl;
-          if (pose_relative.translation().norm() > 5)
-            std::cout << "NORM: " << pose_relative.translation().norm() << std::endl;
-
-          if (pose_relative.x() <= pose_relative.y()) 
-            std::cout << "x=" << pose_relative.x() << " > y=" << pose_relative.y() << std::endl;
+          if (! ( (pose_relative.x() >= -0.5)
+               || ( (pose_relative.x() >= pose_relative.y())
+                 && (pose_relative.x() >= pose_relative.z()) ) ) )
+          {
+            if (pose_relative.x() <= -0.5)
+              std::cout << "x: " << pose_relative.x() << std::endl;
+            
+            if (pose_relative.x() <= pose_relative.y()) 
+              std::cout << "x=" << pose_relative.x() << " > y=" << pose_relative.y() << std::endl;
+            
+            if (pose_relative.x() <= pose_relative.z()) 
+              std::cout << "x=" << pose_relative.x() << " > z=" << pose_relative.z() << std::endl;
+          }
           
-          if (pose_relative.x() <= pose_relative.z()) 
-            std::cout << "x=" << pose_relative.x() << " > z=" << pose_relative.z() << std::endl;
-
-          double yaw_thresh = M_PI / 18;
+          double yaw_thresh = M_PI / 9;
           double pitch_thresh = M_PI / 18;
           double roll_thresh = M_PI / 18;
 
@@ -257,7 +250,11 @@ void Backend::callback(const ros::TimerEvent& event)
       }
       catch(gtsam::IndeterminantLinearSystemException e)
       {
+        indeterminant_index = e.nearbyVariable();
         std::cerr << "\nCAPTURED THE EXCEPTION: " << e.nearbyVariable() << std::endl;
+        // int remove_idx = ( e.nearbyVariable() > gtsam::symbol_shorthand::V(0) ? 
+        //     e.nearbyVariable() - gtsam::symbol_shorthand::V(0) : e.nearbyVariable() - gtsam::symbol_shorthand::B(0) ); 
+
         error_correction = (error_correction == REMOVE_IMU ? NONE : REMOVE_IMU );
       }
 
@@ -265,6 +262,7 @@ void Backend::callback(const ros::TimerEvent& event)
       switch (error_correction)
       {
       case REMOVE_IMU:
+      {
         std::cout << "\nREMOVE IMU" << std::endl;
         isam2_ = isam2_error_prone;
         
@@ -284,17 +282,22 @@ void Backend::callback(const ros::TimerEvent& event)
 
         invalid_optimization = true;
         break;
-      
+      }
       case INVALID_MOTION:
-        // std::cout << "\nINVALID MOTION" << std::endl;
+      {
         isam2_ = isam2_error_prone;
         // Fix
         invalid_optimization = true;
         break;
-
+      }
+      case INDETERMINANT_LINEAR_SYSTEM:
+      {
+        gtsam::VariableIndex key2factor_index = isam2_.getVariableIndex();
+        remove_indices = key2factor_index[indeterminant_index];
+        break;
+      }
       case NONE:
       default:
-        // std::cout << "\nVALID MOTION" << std::endl;
         tryGetEstimate(gtsam::symbol_shorthand::X(newest_pose_id), result, pose_);
         tryGetEstimate(gtsam::symbol_shorthand::V(newest_pose_id), result, velocity_);
         tryGetEstimate(gtsam::symbol_shorthand::B(newest_pose_id), result, bias_);
@@ -312,6 +315,7 @@ void Backend::callback(const ros::TimerEvent& event)
     new_factors_.resize(0);
     new_values_.clear();
     clearOldAssocations();
+    update_contains_loop_ = false;
 
     ros::Time toc = ros::Time::now();
     printSummary((toc - tic).toSec(),
@@ -1097,6 +1101,18 @@ ros::Time Backend::findPoseStamp(int pose_id)
   }
 
   return ros::Time(0, 0);
+}
+
+
+bool Backend::isValidMotion(gtsam::Pose3 pose_relative, double x_thresh, double yaw_thresh, double pitch_thresh, double roll_thresh)
+{
+  return ( ( (pose_relative.x() >= -0.5)
+            || ( (pose_relative.x() >= pose_relative.y())
+              && (pose_relative.x() >= pose_relative.z()) ) )
+          && (std::abs(pose_relative.rotation().yaw()) < yaw_thresh) 
+          && (std::abs(pose_relative.rotation().pitch()) < pitch_thresh)
+          && (std::abs(pose_relative.rotation().roll()) < roll_thresh) 
+          && (! update_contains_loop_) );
 }
 
 

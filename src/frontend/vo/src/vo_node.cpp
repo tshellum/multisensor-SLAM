@@ -278,14 +278,6 @@ public:
     double scale_cur = pose_predictor_.calculateScale(T_r_opt.translation(), 
                                                       sequencer_.previous.scale);
 
-    if ( T_kf_.translation().norm() > 10)
-    {
-      ROS_INFO("\n");
-      ROS_INFO_STREAM("prev scale: " << sequencer_.previous.scale);
-      ROS_INFO_STREAM("prev T_r: \n" << sequencer_.previous.T_r.matrix());
-      ROS_INFO_STREAM("cur scale: " << sequencer_.current.scale);
-      ROS_INFO_STREAM("cur T_r_opt: \n" << T_r_opt.matrix());
-    }
 
     /***** End of iteration processes *****/
     displayWindowFeatures(sequencer_.current.img_l, 
@@ -296,9 +288,11 @@ public:
     
     // Rejecting bad pose optimization --> Setting equal to previous
     if ( (T_r_opt.matrix() == Eigen::Matrix4d::Identity()) // motion-BA actually produces an estimate
-      || (scale_cur > 10)                                  // No large motion
+      || (scale_cur > 2)                                   // No large motion
       || (scale_cur < 0.1)                                 // Standing still - this is typically where thing goes wrong
       || (T_r_opt(2,3) < -0.1)                             // No large backward motion
+      || (T_r_opt(2,3) < T_r_opt(0,3))                     // z < x (in camera frame)
+      || (T_r_opt(2,3) < T_r_opt(1,3))                     // z < y (in camera frame)
     )                                
     {
       sequencer_.current.scale = sequencer_.previous.scale;
@@ -308,6 +302,7 @@ public:
       sequencer_.current.T_r = T_r_opt;
       sequencer_.current.scale = scale_cur;
     }
+
 
     /***** Loop closure *****/
     Eigen::Affine3d T_loop_closure;

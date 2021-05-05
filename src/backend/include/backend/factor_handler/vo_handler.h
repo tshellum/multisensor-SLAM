@@ -162,18 +162,18 @@ public:
   void callback(const backend::VSLAM_msg msg)
   { 
     // Insert initial
-    if ( (backend_->checkNavStatus() == false) && (backend_->checkInitialized() == false) ) // GNSS is offline and the graph is not yet initialized by any module --> initialize
-    {
-      backend_->tryInsertValue(gtsam::symbol_shorthand::X(backend_->getPoseID()), pose_initial_);
-      backend_->addFactor(
-        gtsam::PriorFactor<gtsam::Pose3>(
-          gtsam::symbol_shorthand::X(backend_->getPoseID()), pose_initial_, noise_
-        )
-      );
-      backend_->setInitialized(true);
+    // if ( (backend_->checkNavStatus() == false) && (backend_->checkInitialized() == false) ) // GNSS is offline and the graph is not yet initialized by any module --> initialize
+    // {
+    //   backend_->tryInsertValue(gtsam::symbol_shorthand::X(backend_->getPoseID()), pose_initial_);
+    //   backend_->addFactor(
+    //     gtsam::PriorFactor<gtsam::Pose3>(
+    //       gtsam::symbol_shorthand::X(backend_->getPoseID()), pose_initial_, noise_
+    //     )
+    //   );
+    //   backend_->setInitialized(true);
 
-      return;
-    }
+    //   return;
+    // }
 
     if (backend_->checkInitialized() == false)
       return;
@@ -223,12 +223,12 @@ public:
       tf2::fromMsg(msg.pose_loop, T_loop);
       gtsam::Pose3 pose_loop(T_loop.matrix()); 
 
-      if ( ( (std::abs(pose_loop.rotation().yaw()) > M_PI / 9) 
-          || (std::abs(pose_loop.rotation().roll()) > M_PI / 18) 
-          || (std::abs(pose_loop.rotation().pitch()) > M_PI / 18) )
-        && ( pose_loop.translation().norm() > 5 )
-      )
-        pose_loop = gtsam::Pose3::identity();
+      // if ( ( (std::abs(pose_loop.rotation().yaw()) > M_PI / 9) 
+      //     || (std::abs(pose_loop.rotation().roll()) > M_PI / 18) 
+      //     || (std::abs(pose_loop.rotation().pitch()) > M_PI / 18) )
+      //   && ( pose_loop.translation().norm() > 5 )
+      // )
+      //   pose_loop = gtsam::Pose3::identity();
 
       int loop_to_id = keyframe2graphID_correspondence_[msg.match_id];
       gtsam::Key loop_key_from = gtsam::symbol_shorthand::X(to_id); 
@@ -237,6 +237,13 @@ public:
       backend_->addFactor(
         gtsam::BetweenFactor<gtsam::Pose3>(
           loop_key_from, loop_key_to, pose_loop, noise_
+        )
+      );
+
+      gtsam::Pose3 pose_loop_to = backend_->getPoseAt(loop_key_to);
+      backend_->addFactor(
+        gtsam::PriorFactor<gtsam::Pose3>(
+          loop_key_to, pose_loop_to, gtsam::noiseModel::Constrained::All(6)
         )
       );
 

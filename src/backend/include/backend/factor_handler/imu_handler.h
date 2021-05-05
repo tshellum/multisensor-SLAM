@@ -69,6 +69,7 @@ private:
 
   std::map<ros::Time, IMUMeasurement> stamped_measurements_;
 
+  gtsam::imuBias::ConstantBias initial_bias_;
   gtsam::Pose3   pose_prior_;
   gtsam::Vector3 velocity_prior_;
 
@@ -85,7 +86,7 @@ public:
   , prev_stamp_(ros::Time(0,0))
   , from_id_(backend_->getPoseID())
   , initialized_(false)
-  , pose_prior_(gtsam::Pose3::identity())
+  // , pose_prior_(gtsam::Pose3::identity())
   { 
     // Noise
     {
@@ -134,13 +135,13 @@ public:
     params->biasAccOmegaInt = gtsam::Matrix::Identity(6, 6) * pow(parameters.get< double >("imu.uncertainty.preintegration_bias"), 2);
 
 
-    pose_prior_ = gtsam::Pose3::identity(); // To be read later
-    velocity_prior_ = gtsam::Vector3(0, 0, 0);
+    // pose_prior_ = gtsam::Pose3::identity(); // To be read later
+    // velocity_prior_ = gtsam::Vector3(0, 0, 0);
     if (parameters != boost::property_tree::ptree())
     {
-      velocity_prior_ = gtsam::Vector3(parameters.get< double >("imu.priors.velocity.x"), 
-                                       parameters.get< double >("imu.priors.velocity.y"), 
-                                       parameters.get< double >("imu.priors.velocity.z"));
+      // velocity_prior_ = gtsam::Vector3(parameters.get< double >("imu.priors.velocity.x"), 
+      //                                  parameters.get< double >("imu.priors.velocity.y"), 
+      //                                  parameters.get< double >("imu.priors.velocity.z"));
 
       double t_params[3]; 
       double R_params[9]; 
@@ -170,16 +171,17 @@ public:
                              parameters.get< double >("imu.priors.gyroscope.pitch_rate"), 
                              parameters.get< double >("imu.priors.gyroscope.yaw_rate"));
 
-    gtsam::imuBias::ConstantBias prior_imu_bias = gtsam::imuBias::ConstantBias(acc_bias, gyro_bias);
+    // gtsam::imuBias::ConstantBias prior_imu_bias = gtsam::imuBias::ConstantBias(acc_bias, gyro_bias);
+    initial_bias_ = gtsam::imuBias::ConstantBias(acc_bias, gyro_bias);
+    prev_bias_ = initial_bias_;
 
-    backend_->updateVelocity(velocity_prior_);
-    backend_->updateBias(prior_imu_bias);
+    // backend_->updateVelocity(velocity_prior_);
+    // backend_->updateBias(initial_bias_);
 
-    prev_state_ = gtsam::NavState(pose_prior_, velocity_prior_);
-    pred_state_ = prev_state_;
-    prev_bias_ = prior_imu_bias;
+    // prev_state_ = gtsam::NavState(pose_prior_, velocity_prior_);
+    // pred_state_ = prev_state_;
 
-    preintegrated_ = std::make_shared<gtsam::PreintegratedCombinedMeasurements>(params, prior_imu_bias);
+    preintegrated_ = std::make_shared<gtsam::PreintegratedCombinedMeasurements>(params, initial_bias_);
   }
 
   ~IMUHandler() {} 
@@ -201,10 +203,10 @@ public:
     if ( backend_->checkInitialized() && ! initialized_ ) 
     {
       from_id_ = backend_->getPoseID();
-      pose_prior_ = backend_->getPoseAt(gtsam::symbol_shorthand::X(from_id_));
-      prev_state_ = gtsam::NavState(pose_prior_, 
-                                    pose_prior_.rotation() * backend_->getVelocity());
-      pred_state_ = prev_state_;
+      // pose_prior_ = backend_->getPoseAt(gtsam::symbol_shorthand::X(from_id_));
+      // prev_state_ = gtsam::NavState(pose_prior_, 
+      //                               pose_prior_.rotation() * backend_->getVelocity());
+      // pred_state_ = prev_state_;
 
       // backend_->tryInsertValue(gtsam::symbol_shorthand::B(from_id_), prev_bias_);
       // backend_->tryInsertValue(gtsam::symbol_shorthand::V(from_id_), pred_state_.velocity());
@@ -257,8 +259,6 @@ public:
 
   void addPreintegratedFactor(int from_id, int to_id)
   {
-    pred_state_ = preintegrated_->predict(prev_state_, prev_bias_);
-
     gtsam::Key pose_key_from = gtsam::symbol_shorthand::X(from_id); 
     gtsam::Key vel_key_from  = gtsam::symbol_shorthand::V(from_id); 
     gtsam::Key bias_key_from = gtsam::symbol_shorthand::B(from_id); 
@@ -277,6 +277,9 @@ public:
     //   backend_->addFactor(gtsam::PriorFactor<gtsam::Vector3>(vel_key_from, prev_state_.velocity(), velocity_noise_model_));
     // if ( backend_->tryInsertValue(bias_key_from, prev_bias_) )
     //   backend_->addFactor(gtsam::PriorFactor<gtsam::imuBias::ConstantBias>(bias_key_from, prev_bias_, bias_noise_model_));
+
+  
+    pred_state_ = preintegrated_->predict(prev_state_, prev_bias_);
 
     backend_->tryInsertValue(vel_key_to, pred_state_.velocity());
     backend_->tryInsertValue(bias_key_to, prev_bias_);
@@ -328,9 +331,19 @@ public:
     if ( backend_->tryInsertValue(bias_key_from, bias) )
       backend_->addFactor(gtsam::PriorFactor<gtsam::imuBias::ConstantBias>(bias_key_from, bias, bias_noise_model_));
 
+    // pose_prior_ = backend_->getPoseAt(gtsam::symbol_shorthand::X(from_id_));
+    // prev_state_ = gtsam::NavState(pose_prior_, 
+    //                               pose_prior_.rotation() * velocity);
 
-    // std::cout << "Approximated velocity: " << velocity.transpose() << ", Norm: " << velocity.norm() << std::endl;
+    gtsam::Pose3 pose_from = backend_->getPoseAt(gtsam::symbol_shorthand::X(from_id_));
+    
+    prev_state_ = gtsam::NavState(pose_from, 
+                                  pose_from.rotation() * velocity);
+    pred_state_ = prev_state_;
+    prev_bias_ = initial_bias_;
 
+    backend_->updateVelocity(velocity);
+    backend_->updateBias(initial_bias_);
   }
 
   gtsam::Vector3 approximateVelocityWorldFrame(gtsam::Pose3 pose_previous, gtsam::Pose3 pose_current, double dt)

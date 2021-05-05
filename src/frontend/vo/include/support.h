@@ -221,7 +221,7 @@ void printSummary(ros::Time stamp,
 
   std::cout << '\r' << std::fixed << std::setprecision(2)
             << "\033[1;33mSUMMARY\033[0m \033[3m(C frame)\033[0m: "
-            << "FPS=" << std::setw(4) << std::setfill(' ') << 1/tpf << "; "
+            << "FPS=" << std::setw(5) << std::setfill(' ') << 1/tpf << "; "
             << "R=" << "["  << std::setw(6) << std::setfill(' ') << euler.x() 
                     << "," << std::setw(6) << std::setfill(' ') << euler.y() 
                     << "," << std::setw(6) << std::setfill(' ') << euler.z() << "]" << "; "

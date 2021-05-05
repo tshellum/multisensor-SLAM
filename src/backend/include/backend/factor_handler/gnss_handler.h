@@ -39,9 +39,10 @@ class GNSSHandler : public FactorHandler<const tf2_msgs::TFMessage&>
 {
 private:
   gtsam::noiseModel::Diagonal::shared_ptr noise_; 
-  gtsam::noiseModel::Diagonal::shared_ptr connect_noise_; 
   int pose_id_;
   ros::Time prev_stamp_;
+
+  bool use_gnss_;
 
 public:
   GNSSHandler(
@@ -49,17 +50,12 @@ public:
     const std::string& topic, 
     uint32_t queue_size, 
     std::shared_ptr<Backend> backend,
-    boost::property_tree::ptree parameters = boost::property_tree::ptree()
+    boost::property_tree::ptree parameters = boost::property_tree::ptree(),
+    bool use_gnss = true
   ) 
   : FactorHandler(nh, topic, queue_size, backend)
   , pose_id_(backend_->getPoseID())
-  , connect_noise_( 
-      gtsam::noiseModel::Diagonal::Sigmas( 
-        ( gtsam::Vector(6) << gtsam::Vector3::Constant(M_PI/6), 
-                              gtsam::Vector3::Constant(1.0)
-        ).finished()
-      )
-    )
+  , use_gnss_(use_gnss)
   {
     backend->updateNavStatus(ONLINE);
 
@@ -79,9 +75,9 @@ public:
         ).finished()
       );
     }
-
   }
   ~GNSSHandler() = default; 
+
 
   void callback(const tf2_msgs::TFMessage& msg)
   {
@@ -103,13 +99,14 @@ public:
     }
     else
     {
-      return; 
-      if ( (msg.transforms[0].header.stamp - prev_stamp_).toSec() < 1.0 )
+      if (! use_gnss_)
+        return; 
+
+      if ( (msg.transforms[0].header.stamp - prev_stamp_).toSec() < 5.0 )
         return;
 
       // std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg.transforms[0].header.stamp);
       // pose_id_ = associated_id.first;  
-      // assocated = associated_id.second;
       
       pose_id_ = backend_->incrementPoseID();
       backend_->registerStampedPose(msg.transforms[0].header.stamp, pose_id_);
@@ -120,15 +117,6 @@ public:
       // double x = fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
       // double y = fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
       // delta = gtsam::Pose3(gtsam::Rot3::Rodrigues(0.0, 0.0, 0.0), gtsam::Point3(x, y, 0.0));
-
-     
-      // Eigen::Affine3d pose_relative = backend_->getMotionModel().predictPose( Eigen::Affine3d{backend_->getPoseAt(pose_id_-1).matrix()}, Eigen::Affine3d{pose.matrix()}, 2.0 );
-      // gtsam::Pose3 pose_relative = gtsam::Pose3( backend_->getMotionModel().calculateRelativePose( Eigen::Affine3d{backend_->getPoseAt(pose_id_-1).matrix()}, Eigen::Affine3d{pose.matrix()}).matrix() );
-      // backend_->addFactor(
-      //   gtsam::BetweenFactor<gtsam::Pose3>(
-      //     gtsam::symbol_shorthand::X(pose_id_-1), gtsam::symbol_shorthand::X(pose_id_), gtsam::Pose3( pose_relative.matrix() ), connect_noise_
-      //   )
-      // );
     }
 
 
