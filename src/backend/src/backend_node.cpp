@@ -56,11 +56,11 @@ int main(int argc, char **argv)
 	);
 
 	// Local/relative sensor subscribers 
-	backend::factor_handler::IMUHandler imu(
-		nh, "imu_topic", 1000, 
-		backend,
-		parameters
-	);
+	// backend::factor_handler::IMUHandler imu(
+	// 	nh, "imu_topic", 1000, 
+	// 	backend,
+	// 	parameters
+	// );
 
 	backend::factor_handler::VOHandler vo(
 		nh, "vo_topic", 1000, 

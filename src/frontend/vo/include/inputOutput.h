@@ -264,6 +264,17 @@ vo::VSLAM_msg generateMsgInBody(ros::Time stamp,
 
 
 /***** FORMATTING *****/
+Eigen::Matrix3d euler2rotationMatrix(double pitch, double yaw, double roll)
+{
+  Eigen::Matrix3d rotation;
+  rotation = Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitX())
+           * Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitY())
+           * Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitZ());
+
+  return rotation;
+}
+
+
 std::pair<std::vector<cv::Point2f>, std::vector<cv::Point2f>> convert(std::vector<cv::KeyPoint> image_points_left,
                                                                       std::vector<cv::KeyPoint> image_points_right)
 {

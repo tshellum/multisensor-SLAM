@@ -33,6 +33,7 @@
 #include "BA/gtsam/motion-only_BA.h"
 #include "vo/loop_detector.h"
 #include "vo/stereo_pinhole_model.h"
+#include "thirdparty/PYR/PYREstimation.h"
 
 // #include <JET.hpp>
 
@@ -87,8 +88,8 @@ private:
   BA::StructureEstimator  structure_BA_;
   BA::MotionEstimator     motion_BA_;
   LoopDetector            loop_detector_;
+  PYREstimation           pyr_;
   // JET::CeresJET           jet_;
-
 
 public:
   VO() 
@@ -121,6 +122,7 @@ public:
   , loop_detector_( base_path_ + "vocabulary/ORBvoc.bin",
                     stereo_cameras_.getImageWidth(),
                     stereo_cameras_.getImageHeight() )
+  , pyr_( readConfigFromJsonFile( config_path_ + "PYR.json" ), stereo_cameras_.K_cv() )
   {
     // Synchronization example: https://gist.github.com/tdenewiler/e2172f628e49ab633ef2786207793336
     sub_cam_left_.subscribe(nh_, "cam_left", 1);
@@ -159,7 +161,7 @@ public:
 
     sequencer_.storeImagePair(images.first, 
                               images.second);
-    
+
 
 
     /***** Track features and estimate relative pose *****/
@@ -193,6 +195,17 @@ public:
     sequencer_.current.T_r = pose_predictor_.estimatePoseFromFeatures(sequencer_.previous.kpts_l, 
                                                                       sequencer_.current.kpts_l, 
                                                                       stereo_cameras_.K_cv());
+
+    // PYR
+    if (! sequencer_.previous.img_l.empty())
+    {
+      pyr_.estimate(sequencer_.previous.img_l, sequencer_.current.img_l);
+      pyr_.setFFTReuse(true);
+      sequencer_.current.T_r.linear() = euler2rotationMatrix(pyr_.pitch(), pyr_.yaw(), pyr_.roll());    
+
+      // displayWindow(pyr_.draw(sequencer_.current.img_l.clone()), cv::Mat(), "PYR");
+    }
+
 
     // displayWindowFeatures(sequencer_.previous.img_l,
     //                       sequencer_.previous.kpts_l,
@@ -351,14 +364,14 @@ public:
                                              pts_loop_match);
       }
 
-      toc_ = cv::getTickCount();
-      printSummary(
-        cam_left->header.stamp,
-        (toc_ - tic_)/ cv::getTickFrequency(),
-        T_kf_,
-        sequencer_.current.world_points.size(),
-        loop_result.found
-      );
+      // toc_ = cv::getTickCount();
+      // printSummary(
+      //   cam_left->header.stamp,
+      //   (toc_ - tic_)/ cv::getTickFrequency(),
+      //   T_kf_,
+      //   sequencer_.current.world_points.size(),
+      //   loop_result.found
+      // );
 
       if (loop_result.found)
         std::cout << std::endl;
@@ -381,6 +394,17 @@ public:
                                           sequencer_.current.world_points,
                                           sequencer_.current.indices,
                                           frame_) );
+
+    // std::cout << "\nmain() - Computed Transformation: \n" << sequencer_.current.T_r.matrix() << std::endl;
+
+    toc_ = cv::getTickCount();
+    printSummary(
+      cam_left->header.stamp,
+      (toc_ - tic_)/ cv::getTickFrequency(),
+      sequencer_.current.T_r,
+      sequencer_.current.world_points.size(),
+      loop_result.found
+    ); 
 
     // if ( ! sequencer_.current.T_r.isApprox(Eigen::Affine3d::Identity()) ) // Check not first frame - or standing still
     //   ROS_INFO("Publish");
