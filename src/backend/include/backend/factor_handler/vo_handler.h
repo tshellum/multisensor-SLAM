@@ -56,8 +56,9 @@ class VOHandler : public FactorHandler<const backend::VSLAM_msg>
 {
 private:
   gtsam::Pose3 pose_initial_;
-  gtsam::noiseModel::Diagonal::shared_ptr noise_; 
+  gtsam::noiseModel::Diagonal::shared_ptr pose_noise_; 
   const gtsam::SharedNoiseModel feature_noise_; // uncertainty of feature pos
+  const gtsam::SharedNoiseModel landmark_noise_; // uncertainty of landmark pos
   gtsam::Pose3 pose_world_;
 
   // Between factor from-values
@@ -90,7 +91,10 @@ public:
   , from_keyframe_id_(from_id_)
   , from_time_(0.0)
   , feature_noise_( 
-      gtsam::noiseModel::Isotropic::Sigma(2, 0.5)
+      gtsam::noiseModel::Isotropic::Sigma(2, 1.0)
+    )
+  , landmark_noise_( 
+      gtsam::noiseModel::Isotropic::Sigma(3, 2.0)
     )
   , stereo_noise_ (
       gtsam::noiseModel::Diagonal::Sigmas(
@@ -101,7 +105,7 @@ public:
   {
     if ( parameters != boost::property_tree::ptree() )
     {
-      noise_ = gtsam::noiseModel::Diagonal::Sigmas(
+      pose_noise_ = gtsam::noiseModel::Diagonal::Sigmas(
         ( gtsam::Vector(6) << gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.orientation_sigma")), 
                               gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.position_sigma"))
         ).finished()
@@ -109,27 +113,27 @@ public:
     }
     else
     {
-      noise_ = gtsam::noiseModel::Diagonal::Sigmas( 
+      pose_noise_ = gtsam::noiseModel::Diagonal::Sigmas( 
         ( gtsam::Vector(6) << gtsam::Vector3::Constant(M_PI/18), 
                               gtsam::Vector3::Constant(0.3)
         ).finished()
       );
     }
     
-    pose_initial_ = gtsam::Pose3::identity();
-    if (parameters != boost::property_tree::ptree())
-    {
-      Eigen::Quaterniond q(parameters.get< double >("pose_origin.orientation.w"), 
-                           parameters.get< double >("pose_origin.orientation.x"), 
-                           parameters.get< double >("pose_origin.orientation.y"), 
-                           parameters.get< double >("pose_origin.orientation.z"));
+    // pose_initial_ = gtsam::Pose3::identity();
+    // if (parameters != boost::property_tree::ptree())
+    // {
+    //   Eigen::Quaterniond q(parameters.get< double >("pose_origin.orientation.w"), 
+    //                        parameters.get< double >("pose_origin.orientation.x"), 
+    //                        parameters.get< double >("pose_origin.orientation.y"), 
+    //                        parameters.get< double >("pose_origin.orientation.z"));
       
-      Eigen::Vector3d t(parameters.get< double >("pose_origin.translation.x"), 
-                        parameters.get< double >("pose_origin.translation.y"), 
-                        parameters.get< double >("pose_origin.translation.z"));
+    //   Eigen::Vector3d t(parameters.get< double >("pose_origin.translation.x"), 
+    //                     parameters.get< double >("pose_origin.translation.y"), 
+    //                     parameters.get< double >("pose_origin.translation.z"));
 
-      pose_initial_ = gtsam::Pose3(gtsam::Rot3(q), gtsam::Point3(t));
-    }
+    //   pose_initial_ = gtsam::Pose3(gtsam::Rot3(q), gtsam::Point3(t));
+    // }
 
     if (camera_parameters != boost::property_tree::ptree())
     {
@@ -175,7 +179,6 @@ public:
 
     // ROS_INFO_STREAM("VO() - from_id: " << from_id_ << ", to_id: " << to_id << ", stamp: " << msg.header.stamp );
 
-
     gtsam::Key pose_key_from = gtsam::symbol_shorthand::X(from_id_); 
     gtsam::Key pose_key_to   = gtsam::symbol_shorthand::X(to_id); 
 
@@ -185,7 +188,7 @@ public:
     backend_->tryInsertValue(pose_key_to, pose_world_);  
     backend_->addFactor(
       gtsam::BetweenFactor<gtsam::Pose3>(
-        pose_key_from, pose_key_to, pose_relative, noise_
+        pose_key_from, pose_key_to, pose_relative, pose_noise_
       )
     );
 
@@ -206,7 +209,7 @@ public:
 
       backend_->addFactor(
         gtsam::BetweenFactor<gtsam::Pose3>(
-          loop_key_from, loop_key_to, pose_loop, noise_
+          loop_key_from, loop_key_to, pose_loop, pose_noise_
         )
       );
 
@@ -220,72 +223,78 @@ public:
       backend_->markUpdateWithLoop();
     }
 
-    // // Add landmarks
-    // if (msg.is_keyframe.data || (from_keyframe_id_ == 0))
-    // {
-    //   gtsam::Key pose_key_from_r = gtsam::symbol_shorthand::R(from_keyframe_id_); 
-    //   gtsam::Key pose_key_to_r   = gtsam::symbol_shorthand::R(to_id); 
+    // Add landmarks
+    if (msg.is_keyframe.data || (from_keyframe_id_ == 0))
+    {
+      gtsam::Key pose_key_from_kf = gtsam::symbol_shorthand::X(from_keyframe_id_); 
+      gtsam::Pose3 sensorTbody = gtsam::Pose3( gtsam::Rot3(
+        0,  0, 1,
+       -1,  0, 0,
+        0, -1, 0
+      ), gtsam::Point3()); // CAM --> body
 
-    //   gtsam::Pose3 pose_prev_l = backend_->getPoseAt(pose_key_from);
-    //   gtsam::Pose3 pose_prev_r = backend_->getPoseAt(pose_key_from_r);
-    //   gtsam::Pose3 pose_cur_l = pose_prev_l.compose(pose_relative);
+      gtsam::Pose3 bodyTsensor = gtsam::Pose3( gtsam::Rot3(
+        0, -1,  0,
+        0,  0, -1,
+        1,  0,  0
+      ), gtsam::Point3()); // body --> CAM
 
-    //   backend_->tryInsertValue(pose_key_to_r, T_lr_);  
-    //   backend_->addFactor(
-    //     gtsam::BetweenFactor<gtsam::Pose3>(
-    //       pose_key_to, pose_key_to_r, T_lr_, noise_
-    //     )
-    //   );
 
-    //   std::map<int, StereoMeasurement> cur_stereo_measurements; // <landmark id, stereo measurement>
+      std::map<int, StereoMeasurement> cur_stereo_measurements; // <landmark id, stereo measurement>
 
-    //   for(int idx = 0; idx < msg.landmark_size; idx++)
-    //   {
-    //     std::pair<Eigen::Vector3d, int> landmark_wID = fromPt3DMsg( msg.landmarks[idx] );
-    //     std::pair<Eigen::Vector2d, int> lfeature_wID = fromPt2DMsg( msg.lfeatures[idx] );
-    //     std::pair<Eigen::Vector2d, int> rfeature_wID = fromPt2DMsg( msg.rfeatures[idx] );
-    //     int landmark_id = lfeature_wID.second;
-    //     gtsam::Key landmark_key = gtsam::symbol_shorthand::L(landmark_id);
-    //     gtsam::Point3 landmark = gtsam::Point3(landmark_wID.first);
-    //     landmark = pose_cur_l.translation() + pose_cur_l.rotation()*landmark;
-    //     gtsam::Point2 lfeature = gtsam::Point2(lfeature_wID.first);
-    //     gtsam::Point2 rfeature = gtsam::Point2(rfeature_wID.first);
+      // int number_of_landmarks_to_add = std::min(msg.landmark_size, 50);
+      int num_inserted = 0;
+      for(int idx = 0; idx < msg.landmark_size; idx++)
+      {
+        std::pair<Eigen::Vector3d, int> landmark_wID = fromPt3DMsg( msg.landmarks[idx] );
+        std::pair<Eigen::Vector2d, int> lfeature_wID = fromPt2DMsg( msg.lfeatures[idx] );
+        std::pair<Eigen::Vector2d, int> rfeature_wID = fromPt2DMsg( msg.rfeatures[idx] );
+        int landmark_id = lfeature_wID.second;
+        gtsam::Key landmark_key = gtsam::symbol_shorthand::L(landmark_id);
+        gtsam::Point3 landmark = gtsam::Point3(landmark_wID.first);        
+        landmark = pose_world_.translation() + pose_world_.rotation()*landmark;
+        gtsam::Point2 lfeature = gtsam::Point2(lfeature_wID.first);
+        gtsam::Point2 rfeature = gtsam::Point2(rfeature_wID.first);
         
-    //     cur_stereo_measurements[landmark_id] = StereoMeasurement(landmark, lfeature, rfeature);
 
-    //     if ( prev_stereo_measurements_.find(landmark_id) != prev_stereo_measurements_.end() ) 
-    //     {
-    //       backend_->tryInsertValue(landmark_key, prev_stereo_measurements_[landmark_id].landmark); // Previous should be more accurate than current because the current pose has uncertainties
-    //       backend_->addFactor(
-    //         gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3>(
-    //           prev_stereo_measurements_[landmark_id].lfeature, feature_noise_, pose_key_from, landmark_key, K_
-    //         )
-    //       );
-          
-    //       backend_->addFactor(
-    //         gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3>(
-    //           prev_stereo_measurements_[landmark_id].rfeature, feature_noise_, pose_key_from_r, landmark_key, K_
-    //         )
-    //       );
+        // Insert measurements
+        cur_stereo_measurements[landmark_id] = StereoMeasurement(landmark, lfeature, rfeature);
 
-    //       backend_->addFactor(
-    //         gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3>(
-    //           lfeature, feature_noise_, pose_key_to, landmark_key, K_
-    //         )
-    //       );
+        std::map<int, StereoMeasurement>::iterator landmark_it = prev_stereo_measurements_.find(landmark_id);
+        if ( (landmark_it != prev_stereo_measurements_.end()) && (num_inserted < 50) ) 
+        {
+          num_inserted++;
 
-    //       backend_->addFactor(
-    //         gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3>(
-    //           rfeature, feature_noise_, pose_key_to_r, landmark_key, K_
-    //         )
-    //       );
-    //     }
-    //   }
-    //   prev_stereo_measurements_ = cur_stereo_measurements;
-    //   from_keyframe_id_ = to_id;
-    // }
+          if ( backend_->tryInsertValue(landmark_key, prev_stereo_measurements_[landmark_id].landmark) )
+          {
+            backend_->addFactor(
+              gtsam::PriorFactor<gtsam::Point3>(
+                landmark_key, prev_stereo_measurements_[landmark_id].landmark, landmark_noise_
+              )
+            );
+
+            backend_->addFactor(
+              gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3>(
+                prev_stereo_measurements_[landmark_id].lfeature, feature_noise_, pose_key_from_kf, landmark_key, K_, sensorTbody
+              )
+            );
+          }
+
+          backend_->addFactor(
+            gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3>(
+              lfeature, feature_noise_, pose_key_to, landmark_key, K_, sensorTbody
+            )
+          );
+        }
+      }
+
+      prev_stereo_measurements_ = cur_stereo_measurements;
+      from_keyframe_id_ = to_id;
+
+      // std::cout << "\nAdded " << num_inserted << " landmarks.." << std::endl;
+    }
     
-    
+
     // End of iteration updates
     from_id_ = to_id;
     from_time_ = msg.header.stamp;

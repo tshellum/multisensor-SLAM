@@ -12,6 +12,8 @@
 #include "vo/IDPoint3D_msg.h"
 #include "vo/IDPoint2D_msg.h"
 
+/*** OpenCV packages ***/
+#include <opencv2/core/eigen.hpp>
 
 /*** PCL packages ***/
 #include <pcl/point_cloud.h>
@@ -178,12 +180,12 @@ vo::VO_msg generateMsgInBody(ros::Time stamp,
 }
 
 
-vo::IDPoint3D_msg toPt3DMsg(cv::Point3f pt, int id)
+vo::IDPoint3D_msg toPt3DMsg(Eigen::Vector3d pt, int id)
 {
   vo::IDPoint3D_msg msg;
-  msg.x = pt.x;
-  msg.y = pt.y;
-  msg.z = pt.z;
+  msg.x = pt.x();
+  msg.y = pt.y();
+  msg.z = pt.z();
   msg.id = id;
 
   return msg;
@@ -252,7 +254,13 @@ vo::VSLAM_msg generateMsgInBody(ros::Time stamp,
   vo_msg.landmark_size = world_points.size();
   for(int i = 0; i < world_points.size(); i++)
   {
-    vo_msg.landmarks.push_back( toPt3DMsg(world_points[i], world_point_indices[i]) );
+    Eigen::Vector3d landmark_body = T_bc.block<3,3>(0,0) * Eigen::Vector3d(
+      world_points[i].x,
+      world_points[i].y,
+      world_points[i].z
+    );
+
+    vo_msg.landmarks.push_back( toPt3DMsg(landmark_body, world_point_indices[i]) );
     vo_msg.lfeatures.push_back( toPt2DMsg(image_points_left[i].pt, image_points_left[i].class_id) );
     vo_msg.rfeatures.push_back( toPt2DMsg(image_points_right[i].pt, image_points_right[i].class_id) );
   }
