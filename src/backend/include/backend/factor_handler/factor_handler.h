@@ -19,13 +19,18 @@ class FactorHandler
 protected:
   ros::NodeHandle nh_; 
   ros::Subscriber sub_; 
-  std::shared_ptr<Backend> backend_; 
+  std::shared_ptr<Backend> backend_;
+  bool online_; 
 public:
   FactorHandler(
     ros::NodeHandle nh, 
     const std::string& topic, uint32_t queue_size, 
-    std::shared_ptr<Backend> backend
-  ) : nh_(nh), backend_(backend)
+    std::shared_ptr<Backend> backend,
+    bool sensor_status
+  ) 
+  : nh_(nh)
+  , backend_(backend)
+  , online_(sensor_status)
   {
     sub_ = nh.subscribe(topic, queue_size, &FactorHandler::callback, this); 
   }

@@ -79,8 +79,8 @@ public:
     std::shared_ptr<Backend> backend,
     boost::property_tree::ptree parameters = boost::property_tree::ptree()
   ) 
-  : FactorHandler(nh, topic, queue_size, backend)
-  , dt_( parameters.get< double >("imu.dt_avg") )
+  : FactorHandler(nh, topic, queue_size, backend, parameters.get< bool >("sensor_status.imu", false))
+  , dt_( parameters.get< double >("imu.dt_avg", 0.01) )
   , prev_stamp_(ros::Time(0,0))
   , from_id_(backend_->getPoseID())
   , initialized_(false)
@@ -95,9 +95,6 @@ public:
     velocity_noise_model_ = gtsam::noiseModel::Diagonal::Sigmas( gtsam::Vector3::Constant(0.5) );
 
     // Create preintegrated instance that follows the NED frame
-    std::string dataset;
-	  nh.getParam("/dataset", dataset);
-	
     boost::shared_ptr<gtsam::PreintegratedCombinedMeasurements::Params> params;
     if (parameters.get< std::string >("imu.frame") == "ENU")
       params = gtsam::PreintegratedCombinedMeasurements::Params::MakeSharedU(); // ENU
@@ -147,17 +144,20 @@ public:
       params->body_P_sensor = gtsam::Pose3(bodyTimu_eigen.matrix());
     }
     
-    gtsam::Vector3 acc_bias(parameters.get< double >("imu.priors.accelerometer.x"), 
-                            parameters.get< double >("imu.priors.accelerometer.y"), 
-                            parameters.get< double >("imu.priors.accelerometer.z"));  
-    gtsam::Vector3 gyro_bias(parameters.get< double >("imu.priors.gyroscope.roll_rate"), 
-                             parameters.get< double >("imu.priors.gyroscope.pitch_rate"), 
-                             parameters.get< double >("imu.priors.gyroscope.yaw_rate"));
+    gtsam::Vector3 acc_bias(parameters.get< double >("imu.priors.accelerometer.x", 0.0), 
+                            parameters.get< double >("imu.priors.accelerometer.y", 0.0), 
+                            parameters.get< double >("imu.priors.accelerometer.z", 0.0));  
+    gtsam::Vector3 gyro_bias(parameters.get< double >("imu.priors.gyroscope.roll_rate", 0.0), 
+                             parameters.get< double >("imu.priors.gyroscope.pitch_rate", 0.0), 
+                             parameters.get< double >("imu.priors.gyroscope.yaw_rate", 0.0));
 
     initial_bias_ = gtsam::imuBias::ConstantBias(acc_bias, gyro_bias);
     prev_bias_ = initial_bias_;
 
     preintegrated_ = std::make_shared<gtsam::PreintegratedCombinedMeasurements>(params, initial_bias_);
+
+    if (online_)
+      std::cout << "- IMU" << std::endl;
   }
 
   ~IMUHandler() {} 
@@ -166,7 +166,7 @@ public:
   void callback(const sensor_msgs::ImuConstPtr& msg)
   {
     // Wait to begin preintegration until graph is initialized by another module 
-    if (! backend_->checkInitialized() )
+    if ( (! online_) || (backend_->checkInitialized() == false) )
       return;
 
     // Read measurements and save measurement
@@ -191,6 +191,8 @@ public:
     int to_id = backend_->getNewestPoseID();
     if  (to_id > from_id_)
     {        
+      // std::cout << "IMU callback() - from_id: " << from_id_ << ", to_id: " << to_id << std::endl;
+
       ros::Time from_time = backend_->findPoseStamp(from_id_);
       ros::Time to_time = backend_->getNewestPoseTime();
 

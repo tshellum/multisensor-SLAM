@@ -29,7 +29,7 @@
 #include <time.h>
 
 
-enum { NONE = 0, REMOVE_IMU = 1, INVALID_MOTION = 2, REMOVE_LANDMARK = 3, INDETERMINANT_LINEAR_SYSTEM = 4 };
+enum { NONE = 0, REMOVE_IMU = 1, INVALID_MOTION = 2, REMOVE_LANDMARK = 3 };
 
 
 namespace backend
@@ -79,9 +79,9 @@ private:
   MotionModel motion_model_;
 
 public:
-  Backend() 
+  Backend(boost::property_tree::ptree parameters) 
   : pose_id_(0)
-  , num_opt_(10)
+  , num_opt_( parameters.get< int >("number_of_optimizations", 10) )
   , time_prev_pose_relative_(ros::Time(0.0))
   , initialized_(false)
   , updated_(false)
@@ -96,14 +96,13 @@ public:
   , world_pose_pub_(nh_.advertise<geometry_msgs::PoseStamped>("/backend/pose", buffer_size_))
   , update_contains_loop_(false)
   {
-    double lag = 2.0;
-   
-    isam2_params_.relinearizeThreshold = 0.1;
+    isam2_params_.relinearizeThreshold = parameters.get< double >("relinearization_threshold", 0.1);
     isam2_params_.relinearizeSkip = 10;
     isam2_params_.enableRelinearization = true; 
     isam2_params_.evaluateNonlinearError = false; 
     isam2_params_.factorization = gtsam::ISAM2Params::CHOLESKY; 
     isam2_params_.cacheLinearizedFactors = true;
+    
     isam2_ = gtsam::ISAM2(isam2_params_);
   };
 
@@ -183,7 +182,6 @@ void Backend::callback(const ros::TimerEvent& event)
 
 
     // Optimize   
-    bool valid_motion = false;
     bool invalid_optimization = true;
     int error_correction = NONE;
     gtsam::ISAM2 isam2_error_prone = isam2_; // Save before optimize graph
@@ -216,7 +214,7 @@ void Backend::callback(const ros::TimerEvent& event)
         if ( isValidMotion(pose_relative, -0.5, M_PI / 9, M_PI / 18, M_PI / 18) )
           error_correction = NONE;
         else
-          error_correction = (error_correction == REMOVE_IMU ? NONE : REMOVE_IMU );
+          error_correction = (error_correction == INVALID_MOTION ? NONE : INVALID_MOTION );
 
       }
       catch(gtsam::IndeterminantLinearSystemException e)
@@ -226,13 +224,15 @@ void Backend::callback(const ros::TimerEvent& event)
         indeterminant_idx = symb.index();
         std::cerr << "\nIndeterminant Linear System for " << indeterminant_char << "(" << indeterminant_idx << ")" << std::endl;
 
+        if (error_correction == INVALID_MOTION)
+        error_correction = (error_correction == REMOVE_IMU ? INVALID_MOTION : REMOVE_IMU ); // TODO: Should be INDETERMINANT_LINEAR_SYSTEM
 
         if ( (indeterminant_char == 'v') || (indeterminant_char == 'b') )
           error_correction = (error_correction == REMOVE_IMU ? NONE : REMOVE_IMU );
         else if (indeterminant_char == 'l') 
           error_correction = REMOVE_LANDMARK;
         else
-          error_correction = (error_correction == REMOVE_IMU ? NONE : REMOVE_IMU ); // TODO: Should be INDETERMINANT_LINEAR_SYSTEM
+          error_correction = (error_correction == REMOVE_IMU ? INVALID_MOTION : REMOVE_IMU ); // TODO: Should be INDETERMINANT_LINEAR_SYSTEM
 
       }
 
@@ -261,46 +261,28 @@ void Backend::callback(const ros::TimerEvent& event)
         invalid_optimization = true;
         break;
       }
+
       case INVALID_MOTION:
       {
         isam2_ = isam2_error_prone;
         remove_indices = gtsam::FactorIndices();
 
-        // Fix
-        invalid_optimization = true;
-        break;
-      }
-      case REMOVE_LANDMARK:
-      {
-        isam2_ = isam2_error_prone;
-        remove_indices = gtsam::FactorIndices();
-
-        // std::cout << indeterminant_char << "(" << indeterminant_idx << ") exist in new values? : " << new_values_.exists(gtsam::Symbol(indeterminant_char, indeterminant_idx)) << std::endl;
-        // std::cout << indeterminant_char << "(" << indeterminant_idx << ") exist in isam2? : " << current_estimate_.exists(gtsam::Symbol(indeterminant_char, indeterminant_idx)) << std::endl;
-
-        tryEraseValue(gtsam::Symbol(indeterminant_char, indeterminant_idx)); // Landmark key
-
-        if ( current_estimate_.exists(gtsam::Symbol(indeterminant_char, indeterminant_idx)) )
-        {
-          gtsam::VariableIndex key2factor_index = isam2_.getVariableIndex();
-          remove_indices = key2factor_index[gtsam::Symbol(indeterminant_char, indeterminant_idx)];
-
-          // std::cout << "Remove indices size: " << remove_indices.size() << std::endl;
-
-          // assert(false);
-        }
-
-        // Typically the IMU is the issue --> remove IMUfactors
+        // Remove both landmarks and IMU factors
         for ( int i = 0; i < new_factors_.size(); )
         {
-          gtsam::KeyVector::const_iterator found_it = new_factors_.at(i)->find( gtsam::Symbol(indeterminant_char, indeterminant_idx) );
-
-          if ( found_it != new_factors_.at(i)->end() )
+          bool remove = false;
+          for ( int j = 0; j < new_factors_.at(i)->size(); j++)
           {
-            // std::cout << "factor(" << i << ") found" << std::endl;
-
-            new_factors_.erase( new_factors_.begin() + i ); // Generic projection factor
+            gtsam::Symbol symb(new_factors_.at(i)->keys()[j]);
+            if (symb.chr() != 'x')
+            {
+              tryEraseValue(new_factors_.at(i)->keys()[j]); 
+              remove = true;
+            }   
           }
+
+          if (remove)
+            new_factors_.erase( new_factors_.begin() + i ); // IMUfactor
           else
             i++;
         }
@@ -308,13 +290,34 @@ void Backend::callback(const ros::TimerEvent& event)
         invalid_optimization = true;
         break;
       }
-      case INDETERMINANT_LINEAR_SYSTEM:
+
+      case REMOVE_LANDMARK:
       {
         isam2_ = isam2_error_prone;
         remove_indices = gtsam::FactorIndices();
 
-        // gtsam::VariableIndex key2factor_index = isam2_.getVariableIndex();
-        // remove_indices = key2factor_index[gtsam::Symbol(indeterminant_char, indeterminant_idx)];
+        if ( current_estimate_.exists(gtsam::Symbol(indeterminant_char, indeterminant_idx)) )
+        {
+          gtsam::VariableIndex key2factor_index = isam2_.getVariableIndex();
+          remove_indices = key2factor_index[gtsam::Symbol(indeterminant_char, indeterminant_idx)];
+        }
+
+        // Remove initial estimate of measurement
+        tryEraseValue(gtsam::Symbol(indeterminant_char, indeterminant_idx)); // Landmark key
+
+        // Remove GenericProjectionFactor
+        for ( int i = 0; i < new_factors_.size(); )
+        {
+          gtsam::KeyVector::const_iterator found_it = new_factors_.at(i)->find( gtsam::Symbol(indeterminant_char, indeterminant_idx) );
+
+          if ( found_it != new_factors_.at(i)->end() )
+          {
+            new_factors_.erase( new_factors_.begin() + i ); // Generic projection factor
+          }
+          else
+            i++;
+        }
+
         invalid_optimization = true;
         break;
       }
@@ -329,7 +332,8 @@ void Backend::callback(const ros::TimerEvent& event)
       }
     }
 
-    // std::cout << "\nNum landmarks removed: " << num_tries << std::endl;
+    // std::cout << "\n" << num_tries << " landmarks removed: " << std::endl;
+
 
     // End of iteration updates
     world_pose_pub_.publish(generateMsg()); // TODO: Use latest stamp from map

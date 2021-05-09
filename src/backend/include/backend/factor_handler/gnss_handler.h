@@ -50,30 +50,20 @@ public:
     const std::string& topic, 
     uint32_t queue_size, 
     std::shared_ptr<Backend> backend,
-    boost::property_tree::ptree parameters = boost::property_tree::ptree(),
-    bool use_gnss = true
+    boost::property_tree::ptree parameters = boost::property_tree::ptree()  
   ) 
-  : FactorHandler(nh, topic, queue_size, backend)
+  : FactorHandler(nh, topic, queue_size, backend, parameters.get< bool >("sensor_status.gnss", false))
   , pose_id_(backend_->getPoseID())
-  , use_gnss_(use_gnss)
+  , noise_( gtsam::noiseModel::Diagonal::Sigmas(
+      ( gtsam::Vector(6) << gtsam::Vector3::Constant( parameters.get< double >("gnss.orientation_sigma", M_PI/180) ), 
+                            gtsam::Vector3::Constant( parameters.get< double >("gnss.position_sigma", 0.1) )
+      ).finished() )
+    )
   {
-    backend->updateNavStatus(ONLINE);
-
-    if ( parameters != boost::property_tree::ptree() )
+    if (online_)
     {
-      noise_ = gtsam::noiseModel::Diagonal::Sigmas(
-        ( gtsam::Vector(6) << gtsam::Vector3::Constant(parameters.get< double >("gnss.orientation_sigma")), 
-                              gtsam::Vector3::Constant(parameters.get< double >("gnss.position_sigma"))
-        ).finished()
-      );
-    }
-    else
-    {
-      noise_ = gtsam::noiseModel::Diagonal::Sigmas( 
-        ( gtsam::Vector(6) << gtsam::Vector3::Constant(0.1), 
-                              gtsam::Vector3::Constant(0.15)
-        ).finished()
-      );
+      backend->updateNavStatus(ONLINE); 
+      std::cout << "- GNSS" << std::endl;
     }
   }
   ~GNSSHandler() = default; 
@@ -99,7 +89,7 @@ public:
     }
     else
     {
-      if (! use_gnss_)
+      if (! online_)
         return; 
 
       if ( (msg.transforms[0].header.stamp - prev_stamp_).toSec() < 5.0 )
@@ -120,7 +110,7 @@ public:
     }
 
 
-    // ROS_INFO_STREAM("GNSS() - ID: " << pose_id_ << ", stamp: " << msg.transforms[0].header.stamp );
+    // std::cout << "GNSS callback() - ID: " << pose_id_ << ", stamp: " << msg.transforms[0].header.stamp << std::endl;
 
     gtsam::Key pose_key = gtsam::symbol_shorthand::X(pose_id_);       
     // pose = pose.compose(delta);

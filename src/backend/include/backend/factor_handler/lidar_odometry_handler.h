@@ -36,8 +36,6 @@ private:
   int       from_id_;
   ros::Time from_time_;
 
-  gtsam::Pose3 pose_initial_;
-
 public:
   LidarOdometryHandler(
     ros::NodeHandle nh, 
@@ -46,81 +44,27 @@ public:
     std::shared_ptr<Backend> backend,
     boost::property_tree::ptree parameters = boost::property_tree::ptree()
   ) 
-  : FactorHandler(nh, topic, queue_size, backend)
-  // , noise_(  
-  //     gtsam::noiseModel::Diagonal::Sigmas( 
-  //       (gtsam::Vector(6) << 1.0, 1.0, 1.0, 1.0, 1.0, 1.0).finished()  // rad/deg?, rad/deg?, rad/deg?, m, m, m 
-  //     ) 
-  //   )
+  : FactorHandler(nh, topic, queue_size, backend, parameters.get< bool >("sensor_status.lidar_slam", false))
+  , noise_( gtsam::noiseModel::Diagonal::Sigmas(
+      ( gtsam::Vector(6) << gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.orientation_sigma", M_PI/18)), 
+                            gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.position_sigma", 0.3))
+      ).finished() )
+    )
   , from_id_(0)
   , from_time_(0.0)
   {
-    if ( parameters != boost::property_tree::ptree() )
-    {
-      noise_ = gtsam::noiseModel::Diagonal::Sigmas(
-        ( gtsam::Vector(6) << gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.orientation_sigma")), 
-                              gtsam::Vector3::Constant(parameters.get< double >("visual_odometry.position_sigma"))
-        ).finished()
-      );
-    }
-    else
-    {
-      noise_ = gtsam::noiseModel::Diagonal::Sigmas( 
-        ( gtsam::Vector(6) << gtsam::Vector3::Constant(M_PI/18), 
-                              gtsam::Vector3::Constant(0.3)
-        ).finished()
-      );
-    }
-
-
-    pose_initial_ = gtsam::Pose3::identity();
-    if (parameters != boost::property_tree::ptree())
-    {
-      ROS_INFO("LIDAR INSERT");
-      Eigen::Quaterniond q(parameters.get< double >("pose_origin.orientation.w"), 
-                           parameters.get< double >("pose_origin.orientation.x"), 
-                           parameters.get< double >("pose_origin.orientation.y"), 
-                           parameters.get< double >("pose_origin.orientation.z"));
-      
-      Eigen::Vector3d t(parameters.get< double >("pose_origin.translation.x"), 
-                        parameters.get< double >("pose_origin.translation.y"), 
-                        parameters.get< double >("pose_origin.translation.z"));
-      ROS_INFO("LIDAR INSERTED");
-
-      pose_initial_ = gtsam::Pose3(gtsam::Rot3(q), gtsam::Point3(t));
-      
-
-      Eigen::Quaterniond q_cor;
-      q_cor = Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX())
-            * Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY())
-            * Eigen::AngleAxisd(-M_PI/5.2, Eigen::Vector3d::UnitZ());
-
-      pose_initial_ = pose_initial_.compose(gtsam::Pose3(gtsam::Rot3(q_cor),
-                                         gtsam::Point3()));
-    }
+    if (online_)
+      std::cout << "- LiDAR SLAM" << std::endl;
   }
+
   ~LidarOdometryHandler() = default; 
 
 
   void callback(const geometry_msgs::PoseStamped msg)
   { 
-    if ( (backend_->checkNavStatus() == false) && (backend_->checkInitialized() == false) ) // GNSS is offline and the graph is not yet initialized by any module --> initialize
-    {
-      backend_->tryInsertValue(gtsam::symbol_shorthand::X(backend_->getPoseID()), pose_initial_);
-      backend_->addFactor(
-        gtsam::PriorFactor<gtsam::Pose3>(
-          gtsam::symbol_shorthand::X(backend_->getPoseID()), pose_initial_, noise_
-        )
-      );
-      backend_->setInitialized(true);
-
-      return;
-    }
-
-    if (backend_->checkInitialized() == false)
+    if ((! online_) && (backend_->checkInitialized() == false) )
       return;
     
-
     Eigen::Isometry3d T_b1b2;
     tf2::fromMsg(msg.pose, T_b1b2);
     gtsam::Pose3 pose_relative(T_b1b2.matrix()); 

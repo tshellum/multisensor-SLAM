@@ -131,7 +131,7 @@ public:
     sync_->registerCallback(boost::bind(&VO::callback, this, _1, _2));
 
     // Publish
-    vo_pub_  = nh_.advertise<vo::VSLAM_msg>("/frontend/vo", 1000);
+    vo_pub_  = nh_.advertise<vo::VSLAM_msg>("/frontend/vslam", 1000);
 
     // Read base parameters
     nh_.getParam("/frame", frame_);
@@ -287,6 +287,16 @@ public:
                                                   landmarks_prev,
                                                   features_cur_l,
                                                   features_cur_r);
+
+    // // PYR
+    // if (! sequencer_.previous.img_l.empty())
+    // {
+    //   pyr_.estimate(sequencer_.previous.img_l, sequencer_.current.img_l);
+    //   pyr_.setFFTReuse(true);
+    //   sequencer_.current.T_r.linear() = euler2rotationMatrix(pyr_.pitch(), pyr_.yaw(), pyr_.roll());    
+
+    //   // displayWindow(pyr_.draw(sequencer_.current.img_l.clone()), cv::Mat(), "PYR");
+    // }
 
     double scale_cur = pose_predictor_.calculateScale(T_r_opt.translation(), 
                                                       sequencer_.previous.scale);

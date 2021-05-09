@@ -8,7 +8,7 @@
 /*** Local ***/
 #include "backend/factor_handler/factor_handler.h"
 #include "backend/backend.h"
-#include "backend/factor_handler/vo_handler.h"
+#include "backend/factor_handler/vslam_handler.h"
 #include "backend/factor_handler/lidar_odometry_handler.h"
 #include "backend/factor_handler/gnss_handler.h"
 #include "backend/factor_handler/imu_handler.h"
@@ -41,41 +41,48 @@ int main(int argc, char **argv)
 	std::string config_path = ros::package::getPath("backend") + "/../../config/" + dataset + "/";
 	boost::property_tree::ptree parameters = readConfigFromJsonFile( config_path + "backend/" + filename + ".json" );
 
+	std::cout << "Body frame is set to " << parameters.get< std::string >("body_frame") << "..." << std::endl;
+	if ( parameters.get< bool >("pgo") )
+		std::cout << "Pose graph optimization=ON" << std::endl;
+	else
+		std::cout << "Pose graph optimization=OFF" << std::endl;
+
+	std::cout << "Enabled sensors:" << std::endl;
+
 
 	// Initialize backend node
-	std::shared_ptr<backend::Backend> backend = std::make_shared<backend::Backend>(); 
-
+	std::shared_ptr<backend::Backend> backend = std::make_shared<backend::Backend>(parameters); 
 
 	// Global sensor subscribers (if used - shoule be placed first)
-	bool use_gnss = false; // If false: Only used for initialization
 	backend::factor_handler::GNSSHandler gnss(
 		nh, "gnss_topic", 1000, 
 		backend,
-		parameters,
-		use_gnss
+		parameters
 	);
 
 	// Local/relative sensor subscribers 
-	// backend::factor_handler::IMUHandler imu(
-	// 	nh, "imu_topic", 1000, 
-	// 	backend,
-	// 	parameters
-	// );
+	backend::factor_handler::IMUHandler imu(
+		nh, "imu_topic", 1000, 
+		backend,
+		parameters
+	);
 
-	backend::factor_handler::VOHandler vo(
-		nh, "vo_topic", 1000, 
+	backend::factor_handler::VSLAMHandler vslam(
+		nh, "vslam_frontend_topic", 1000, 
 		backend,
 		parameters,
 		readConfigFromJsonFile( config_path + "camera.json" )
 	);
 
-	// backend::factor_handler::LidarOdometryHandler lidar_odometry(
-	// 	nh, "lidar_odometry_topic", 1000, 
-	// 	backend,
-	// 	parameters
-	// );
+	backend::factor_handler::LidarOdometryHandler lidar_odometry(
+		nh, "lidar_odometry_topic", 1000, 
+		backend,
+		parameters
+	);
 
 	// backend::factor_handler::ApriltagHandler tag;
+
+	std::cout << std::endl;
 
 	ros::spin();
 }

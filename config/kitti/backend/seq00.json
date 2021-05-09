@@ -1,18 +1,17 @@
 {
-	"pose_origin" : {
-		"translation" : {
-			"x" : 0.9427439151613526,  
-			"y" : 1.0509059665194544,
-			"z" : -0.9737327970033957
-		},
-		"orientation" : {
-			"w" : 0.8677891330809939,
-			"x" : 0.012781201696915715,  
-			"y" : 0.020143893153311693,
-			"z" : 0.49635963268415356
-		}
+	"body_frame" : "ENU",
+	"pgo" : false,
+	"number_of_optimizations"   : 10,
+	"relinearization_threshold" : 0.1,
+
+	"sensor_status" : {
+		"gnss"		 : false,
+		"imu"		 : false,
+		"vslam" 	 : true,
+		"lidar_slam" : false
 	},
 
+	
 	"imu" : {
 		"frame"  : "ENU",
 		"dt_avg" : 0.01,
@@ -51,13 +50,18 @@
 	},
 
 	"gnss" : {
-		"frame"  			: "ENU",
 		"orientation_sigma" : 0.1,
 		"position_sigma" 	: 0.15
 	},
 
-	"visual_odometry" : {
-		"orientation_sigma" : 0.2,
-		"position_sigma" 	: 0.175
+	"vslam" : {
+		"pose_noise" : {
+			"orientation_sigma" : 0.07,
+			"position_sigma" 	: 0.2
+		},
+
+		"max_num_landmarks" : 30,
+		"feature_noise"     : 1.0,
+		"landmark_noise"    : 2.0
 	}
 }
