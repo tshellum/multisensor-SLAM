@@ -50,7 +50,6 @@ void displayWindow
     return;
 
   // Decide image to be displayed
-  double ratio = 1.0;
   cv::Mat display_image;
   if (image2.empty())
     display_image = image1;
@@ -59,14 +58,12 @@ void displayWindow
     display_image = image2;
   
   else
-  {
     cv::hconcat(image1, image2, display_image);
-    double width_ratio = (double) display_image.cols / resizeWidth;
-    double height_ratio = (double) display_image.rows / resizeHeight;
-    ratio = std::max(width_ratio, height_ratio);
-  }
 
   // Resize
+  double width_ratio = std::max(1.0, (double) display_image.cols / resizeWidth);
+  double height_ratio = std::max(1.0, (double) display_image.rows / resizeHeight);
+  double ratio = std::max(width_ratio, height_ratio);
   resize(display_image, display_image, cv::Size(display_image.cols / ratio, display_image.rows / ratio)); 
 
   // Display

@@ -7,10 +7,10 @@
 		"use_provided_features" : true,
 		"grid_size"           	: 10,
 		"patch_feature_limit" 	: 3,
-		"nms_distance"     	  	: 10,
+		"nms_distance"     	  	: 5,
 		
 		"FAST" : {
-			"threshold"  		 : 10,
+			"threshold"  		: 10,
 			"nonmax_suppression" : true
 		},
 
@@ -47,14 +47,14 @@
 
 	},
   	"matcher" : {
-		"match_error" 		   : 0.5,
-		"reprojection_error"   : 1.0,
+		"match_error" 		   : 1.0,
+		"reprojection_error"   : 0.5,
 		"LKtracker_eig_thresh" : 1e-4,
-		"stereo_match_method"  : 0,
+		"stereo_match_method"  : 2,
 		"display"			   : true,
 
 		"descriptor" : {
-			"method" 	  : "BF",
+			"method" 	  : "FLANN",
 			"knn_match"	  : false,
 			"cross_check" : true
 		}

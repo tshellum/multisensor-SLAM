@@ -9,7 +9,8 @@
 			"width"  : -1,
 			"height" : -1
 		},
-		"brightness_gamma_correction" : 1.0
+		"brightness_gamma_correction" : true,
+		"brightness_gain" : 1.0
 	},
 
 	"camera_left" : {

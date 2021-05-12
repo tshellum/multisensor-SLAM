@@ -47,7 +47,7 @@ std::string getParam(ros::NodeHandle nh, std::string param)
 
 
 
-class VO
+class VSLAM
 {
 private:
   // Typedef
@@ -92,7 +92,7 @@ private:
   // JET::CeresJET           jet_;
 
 public:
-  VO() 
+  VSLAM() 
   : initialized_(false)
   , is_keyframe_(false)
   , sequence_id_(0)
@@ -128,7 +128,7 @@ public:
     sub_cam_left_.subscribe(nh_, "cam_left", 1);
     sub_cam_right_.subscribe(nh_, "cam_right", 1);
     sync_.reset(new Sync(MySyncPolicy(10), sub_cam_left_, sub_cam_right_));
-    sync_->registerCallback(boost::bind(&VO::callback, this, _1, _2));
+    sync_->registerCallback(boost::bind(&VSLAM::callback, this, _1, _2));
 
     // Publish
     vo_pub_  = nh_.advertise<vo::VSLAM_msg>("/frontend/vslam", 1000);
@@ -146,7 +146,8 @@ public:
     std::cout << "Frontend of visual odometry constructed...\n" << std::endl;
   }
 
-  ~VO() {}
+  ~VSLAM() {}
+
 
 
   void callback(const sensor_msgs::ImageConstPtr &cam_left, const sensor_msgs::ImageConstPtr &cam_right)
@@ -162,7 +163,7 @@ public:
     sequencer_.storeImagePair(images.first, 
                               images.second);
 
-
+    // std::cout << "image pair stored" << std::endl;
 
     /***** Track features and estimate relative pose *****/
     if ( matcher_.getMatchMethod() == DESCRIPTOR )
@@ -192,6 +193,8 @@ public:
                      sequencer_.current.kpts_l);
     }
 
+    // std::cout << "Tracked features" << std::endl;
+
     sequencer_.current.T_r = pose_predictor_.estimatePoseFromFeatures(sequencer_.previous.kpts_l, 
                                                                       sequencer_.current.kpts_l, 
                                                                       stereo_cameras_.K_cv());
@@ -206,6 +209,7 @@ public:
       // displayWindow(pyr_.draw(sequencer_.current.img_l.clone()), cv::Mat(), "PYR");
     }
 
+    // std::cout << "Initial pose estimate computed" << std::endl;
 
     // displayWindowFeatures(sequencer_.previous.img_l,
     //                       sequencer_.previous.kpts_l,
@@ -219,9 +223,18 @@ public:
     sequencer_.current.T_r.translation() *= sequencer_.previous.scale;
 
 
+    
     /***** Manage new features *****/
     detector_.detect(sequencer_.current.img_l, 
                      sequencer_.current.kpts_l);
+
+    // std::cout << "\nFound left features, l.size: " << sequencer_.current.kpts_l.size() << std::endl;
+
+    // displayWindowFeatures(sequencer_.current.img_l,
+    //                       sequencer_.current.kpts_l,
+    //                       cv::Mat(), 
+    //                       {},
+    //                       "Detections left image"); 
 
     if ( matcher_.getMatchMethod() == DESCRIPTOR )
     {
@@ -233,12 +246,14 @@ public:
 
       sequencer_.current.descriptor_r = detector_.computeDescriptor(sequencer_.current.img_r, 
                                                                     sequencer_.current.kpts_r);
+
+      // displayWindowFeatures(sequencer_.current.img_l,
+      //                       sequencer_.current.kpts_l,
+      //                       sequencer_.current.img_r, 
+      //                       sequencer_.current.kpts_r,
+      //                       "Stereo Seperate Detections"); 
     }
 
-    // displayWindowFeatures(sequencer_.current.img_l,
-    //                       sequencer_.current.kpts_l,
-    //                       sequencer_.current.img_r, 
-    //                       sequencer_.current.kpts_r); 
 
     std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> stereo_features = matcher_.matchStereoFeatures(sequencer_.current.img_l,
                                                                                                                    sequencer_.current.img_r,
@@ -249,7 +264,10 @@ public:
                                                                                                                    sequencer_.current.descriptor_l,
                                                                                                                    sequencer_.current.descriptor_r);
 
+
     sequencer_.storeFeatures(stereo_features.first, stereo_features.second);
+
+    // std::cout << "Found stereo matches, l.size: " << sequencer_.current.kpts_l.size() << ", r.size(): " << sequencer_.current.kpts_r.size() << std::endl;
 
     // saveImgWithKps(sequencer_.current.img_l,
     //                sequencer_.current.img_r, 
@@ -263,7 +281,7 @@ public:
     sequencer_.storeCloud(wrld_pts.first,
                           wrld_pts.second);
 
-    // ROS_INFO_STREAM("landmarks size: " << sequencer_.current.world_points.size() );
+    // std::cout << "landmarks size: " << sequencer_.current.world_points.size() << std::endl;
 
     /***** Refine results using BA *****/
     std::pair<std::vector<cv::Point2f>, std::vector<cv::Point2f>> img_pts = convert(sequencer_.current.kpts_l, 
@@ -307,7 +325,7 @@ public:
                           sequencer_.current.kpts_l,
                           sequencer_.current.img_r,
                           sequencer_.current.kpts_r,
-                          "Stereo features" ); 
+                          "Published Stereo Features" ); 
     
     // Rejecting bad pose optimization --> Setting equal to previous
     if ( (T_r_opt.matrix() == Eigen::Matrix4d::Identity()) // motion-BA actually produces an estimate
@@ -383,9 +401,6 @@ public:
       //   loop_result.found
       // );
 
-      if (loop_result.found)
-        std::cout << std::endl;
-
       T_kf_ = Eigen::Affine3d::Identity();
       keyframe_id_++;
     }
@@ -415,6 +430,9 @@ public:
       sequencer_.current.world_points.size(),
       loop_result.found
     ); 
+
+    if (loop_result.found)
+      std::cout << std::endl;
 
     // if ( ! sequencer_.current.T_r.isApprox(Eigen::Affine3d::Identity()) ) // Check not first frame - or standing still
     //   ROS_INFO("Publish");
@@ -462,9 +480,9 @@ public:
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "stereo_frontend");
-	std::cout << "\n\n\n ----- Starting VO frontend ----- \n" << std::endl;
+	std::cout << "\n\n\n ----- Starting VSLAM frontend ----- \n" << std::endl;
 
-	VO vo;
+	VSLAM vslam;
 
   ros::spin();
 }

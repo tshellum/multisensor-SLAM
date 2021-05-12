@@ -24,15 +24,18 @@ private:
 
   Visualization viz;
 
+  bool initialized_;
+
 public:
   Viewer()
+  : initialized_(false)
   {
     _pose_sub.subscribe(_nh, "pose_topic", 1);
     _cloud_sub.subscribe(_nh, "point_cloud_topic", 1);
     _sync.reset(new Sync(SyncPolicy(10), _pose_sub, _cloud_sub));
     _sync->registerCallback(boost::bind(&Viewer::callback, this, _1, _2));
 
-    _viewer_timer = _nh.createTimer(ros::Duration(0.1), &Viewer::timerCB,this);
+    _viewer_timer = _nh.createTimer(ros::Duration(0.1), &Viewer::timerCB, this);
   }
 
   void callback(const geometry_msgs::PoseStampedConstPtr &pose_msg, const sensor_msgs::PointCloud2ConstPtr &cloud_msg)
@@ -41,10 +44,15 @@ public:
     viz.updatePoseWorld(*pose_msg);
     viz.readCloud(*cloud_msg);
     viz.setEnvironment();
-    viz.addCamera();
+    if (! initialized_)
+      viz.addOrigin();    
+    else
+      viz.addCamera();
     
     // viz.show();
     viz.spinOnce();
+
+    initialized_ = true;
   }
 
   void timerCB(const ros::TimerEvent&)

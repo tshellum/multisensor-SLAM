@@ -20,7 +20,7 @@
 /*** Eigen packages ***/
 #include <Eigen/Dense> 
 
-enum StereoMatchMethod { DESCRIPTOR, FORWARDBACKWARD, CIRCULAR };
+enum StereoMatchMethod { DESCRIPTOR, FORWARDBACKWARD, CIRCULAR, OPTICAL_FLOW };
 
 
 class Matcher
@@ -271,6 +271,20 @@ std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> Matcher::matchSt
     return std::make_pair(features_left_cur, features_right_cur);
   }
   
+  case OPTICAL_FLOW:
+  {
+    track(left_cur_img, right_cur_img, features_left_cur, features_right_cur);
+
+    if (display_)
+      displayWindowFeatures(left_cur_img,
+                            features_left_cur,
+                            right_cur_img,
+                            features_right_cur,
+                            "Matched Features" );
+
+    return std::make_pair(features_left_cur, features_right_cur);
+  }
+
   case CIRCULAR:
   default:
     std::pair<std::vector<cv::KeyPoint>, std::vector<cv::KeyPoint>> matches = circularMatching(left_cur_img,
@@ -542,6 +556,7 @@ cv::Point2f Matcher::project(cv::Mat pt3D, cv::Mat P)
 
 
 
+
 std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::vector<cv::KeyPoint>& match_left, 
                                                                            std::vector<cv::KeyPoint>& match_right,
                                                                            cv::Mat P_l,
@@ -553,6 +568,14 @@ std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::
   if (match_left.empty() || match_right.empty())
     return std::make_pair(wrld_pts, indices);;
 
+  // std::vector<cv::Point2f> point2D_left, point2D_right;
+  // cv::KeyPoint::convert(match_left, point2D_left);
+  // cv::KeyPoint::convert(match_right, point2D_right);
+
+  // cv::Mat point3D_homogenous(4, point2D_left.size(), CV_64FC1);                                                 // https://stackoverflow.com/questions/16295551/how-to-correctly-use-cvtriangulatepoints
+  // cv::triangulatePoints(P_l, P_r, point2D_left, point2D_right, point3D_homogenous); // https://gist.github.com/cashiwamochi/8ac3f8bab9bf00e247a01f63075fedeb
+
+
   int n_err = 0;
   int num_features = match_left.size();
   for(int i = 0; i < num_features; i++)
@@ -561,6 +584,11 @@ std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::
 
     // Triangulate
     cv::Mat pt3D = DLT(match_left[pt_it].pt, match_right[pt_it].pt, P_l, P_r);
+
+    // cv::Mat pt3Dh = point3D_homogenous.col(i); 
+    // cv::Mat pt3Dc = pt3Dh.rowRange(0,3)/pt3Dh.at<float>(3); // / Homogenous to cartesian
+    // cv::Mat pt3D;
+    // pt3Dc.convertTo(pt3D, CV_64FC1);
 
     // Check potential errors when triangulating
     cv::Point2f proj_l = project(pt3D, P_l);
@@ -574,14 +602,20 @@ std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::
     // ROS_INFO_STREAM("z < 0: " << positive);
     // ROS_INFO_STREAM("z > 200: " << less_than_200);
     // ROS_INFO_STREAM("left.class_id: " << match_left[i].class_id << ", right.class_id: " << match_right[i].class_id << " - is equal: "  << same_id);
-    // ROS_INFO_STREAM("reproj left error: " << pow((match_left[pt_it].pt.x - proj_l.x), 2)  + pow((match_left[pt_it].pt.y - proj_l.y), 2));
-    // ROS_INFO_STREAM("Reproj right error: " << pow((match_right[pt_it].pt.x - proj_r.x), 2) + pow((match_right[pt_it].pt.y - proj_r.y), 2) << "\n");
+    // std::cout << "\nLeft  pt org: " << match_left[pt_it].pt << ", reprojected: " << proj_l << std::endl;
+    // std::cout << "- Reproj left error: " << std::sqrt(pow((match_left[pt_it].pt.x - proj_l.x), 2)  + pow((match_left[pt_it].pt.y - proj_l.y), 2)) << std::endl;
+    // std::cout << "- Left x diff: " << (match_left[pt_it].pt.x - proj_l.x) << std::endl;
+    // std::cout << "- Left y diff: " << (match_left[pt_it].pt.y - proj_l.y) << std::endl;
+    // std::cout << "Right pt org: " << match_right[pt_it].pt << ", reprojected: " << proj_r << std::endl;
+    // std::cout << "- Reproj right error: " << std::sqrt(pow((match_right[pt_it].pt.x - proj_r.x), 2) + pow((match_right[pt_it].pt.y - proj_r.y), 2)) << std::endl;
+    // std::cout << "- Right x diff: " << (match_right[pt_it].pt.x - proj_r.x) << std::endl;
+    // std::cout << "- Right y diff: " << (match_right[pt_it].pt.y - proj_r.y) << std::endl;
 
     if ( (pt3D.at<double>(2) < 0)                              // Point is not in front of camera
       || (pt3D.at<double>(2) > 200)                           // Point is more than ..m away from camera
       || (match_left[i].class_id != match_right[i].class_id)   // Not matched
-      || ( pow((match_left[pt_it].pt.x - proj_l.x), 2)  + pow((match_left[pt_it].pt.y - proj_l.y), 2)  > reproj_thresh_ ) // To large reprojection error in left cam
-      || ( pow((match_right[pt_it].pt.x - proj_r.x), 2) + pow((match_right[pt_it].pt.y - proj_r.y), 2) > reproj_thresh_ ) // To large reprojection error in right cam
+      || ( std::sqrt( pow((match_left[pt_it].pt.x - proj_l.x), 2)  + pow((match_left[pt_it].pt.y - proj_l.y), 2)  ) > std::sqrt(reproj_thresh_) ) // To large reprojection error in left cam
+      || ( std::sqrt( pow((match_right[pt_it].pt.x - proj_r.x), 2) + pow((match_right[pt_it].pt.y - proj_r.y), 2) ) > std::sqrt(reproj_thresh_) ) // To large reprojection error in right cam
     )
     {
       match_left.erase(match_left.begin() + pt_it);
@@ -605,6 +639,8 @@ std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::
 
   return std::make_pair(wrld_pts, indices);;
 }
+
+
 
 
 

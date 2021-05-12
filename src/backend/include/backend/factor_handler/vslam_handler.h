@@ -175,7 +175,7 @@ public:
 
       backend_->addFactor(
         gtsam::BetweenFactor<gtsam::Pose3>(
-          loop_key_from, loop_key_to, pose_loop, pose_noise_
+          loop_key_from, loop_key_to, pose_loop, gtsam::noiseModel::Constrained::All(6)
         )
       );
 

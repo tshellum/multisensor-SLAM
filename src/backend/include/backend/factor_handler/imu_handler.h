@@ -38,15 +38,15 @@ struct IMUMeasurement
 
   IMUMeasurement() {}
 
-  IMUMeasurement(Eigen::Vector3d gyr, Eigen::Vector3d acc)
-  : gyro( gtsam::Vector3(gyr) )
-  , accelerometer( gtsam::Vector3(acc) )
+  IMUMeasurement(gtsam::Vector3 gyr, gtsam::Vector3 acc)
+  : gyro( gyr )
+  , accelerometer( acc )
   , dt( 0.01 )
   {}
 
-  IMUMeasurement(Eigen::Vector3d gyr, Eigen::Vector3d acc, double dt)
-  : gyro( gtsam::Vector3(gyr) )
-  , accelerometer( gtsam::Vector3(acc) )
+  IMUMeasurement(gtsam::Vector3 gyr, gtsam::Vector3 acc, double dt)
+  : gyro( gyr )
+  , accelerometer( acc )
   , dt( dt )
   {}
 };
@@ -153,6 +153,7 @@ public:
 
     initial_bias_ = gtsam::imuBias::ConstantBias(acc_bias, gyro_bias);
     prev_bias_ = initial_bias_;
+    backend_->updateBias(initial_bias_);
 
     preintegrated_ = std::make_shared<gtsam::PreintegratedCombinedMeasurements>(params, initial_bias_);
 
@@ -174,6 +175,7 @@ public:
     tf2::fromMsg(msg->angular_velocity, gyr);
     tf2::fromMsg(msg->linear_acceleration, acc);
 
+    std::pair<gtsam::Vector3, gtsam::Vector3> IMU_measurement_body = preintegrated_->correctMeasurementsBySensorPose(gtsam::Vector3(acc), gtsam::Vector3(gyr));
 
     // Initialize by inserting initial priors to the graph
     if ( backend_->checkInitialized() && ! initialized_ ) 
@@ -181,11 +183,19 @@ public:
       from_id_ = backend_->getPoseID();
       initialized_ = true;
 
-      stamped_measurements_[msg->header.stamp] = IMUMeasurement(gyr, acc, dt_);
-    }
-    else
-      stamped_measurements_[msg->header.stamp] = IMUMeasurement(gyr, acc, (msg->header.stamp - prev_stamp_).toSec());
+      // stamped_measurements_[msg->header.stamp] = IMUMeasurement(IMU_measurement_body.second, IMU_measurement_body.first, dt_);
+      // stamped_measurements_[msg->header.stamp] = IMUMeasurement(gtsam::Vector3(gyr), gtsam::Vector3(acc), dt_);
 
+    }
+    // else
+      // stamped_measurements_[msg->header.stamp] = IMUMeasurement(IMU_measurement_body.second, IMU_measurement_body.first, (msg->header.stamp - prev_stamp_).toSec());
+      // stamped_measurements_[msg->header.stamp] = IMUMeasurement(gtsam::Vector3(gyr), gtsam::Vector3(acc), (msg->header.stamp - prev_stamp_).toSec());
+    
+    double dt = (msg->header.stamp - prev_stamp_).toSec();
+    if ( (std::abs(dt) > 1) || (std::abs(dt) < 0.001) )
+      stamped_measurements_[msg->header.stamp] = IMUMeasurement(IMU_measurement_body.second, IMU_measurement_body.first, dt_);
+    else
+      stamped_measurements_[msg->header.stamp] = IMUMeasurement(IMU_measurement_body.second, IMU_measurement_body.first, dt);
 
     // New pose is added --> add preintegrated measurement
     int to_id = backend_->getNewestPoseID();

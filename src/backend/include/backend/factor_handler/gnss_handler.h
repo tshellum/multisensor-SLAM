@@ -4,8 +4,8 @@
 #include <ros/ros.h> 
 #include <tf2_ros/transform_listener.h>
 #include <tf2_eigen/tf2_eigen.h>
-#include <sensor_msgs/NavSatFix.h>
-#include "backend/NorthEastHeading.h"
+// #include <sensor_msgs/NavSatFix.h>
+// #include "backend/NorthEastHeading.h"
 
 /*** Eigen packages ***/
 #include <Eigen/Dense>
@@ -71,8 +71,8 @@ public:
 
   void callback(const tf2_msgs::TFMessage& msg)
   {
-    if (msg.transforms[0].header.stamp < ros::Time(1317639337, 634870052) )
-      return;
+    // if (msg.transforms[0].header.stamp < ros::Time(1317639337, 634870052) )
+    //   return;
 
     Eigen::Isometry3d T_w = tf2::transformToEigen(msg.transforms[0].transform); 
     gtsam::Pose3 pose(T_w.matrix()); 
@@ -86,6 +86,7 @@ public:
 
       backend_->registerStampedPose(msg.transforms[0].header.stamp, pose_id_);
       backend_->updatePose(pose);
+      backend_->setWorldOrigin(pose);
     }
     else
     {

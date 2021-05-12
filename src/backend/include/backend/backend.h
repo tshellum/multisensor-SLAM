@@ -5,6 +5,10 @@
 #include <ros/package.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <tf2_eigen/tf2_eigen.h>
+#include <sensor_msgs/PointCloud2.h>
+#include <geometry_msgs/TransformStamped.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/static_transform_broadcaster.h>
 
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
@@ -22,7 +26,8 @@
 
 /*** Local ***/ 
 #include "support.h"
-#include "backend/motion_model.h"
+#include "inputOutput.h"
+// #include "backend/motion_model.h"
 
 /*** Standard library ***/ 
 #include <fstream>
@@ -41,7 +46,11 @@ private:
   // Nodes
   ros::NodeHandle nh_;
   ros::Publisher world_pose_pub_;
-  ros::Timer optimize_timer_;  // Spun node
+  ros::Publisher world_cloud_pub_;
+  tf2_ros::StaticTransformBroadcaster odom_origin_tf_;
+  tf2_ros::TransformBroadcaster odom_world_tf_;
+
+  ros::Timer optimize_timer_;       // Spun node fpr callback
   const int buffer_size_;
 
   // File
@@ -75,8 +84,8 @@ private:
   bool nav_status_;  // is online
   bool initialized_; // initialized pos by nav
 
-  // Motion model
-  MotionModel motion_model_;
+  // World origin
+  gtsam::Pose3 world_origin_;
 
 public:
   Backend(boost::property_tree::ptree parameters) 
@@ -94,7 +103,9 @@ public:
   , buffer_size_(1000)
   , optimize_timer_(nh_.createTimer(ros::Duration(0.1), &Backend::callback, this))
   , world_pose_pub_(nh_.advertise<geometry_msgs::PoseStamped>("/backend/pose", buffer_size_))
+  , world_cloud_pub_(nh_.advertise<sensor_msgs::PointCloud2>("/backend/cloud", buffer_size_))
   , update_contains_loop_(false)
+  , world_origin_(gtsam::Pose3::identity())
   {
     isam2_params_.relinearizeThreshold = parameters.get< double >("relinearization_threshold", 0.1);
     isam2_params_.relinearizeSkip = 10;
@@ -127,7 +138,6 @@ public:
   bool checkInitialized()                 { return initialized_; }
   bool checkNavStatus()                   { return nav_status_; }
   std::map<ros::Time, int> getStampedPoseIDs() { return stamped_pose_ids_; }
-  MotionModel getMotionModel()            { return motion_model_; }
 
   int  incrementPoseID()                                { return ++pose_id_; }
   void registerStampedPose(ros::Time stamp, int id)     { stamped_pose_ids_[stamp] = id; }
@@ -139,8 +149,8 @@ public:
   void updateVelocity(gtsam::Vector3 velocity)          { velocity_ = velocity; }
   void updateBias(gtsam::imuBias::ConstantBias bias)    { bias_ = bias; }
   void markUpdateWithLoop()                             { update_contains_loop_ = true; }
+  void setWorldOrigin(gtsam::Pose3 pose)                { world_origin_= pose; }
 
-  geometry_msgs::PoseStamped generateMsg();
   void callback(const ros::TimerEvent& event);
 
   bool valueExist(gtsam::Key key);
@@ -225,15 +235,16 @@ void Backend::callback(const ros::TimerEvent& event)
         std::cerr << "\nIndeterminant Linear System for " << indeterminant_char << "(" << indeterminant_idx << ")" << std::endl;
 
         if (error_correction == INVALID_MOTION)
-        error_correction = (error_correction == REMOVE_IMU ? INVALID_MOTION : REMOVE_IMU ); // TODO: Should be INDETERMINANT_LINEAR_SYSTEM
-
-        if ( (indeterminant_char == 'v') || (indeterminant_char == 'b') )
-          error_correction = (error_correction == REMOVE_IMU ? NONE : REMOVE_IMU );
-        else if (indeterminant_char == 'l') 
-          error_correction = REMOVE_LANDMARK;
+          error_correction = NONE; 
         else
-          error_correction = (error_correction == REMOVE_IMU ? INVALID_MOTION : REMOVE_IMU ); // TODO: Should be INDETERMINANT_LINEAR_SYSTEM
-
+        { 
+          if ( (indeterminant_char == 'v') || (indeterminant_char == 'b') )
+            error_correction = (error_correction == REMOVE_IMU ? NONE : REMOVE_IMU );
+          else if (indeterminant_char == 'l') 
+            error_correction = REMOVE_LANDMARK;
+          else
+            error_correction = (error_correction == REMOVE_IMU ? INVALID_MOTION : REMOVE_IMU ); 
+        }
       }
 
 
@@ -336,7 +347,11 @@ void Backend::callback(const ros::TimerEvent& event)
 
 
     // End of iteration updates
-    world_pose_pub_.publish(generateMsg()); // TODO: Use latest stamp from map
+    odom_origin_tf_.sendTransform( generateOdomOriginMsg(ros::Time::now(), world_origin_, "odom") );
+    // odom_world_tf_.sendTransform( generateOdomOriginMsg(ros::Time::now(), pose_, "body") );
+    
+    world_pose_pub_.publish( generatePoseMsg(ros::Time::now(), pose_) ); // TODO: Use latest stamp from map
+    // world_cloud_pub_.publish( generateCloudMsg(ros::Time::now(), current_estimate_) );
 
     // Reset parameters
     new_factors_.resize(0);
@@ -350,19 +365,6 @@ void Backend::callback(const ros::TimerEvent& event)
   }
 }
 
-
-
-geometry_msgs::PoseStamped Backend::generateMsg()
-{
-  tf2::Stamped<Eigen::Affine3d> tf2_stamped_T(
-    Eigen::Isometry3d{pose_.matrix()}, 
-    ros::Time::now(), 
-    "backend_pose_world"
-  );
-  geometry_msgs::PoseStamped stamped_pose_msg = tf2::toMsg(tf2_stamped_T);
-
-  return stamped_pose_msg;
-}
 
 
 gtsam::Pose3 Backend::getPoseAt(gtsam::Key key)

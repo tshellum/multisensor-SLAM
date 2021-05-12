@@ -2,22 +2,17 @@
 
 <launch>
     <arg name="dataset_" />
-    <arg name="filename_" />
 
     <arg name = "vo_topic"             default = "/frontend/vo"/>
     <arg name = "lidar_odometry_topic" default = "/frontend/lidar_odometry/pose_relative"/>
     <arg name = "gnss_topic"           default = "/tf"/>
     <arg name = "imu_topic"            default = "/xsens/imu"/>
 
-    <!-- <param name = "dataset"  type = "string" value = "milliAmpere" />
-    <param name = "filename" type = "string" value = "seq01" /> -->
-
     <node 
         name   = "backend"
         pkg    = "backend"
         type   = "backend_node"
         args   = "$(arg dataset_) 
-                  $(arg filename_) 
                   $(arg vo_topic) 
                   $(arg lidar_odometry_topic) 
                   $(arg gnss_topic) 
@@ -25,7 +20,6 @@
         output = "screen"
     >
 
-    <remap from = "filename_"            to = "$(arg filename_)"/>
     <remap from = "dataset_"             to = "$(arg dataset_)"/>
 
     <remap from = "vo_topic"             to = "$(arg vo_topic)"/>

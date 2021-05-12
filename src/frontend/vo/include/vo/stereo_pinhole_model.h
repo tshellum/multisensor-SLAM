@@ -10,6 +10,7 @@
 
 #include <boost/property_tree/ptree.hpp>
 
+#include "inputOutput.h"
 
 struct PinholeModel
 {
@@ -60,6 +61,7 @@ struct PinholeModel
       proj_params[4], proj_params[5],  proj_params[6],  proj_params[7],
       proj_params[8], proj_params[9], proj_params[10], proj_params[11]);
 
+
     // if (placement == "right")
     //   P.at<double>(0, 3) = -2152.4398853199;
 
@@ -100,8 +102,12 @@ struct PinholeModel
     // P = K_cv * P;
     // std::cout << placement << " P: \n" << P << std::endl;
 
-    // K_cv = cv::Mat(3, 3, CV_64F, intrinsics);
-    // P    = cv::Mat(3, 4, CV_64F, proj_params);
+// 1166.63168894294, -7.20692985562, 762.63559915158, -2096.0786956901;
+//  -35.39667059034, 1243.82082546096, 512.9316476381, 34.4586267311;
+//  -0.09935919999999999, 0.0132798, 0.994963, 0.087338
+
+    // K_cv = cv::Mat(3, 3, CV_64F, intrinsics).clone();
+    // P    = cv::Mat(3, 4, CV_64F, proj_params).clone();
   }
 };
 
@@ -111,7 +117,8 @@ class StereoPinholeModel
 {
 private:
   // Brightness parameter
-  double brightness_gamma_correction_;
+  bool brightness_gamma_correction_;
+  double brightness_gain_;
 
   // Image parameters  
   int width_, height_;
@@ -134,7 +141,8 @@ public:
   , T_clcr_(Eigen::Affine3d::Identity())
   , T_crcl_(Eigen::Affine3d::Identity())
   {
-    brightness_gamma_correction_ = camera_params.get< double >("preprocess.brightness_gamma_correction");
+    brightness_gamma_correction_ = camera_params.get< bool >("preprocess.brightness_gamma_correction");
+    brightness_gain_ = camera_params.get< double >("preprocess.brightness_gain");
 
     int patch_size = detector_params.get< int >("detector.grid_size");
     x0_ = std::max(0, camera_params.get< int >("preprocess.crop.x0"));
@@ -206,27 +214,33 @@ public:
 std::pair<cv::Mat, cv::Mat> StereoPinholeModel::preprocessImagePair(cv::Mat img_left, 
 															                                      cv::Mat img_right)
 {
-  cv::Mat limg_edit, rimg_edit;
-  cv::undistort(img_left, limg_edit, camera_left_.K_cv, camera_left_.distortion, cv::Mat());
-  cv::undistort(img_right, rimg_edit, camera_right_.K_cv, camera_right_.distortion, cv::Mat());
+  cv::Mat limg_undist, rimg_undist;
+  cv::undistort(img_left, limg_undist, camera_left_.K_cv, camera_left_.distortion, cv::Mat());
+  cv::undistort(img_right, rimg_undist, camera_right_.K_cv, camera_right_.distortion, cv::Mat());
 
-  cv::Mat lcropped = limg_edit(cv::Rect(x0_, y0_, crop_width_, crop_height_));
-  cv::Mat rcropped = rimg_edit(cv::Rect(x0_, y0_, crop_width_, crop_height_));
+  cv::Mat lcropped = limg_undist(cv::Rect(x0_, y0_, crop_width_, crop_height_));
+  cv::Mat rcropped = rimg_undist(cv::Rect(x0_, y0_, crop_width_, crop_height_));
 
   // Gamma correction of brightness
-  if ( (brightness_gamma_correction_ >= 0) && (brightness_gamma_correction_ != 1) )
+  if ( (brightness_gain_ >= 0) && (brightness_gain_ != 1) )
   {
-    for( int row = 0; row < crop_height_; row++)
+    if (brightness_gamma_correction_)
     {
-      for( int col = 0; col < crop_width_; col++)
+      for( int row = 0; row < crop_height_; row++)
       {
-          lcropped.at<uchar>(row,col) = cv::saturate_cast<uchar>(pow(lcropped.at<uchar>(row,col) / 255.0, brightness_gamma_correction_) * 255.0);
-          rcropped.at<uchar>(row,col) = cv::saturate_cast<uchar>(pow(rcropped.at<uchar>(row,col) / 255.0, brightness_gamma_correction_) * 255.0);
+        for( int col = 0; col < crop_width_; col++)
+        {
+            lcropped.at<uchar>(row,col) = cv::saturate_cast<uchar>(pow(lcropped.at<uchar>(row,col) / 255.0, brightness_gain_) * 255.0);
+            rcropped.at<uchar>(row,col) = cv::saturate_cast<uchar>(pow(rcropped.at<uchar>(row,col) / 255.0, brightness_gain_) * 255.0);
+        }
       }
     }
+    else
+    {
+      lcropped *= brightness_gain_;
+      rcropped *= brightness_gain_;
+    }
   }
-  // lcropped *= 1.2;
-  // rcropped *= 1.2;
 
 	return std::make_pair(lcropped, rcropped);
 }

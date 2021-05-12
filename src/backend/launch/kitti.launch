@@ -7,8 +7,7 @@
     <arg name = "imu_topic"            default = "/kitti/oxts/imu"/>
 
     <param name = "dataset"  type = "string" value = "kitti" />
-    <param name = "filename" type = "string" value = "seq00" />
-
+    
     <node 
         name   = "backend"
         pkg    = "backend"
@@ -20,11 +19,10 @@
         output = "screen"
     >
     
-    <remap from = "vslam_frontend_topic" to = "$(arg vslam_frontend_topic)"/>
-    <remap from = "lidar_odometry_topic" to = "$(arg lidar_odometry_topic)"/>
-    <remap from = "gnss_topic"           to = "$(arg gnss_topic)"/>
-    <remap from = "imu_topic"            to = "$(arg imu_topic)"/>
-
+        <remap from = "vslam_frontend_topic" to = "$(arg vslam_frontend_topic)"/>
+        <remap from = "lidar_odometry_topic" to = "$(arg lidar_odometry_topic)"/>
+        <remap from = "gnss_topic"           to = "$(arg gnss_topic)"/>
+        <remap from = "imu_topic"            to = "$(arg imu_topic)"/>
     </node>
 
 </launch>

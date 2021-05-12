@@ -7,7 +7,6 @@
     <arg name = "imu_topic"            default = "/xsens/imu"/>
 
     <param name = "dataset"  type = "string" value = "milliAmpere" />
-    <param name = "filename" type = "string" value = "seq04" />
 
     <node 
         name   = "backend"

@@ -60,8 +60,8 @@ public:
 		_q_wb = _R_wb;
 		_T_wb.setIdentity();
 
-		_viewer.setBackgroundColor (1.0, 0.5, 1.0);
-		_viewer.addCoordinateSystem (10, _T_w0, "world center", 0);
+		_viewer.setBackgroundColor(0.2, 0.2, 0.2, 0);
+		// _viewer.addCoordinateSystem (10, _T_w0, "world center", 0);
 		// _viewer.setPosition(0, 1000);
 		// _viewer.addCoordinateSystem (1.0, "world center", 0);   
 	};
@@ -72,6 +72,7 @@ public:
 
 	void readCloud(const sensor_msgs::PointCloud2 msg);
 	void addCamera();
+	void addOrigin();
 	void setEnvironment();
 
 	bool wasStopped();
@@ -114,8 +115,8 @@ void Visualization::readCloud(const sensor_msgs::PointCloud2 msg)
 	for(int n = 0; n < cloud_msg.points.size(); n++)
 	{
 		pcl::PointXYZ pt;
-		pt.x = cloud_msg.points[n].y;
-		pt.y = cloud_msg.points[n].x;
+		pt.x = cloud_msg.points[n].x;
+		pt.y = cloud_msg.points[n].y;
 		pt.z = cloud_msg.points[n].z;
 
 		cloud_bodyframe.points.push_back(pt);
@@ -125,6 +126,8 @@ void Visualization::readCloud(const sensor_msgs::PointCloud2 msg)
 
 	_viewer.addPointCloud<pcl::PointXYZ>(_cloud, std::to_string(++n_id));
 	_viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, std::to_string(n_id));
+    // _viewer.setPointCloudRenderingProperties ( pcl::visualization::PCL_VISUALIZER_COLOR, 0.937, 0.992, 0.373, std::to_string(n_id) );
+	
 
 }
 
@@ -141,12 +144,20 @@ void Visualization::addCamera()
 	// _viewer.addPlane(plane_coeff, 1, 1, 1, std::to_string(++n_id));
 
 	Eigen::Affine3f T_wb = _T_wb.cast<float>();
-	_viewer.addCoordinateSystem (10, T_wb, std::to_string(++n_id), 0);
+	_viewer.addCoordinateSystem (3, T_wb, std::to_string(++n_id), 0);
 
 	// createViewPort (double xmin, double ymin, double xmax, double ymax, int &viewport)
 
 	// _viewer.addCoordinateSystem (1.0, "camera", 0);   
 
+}
+
+void Visualization::addOrigin()
+{	
+	pcl::ModelCoefficients plane_coeff;
+
+	Eigen::Affine3f T_wb = _T_wb.cast<float>();
+	_viewer.addCoordinateSystem (10, T_wb, "world origin", 0);
 }
 
 

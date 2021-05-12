@@ -29,17 +29,13 @@ int main(int argc, char **argv)
 	ros::NodeHandle nh; 
 
 	// Read initial parameter values
-	std::string filename, dataset;
+	std::string dataset;
 	nh.getParam("/dataset", dataset);
-	nh.getParam("/filename", filename);
-	if ( (dataset == "") || (filename == "") || argc > 5)
-	{
+	if ( (dataset == "") || argc > 5)
 		dataset = argv[1];
-		filename = argv[2];
-	}
 
 	std::string config_path = ros::package::getPath("backend") + "/../../config/" + dataset + "/";
-	boost::property_tree::ptree parameters = readConfigFromJsonFile( config_path + "backend/" + filename + ".json" );
+	boost::property_tree::ptree parameters = readConfigFromJsonFile( config_path + "backend.json" );
 
 	std::cout << "Body frame is set to " << parameters.get< std::string >("body_frame") << "..." << std::endl;
 	if ( parameters.get< bool >("pgo") )

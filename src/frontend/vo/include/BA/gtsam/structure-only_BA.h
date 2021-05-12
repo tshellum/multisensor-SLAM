@@ -177,10 +177,10 @@ std::vector<cv::Point3f> StructureEstimator::estimate(const std::vector<cv::Poin
     Eigen::Vector3d wrld_pt_opt = result.at<gtsam::Point3>(gtsam::Symbol('l', i)).matrix();
     wrld_pts_optim.push_back( cv::Point3f(wrld_pt_opt.x(), wrld_pt_opt.y(), wrld_pt_opt.z()) );
 
-    cv::Point3f diff = world_inlier_points[i] - wrld_pts_optim[i];
-    x_abs += abs(diff.x);
-    y_abs += abs(diff.y);
-    z_abs += abs(diff.z);
+    // cv::Point3f diff = world_inlier_points[i] - wrld_pts_optim[i];
+    // x_abs += abs(diff.x);
+    // y_abs += abs(diff.y);
+    // z_abs += abs(diff.z);
   }
   
   // ROS_INFO_STREAM( "MAE - x: " << x_abs / world_inlier_points.size() << ", y: " << y_abs / world_inlier_points.size() << ", z: " << z_abs / world_inlier_points.size() );
