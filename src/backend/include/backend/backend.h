@@ -169,6 +169,8 @@ public:
   template <typename FactorType>
   void addFactor(FactorType factor) { new_factors_.add(factor); }
 
+  gtsam::FastList<gtsam::Key> findAllLeafNodeLandmarks(gtsam::ISAM2 graph);
+
   std::pair<int, bool> searchAssociatedPose(ros::Time pose_stamp, ros::Time prev_pose_stamp = ros::Time(0.0));
 
   void clearOldAssocations(double interval = 1.0);
@@ -190,6 +192,19 @@ void Backend::callback(const ros::TimerEvent& event)
     // new_values_.print("----- Values -----");
     // new_factors_.print("----- New factors -----");
 
+    if ( update_contains_loop_ )
+    {  
+      std::cout << "\nNumber of values before marginalization: " << current_estimate_.size() << std::endl;
+      try 
+      {
+        isam2_.marginalizeLeaves( findAllLeafNodeLandmarks(isam2_) );
+        std::cout << "Marginalized before loop closure added..." << std::endl;
+      }
+      catch(std::invalid_argument& e)
+      {
+        std::cout << "Marginalization error" << std::endl;
+      }
+    }
 
     // Optimize   
     bool invalid_optimization = true;
@@ -343,6 +358,9 @@ void Backend::callback(const ros::TimerEvent& event)
       }
     }
 
+    if ( update_contains_loop_ )
+      std::cout << "Number of values after marginalization: " << current_estimate_.size() << std::endl;
+
     // std::cout << "\n" << num_tries << " landmarks removed: " << std::endl;
 
 
@@ -443,6 +461,22 @@ bool Backend::tryGetEstimate(gtsam::Key key, gtsam::Values result, Value& estima
   }
   
   return false; 
+}
+
+
+gtsam::FastList<gtsam::Key> Backend::findAllLeafNodeLandmarks(gtsam::ISAM2 graph)
+{
+  gtsam::FastList<gtsam::Key> variables_to_marginalize;
+
+  gtsam::BayesTree<gtsam::ISAM2Clique>::Nodes cliques = graph.nodes();
+  for (std::pair<gtsam::Key, boost::shared_ptr<gtsam::ISAM2Clique>> clique : cliques)
+  {
+    gtsam::Symbol symb(clique.first);
+    if ( (symb.chr() == 'l') && (clique.second->treeSize() == 1) )
+      variables_to_marginalize.push_back( gtsam::Key(symb) );
+  }
+
+  return variables_to_marginalize;
 }
 
 

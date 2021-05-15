@@ -3,6 +3,7 @@
 	"pgo" : false,
 	"number_of_optimizations"   : 10,
 	"relinearization_threshold" : 0.1,
+	"use_loop_closure" : true,
 
 	"sensor_status" : {
 		"gnss"		 : false,

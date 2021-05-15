@@ -71,6 +71,8 @@ private:
 
   // For local BA
   bool pgo_;
+  bool use_loop_closure_;
+  bool has_closed_loop_;
   int max_num_landmarks_;
   std::map<int, StereoMeasurement> prev_stereo_measurements_; // <landmark id, stereo measurement>
   gtsam::Pose3 sensorTbody_;     // body frame --> cam frame
@@ -92,6 +94,8 @@ public:
   , from_time_(0.0)
   , sensorTbody_(gtsam::Pose3::identity())
   , pgo_( parameters.get< bool >("pgo") )
+  , use_loop_closure_( parameters.get< bool >("use_loop_closure", true) )
+  , has_closed_loop_( false )
   , max_num_landmarks_( parameters.get< int >("vslam.max_num_landmarks", 50) )
   , pose_noise_( gtsam::noiseModel::Diagonal::Sigmas(
       ( gtsam::Vector(6) << gtsam::Vector3::Constant(parameters.get< double >("vslam.pose_noise.orientation_sigma", M_PI/18)), 
@@ -163,7 +167,7 @@ public:
 
 
     // Insert loop closure
-    if ( msg.loop_found.data )
+    if ( use_loop_closure_ && msg.loop_found.data )
     {
       Eigen::Isometry3d T_loop;
       tf2::fromMsg(msg.pose_loop, T_loop);
@@ -187,6 +191,7 @@ public:
       );
 
       backend_->markUpdateWithLoop();
+      has_closed_loop_ = true;
     }
 
 
@@ -218,7 +223,7 @@ public:
         cur_stereo_measurements[landmark_id] = StereoMeasurement(landmark, lfeature, rfeature);
 
         std::map<int, StereoMeasurement>::iterator landmark_it = prev_stereo_measurements_.find(landmark_id);
-        if ( (landmark_it != prev_stereo_measurements_.end()) && (idx < max_num_landmarks_) ) 
+        if ( (! has_closed_loop_) && (landmark_it != prev_stereo_measurements_.end()) && (idx < max_num_landmarks_) ) 
         {
           num_inserted++;
 
@@ -247,7 +252,8 @@ public:
 
       prev_stereo_measurements_ = cur_stereo_measurements;
       from_keyframe_id_ = to_id;
-
+      has_closed_loop_ = false;
+      
       // std::cout << "\nAdded " << num_inserted << " landmarks.." << std::endl;
     }
     
