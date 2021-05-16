@@ -73,6 +73,7 @@ private:
   bool pgo_;
   bool use_loop_closure_;
   bool has_closed_loop_;
+  double loop_stamp_;
   int max_num_landmarks_;
   std::map<int, StereoMeasurement> prev_stereo_measurements_; // <landmark id, stereo measurement>
   gtsam::Pose3 sensorTbody_;     // body frame --> cam frame
@@ -96,6 +97,7 @@ public:
   , pgo_( parameters.get< bool >("pgo") )
   , use_loop_closure_( parameters.get< bool >("use_loop_closure", true) )
   , has_closed_loop_( false )
+  , loop_stamp_(0.0)
   , max_num_landmarks_( parameters.get< int >("vslam.max_num_landmarks", 50) )
   , pose_noise_( gtsam::noiseModel::Diagonal::Sigmas(
       ( gtsam::Vector(6) << gtsam::Vector3::Constant(parameters.get< double >("vslam.pose_noise.orientation_sigma", M_PI/18)), 
@@ -139,14 +141,17 @@ public:
 
   void callback(const backend::VSLAM_msg msg)
   { 
+    backend_->setOdometryStamp(msg.header.stamp);
+
     if ( (! online_) || (backend_->checkInitialized() == false) )
       return;
     
-    // Add pose
+    // Get pose relative
     Eigen::Isometry3d T_b1b2;
     tf2::fromMsg(msg.pose, T_b1b2);
     gtsam::Pose3 pose_relative(T_b1b2.matrix()); 
 
+    // Add pose
     std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg.header.stamp, from_time_);
     int to_id = associated_id.first;
 
@@ -192,6 +197,7 @@ public:
 
       backend_->markUpdateWithLoop();
       has_closed_loop_ = true;
+      loop_stamp_ = msg.header.stamp.toSec();
     }
 
 
@@ -223,7 +229,7 @@ public:
         cur_stereo_measurements[landmark_id] = StereoMeasurement(landmark, lfeature, rfeature);
 
         std::map<int, StereoMeasurement>::iterator landmark_it = prev_stereo_measurements_.find(landmark_id);
-        if ( (! has_closed_loop_) && (landmark_it != prev_stereo_measurements_.end()) && (idx < max_num_landmarks_) ) 
+        if ( (msg.header.stamp.toSec() > (loop_stamp_+2.0)) && (landmark_it != prev_stereo_measurements_.end()) && (idx < max_num_landmarks_) ) 
         {
           num_inserted++;
 
@@ -240,6 +246,8 @@ public:
                 prev_stereo_measurements_[landmark_id].lfeature, feature_noise_, pose_key_from_kf, landmark_key, K_, sensorTbody_
               )
             );
+
+            // backend_->relateLandmarkToFrame(msg.header.stamp.toSec(), landmark_key);
           }
 
           backend_->addFactor(

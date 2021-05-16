@@ -52,7 +52,8 @@
 
 	"gnss" : {
 		"orientation_sigma" : 0.1,
-		"position_sigma" 	: 0.15
+		"position_sigma" 	: 0.15,
+		"dt"				: 1.0
 	},
 
 	"vslam" : {

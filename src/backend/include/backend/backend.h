@@ -75,7 +75,7 @@ private:
   double association_threshold_; // in seconds
   std::map<ros::Time, int> stamped_pose_ids_;
   bool update_contains_loop_;
-  double pending_odometry_stamp_;
+  ros::Time pending_odometry_stamp_;
 
   // Current state
   int pose_id_;
@@ -109,7 +109,7 @@ public:
   , world_cloud_pub_(nh_.advertise<sensor_msgs::PointCloud2>("/backend/cloud", buffer_size_))
   , update_contains_loop_(false)
   , world_origin_(gtsam::Pose3::identity())
-  , pending_odometry_stamp_(0.0)
+  , pending_odometry_stamp_(ros::Time(0.0))
   {
     isam2_params_.relinearizeThreshold = parameters.get< double >("relinearization_threshold", 0.1);
     isam2_params_.relinearizeSkip = 10;
@@ -142,8 +142,8 @@ public:
   bool checkInitialized()                 { return initialized_; }
   bool checkNavStatus()                   { return nav_status_; }
   std::map<ros::Time, int> getStampedPoseIDs() { return stamped_pose_ids_; }
-  bool isOdometryPending()                { return (pending_odometry_stamp_ != 0.0); }
-  double newestOdometryStamp()            { return pending_odometry_stamp_; }
+  bool isOdometryPending()                { return (pending_odometry_stamp_ != ros::Time(0.0)); }
+  ros::Time newestOdometryStamp()         { return pending_odometry_stamp_; }
   int getPoseIDAtStamp(ros::Time stamp)   { return stamped_pose_ids_[stamp]; }
 
   int  incrementPoseID()                                { return ++pose_id_; }
@@ -157,7 +157,7 @@ public:
   void updateBias(gtsam::imuBias::ConstantBias bias)    { bias_ = bias; }
   void markUpdateWithLoop()                             { update_contains_loop_ = true; }
   void setWorldOrigin(gtsam::Pose3 pose)                { world_origin_= pose; }
-  void setOdometryStamp(double stamp)                   { pending_odometry_stamp_ = stamp; }
+  void setOdometryStamp(ros::Time stamp)                { pending_odometry_stamp_ = stamp; }
   void relateLandmarkToFrame(double frame_stamp, gtsam::Key landmark_key) { landmarks_in_frame_[frame_stamp].push_back(landmark_key); }
 
   void callback(const ros::TimerEvent& event);

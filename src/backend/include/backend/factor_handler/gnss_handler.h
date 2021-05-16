@@ -42,7 +42,8 @@ private:
   int pose_id_;
   ros::Time prev_stamp_;
 
-  bool use_gnss_;
+  double dt_;
+  std::map<ros::Time, gtsam::Pose3> pendig_gnss_measurements_;
 
 public:
   GNSSHandler(
@@ -59,6 +60,7 @@ public:
                             gtsam::Vector3::Constant( parameters.get< double >("gnss.position_sigma", 0.1) )
       ).finished() )
     )
+  , dt_(parameters.get< double >("dt", 1.0))
   {
     if (online_)
     {
@@ -68,63 +70,80 @@ public:
   }
   ~GNSSHandler() = default; 
 
+  void queueMeasurement(ros::Time stamp, gtsam::Pose3 measurement) { pendig_gnss_measurements_[stamp] = measurement; }
+
+  gtsam::Pose3 queryGNSSMeasurement(ros::Time stamp, std::map<ros::Time, gtsam::Pose3> pendig_gnss_measurements)
+  {
+    std::map<ros::Time, gtsam::Pose3>::iterator cur_measurement_it = pendig_gnss_measurements.begin();
+    std::map<ros::Time, gtsam::Pose3>::iterator prev_measurement_it = pendig_gnss_measurements.begin();
+    
+    int i = 0;
+    while (cur_measurement_it != pendig_gnss_measurements.end())
+    {
+      if (stamp < cur_measurement_it->first)
+        break;
+  
+      cur_measurement_it++;
+      if (i++ > 0)
+        prev_measurement_it = pendig_gnss_measurements.erase(prev_measurement_it);
+    }
+
+    double cur_diff = std::abs( (stamp - cur_measurement_it->first).toSec() );
+    double prev_diff = std::abs( (stamp - prev_measurement_it->first).toSec() );
+
+    if ( cur_diff > prev_diff ) // Ensure that previous association isn't the actual previous pose 
+      return prev_measurement_it->second;           // Previous is associated
+    else
+      return cur_measurement_it->second;            // Current is associated
+  }
+
 
   void callback(const tf2_msgs::TFMessage& msg)
   {
-    // if (msg.transforms[0].header.stamp < ros::Time(1317639337, 634870052) )
-    //   return;
-
     Eigen::Isometry3d T_w = tf2::transformToEigen(msg.transforms[0].transform); 
     gtsam::Pose3 pose(T_w.matrix()); 
 
-    gtsam::Pose3 delta;
-    bool assocated = true;
-    if (backend_->checkInitialized() == false) 
-    {
-      pose_id_ = backend_->getPoseID();  
-      backend_->setInitialized(true);  
+    if ( (! backend_->checkInitialized()) || online_ )
+      queueMeasurement(msg.transforms[0].header.stamp, pose);
+    else
+      return;
 
-      backend_->registerStampedPose(msg.transforms[0].header.stamp, pose_id_);
-      backend_->updatePose(pose);
-      backend_->setWorldOrigin(pose);
+    if (! backend_->isOdometryPending())
+      return;
+
+    ros::Time stamp = backend_->newestOdometryStamp();
+
+    gtsam::Pose3 associated_pose = queryGNSSMeasurement(stamp, pendig_gnss_measurements_);
+    pose_id_ = backend_->getPoseID();
+
+    backend_->setOdometryStamp(ros::Time(0.0));  // Set odometry to not pending
+
+    if (! backend_->checkInitialized()) 
+    {
+      backend_->registerStampedPose(stamp, pose_id_);
+
+      backend_->updatePose(associated_pose);
+      backend_->setWorldOrigin(associated_pose);
+
+      backend_->setInitialized(true);  
     }
     else
     {
-      if (! online_)
-        return; 
-
-      if ( (msg.transforms[0].header.stamp - prev_stamp_).toSec() < 5.0 )
-        return;
-
-      // std::pair<int, bool> associated_id = backend_->searchAssociatedPose(msg.transforms[0].header.stamp);
-      // pose_id_ = associated_id.first;  
-      
-      pose_id_ = backend_->incrementPoseID();
-      backend_->registerStampedPose(msg.transforms[0].header.stamp, pose_id_);
-
-      // double fMin = -4.0;
-      // double fMax = 4.0;
-      // // double f = (double)rand() / RAND_MAX;
-      // double x = fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
-      // double y = fMin + ((double)rand() / RAND_MAX) * (fMax - fMin);
-      // delta = gtsam::Pose3(gtsam::Rot3::Rodrigues(0.0, 0.0, 0.0), gtsam::Point3(x, y, 0.0));
+      if ( (stamp - prev_stamp_).toSec() < dt_ )
+        return;      
     }
 
-
-    // std::cout << "GNSS callback() - ID: " << pose_id_ << ", stamp: " << msg.transforms[0].header.stamp << std::endl;
-
     gtsam::Key pose_key = gtsam::symbol_shorthand::X(pose_id_);       
-    // pose = pose.compose(delta);
-    backend_->tryInsertValue(pose_key, pose);
+    backend_->tryInsertValue(pose_key, associated_pose);
     backend_->addFactor(
       gtsam::PriorFactor<gtsam::Pose3>(
-        pose_key, pose, noise_
+        pose_key, associated_pose, noise_
       )
     );
 
-    // backend_->insertMeasurementStamp( pose_key, msg.transforms[0].header.stamp.toSec() );
+    // std::cout << "GNSS callback() adding - ID: " << pose_id_ << ", stamp: " << stamp << std::endl;
 
-    prev_stamp_ = msg.transforms[0].header.stamp;
+    prev_stamp_ = stamp;
     backend_->isUpdated();
   }
 
