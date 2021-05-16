@@ -67,13 +67,16 @@ private:
   bool updated_; 
   gtsam::Values new_values_; 
   gtsam::NonlinearFactorGraph new_factors_;
+  std::map< double, std::vector<gtsam::Key> > landmarks_in_frame_;
+  std::vector<gtsam::Key> pending_landmarks_to_remove_;
 
   // Association
   ros::Time time_prev_pose_relative_;
   double association_threshold_; // in seconds
   std::map<ros::Time, int> stamped_pose_ids_;
   bool update_contains_loop_;
-  
+  double pending_odometry_stamp_;
+
   // Current state
   int pose_id_;
   gtsam::Pose3 pose_;
@@ -95,7 +98,7 @@ public:
   , initialized_(false)
   , updated_(false)
   , nav_status_(false)
-  , association_threshold_(0.1)
+  , association_threshold_(0.05)
   , pose_(gtsam::Pose3::identity())
   , velocity_(gtsam::Vector3(0.0, 0.0, 0.0))
   , graph_filename_("graph.dot")
@@ -106,6 +109,7 @@ public:
   , world_cloud_pub_(nh_.advertise<sensor_msgs::PointCloud2>("/backend/cloud", buffer_size_))
   , update_contains_loop_(false)
   , world_origin_(gtsam::Pose3::identity())
+  , pending_odometry_stamp_(0.0)
   {
     isam2_params_.relinearizeThreshold = parameters.get< double >("relinearization_threshold", 0.1);
     isam2_params_.relinearizeSkip = 10;
@@ -138,6 +142,9 @@ public:
   bool checkInitialized()                 { return initialized_; }
   bool checkNavStatus()                   { return nav_status_; }
   std::map<ros::Time, int> getStampedPoseIDs() { return stamped_pose_ids_; }
+  bool isOdometryPending()                { return (pending_odometry_stamp_ != 0.0); }
+  double newestOdometryStamp()            { return pending_odometry_stamp_; }
+  int getPoseIDAtStamp(ros::Time stamp)   { return stamped_pose_ids_[stamp]; }
 
   int  incrementPoseID()                                { return ++pose_id_; }
   void registerStampedPose(ros::Time stamp, int id)     { stamped_pose_ids_[stamp] = id; }
@@ -150,6 +157,8 @@ public:
   void updateBias(gtsam::imuBias::ConstantBias bias)    { bias_ = bias; }
   void markUpdateWithLoop()                             { update_contains_loop_ = true; }
   void setWorldOrigin(gtsam::Pose3 pose)                { world_origin_= pose; }
+  void setOdometryStamp(double stamp)                   { pending_odometry_stamp_ = stamp; }
+  void relateLandmarkToFrame(double frame_stamp, gtsam::Key landmark_key) { landmarks_in_frame_[frame_stamp].push_back(landmark_key); }
 
   void callback(const ros::TimerEvent& event);
 
@@ -169,7 +178,9 @@ public:
   template <typename FactorType>
   void addFactor(FactorType factor) { new_factors_.add(factor); }
 
+  bool isLeaf(gtsam::Key key, gtsam::ISAM2 graph);
   gtsam::FastList<gtsam::Key> findAllLeafNodeLandmarks(gtsam::ISAM2 graph);
+  gtsam::FastList<gtsam::Key> popLeafNodeLandmarksOlderThanLag(double lag, gtsam::ISAM2 graph, std::map< double, std::vector<gtsam::Key> >& landmarks_in_frame, std::vector<gtsam::Key>& pending_landmarks_to_remove);
 
   std::pair<int, bool> searchAssociatedPose(ros::Time pose_stamp, ros::Time prev_pose_stamp = ros::Time(0.0));
 
@@ -321,20 +332,25 @@ void Backend::callback(const ros::TimerEvent& event)
       {
         isam2_ = isam2_error_prone;
         remove_indices = gtsam::FactorIndices();
+        gtsam::Symbol key(indeterminant_char, indeterminant_idx);
 
-        if ( current_estimate_.exists(gtsam::Symbol(indeterminant_char, indeterminant_idx)) )
+        if ( current_estimate_.exists(key) && isLeaf(key, isam2_) )
         {
-          gtsam::VariableIndex key2factor_index = isam2_.getVariableIndex();
-          remove_indices = key2factor_index[gtsam::Symbol(indeterminant_char, indeterminant_idx)];
+          gtsam::FastList<gtsam::Key> remove_indices;
+          remove_indices.push_back(key);
+          isam2_.marginalizeLeaves( remove_indices );
+
+          // gtsam::VariableIndex key2factor_index = isam2_.getVariableIndex();
+          // remove_indices = key2factor_index[gtsam::Symbol(indeterminant_char, indeterminant_idx)];
         }
 
         // Remove initial estimate of measurement
-        tryEraseValue(gtsam::Symbol(indeterminant_char, indeterminant_idx)); // Landmark key
+        tryEraseValue(key); // Landmark key
 
         // Remove GenericProjectionFactor
         for ( int i = 0; i < new_factors_.size(); )
         {
-          gtsam::KeyVector::const_iterator found_it = new_factors_.at(i)->find( gtsam::Symbol(indeterminant_char, indeterminant_idx) );
+          gtsam::KeyVector::const_iterator found_it = new_factors_.at(i)->find( key );
 
           if ( found_it != new_factors_.at(i)->end() )
           {
@@ -365,10 +381,10 @@ void Backend::callback(const ros::TimerEvent& event)
 
 
     // End of iteration updates
-    odom_origin_tf_.sendTransform( generateOdomOriginMsg(ros::Time::now(), world_origin_, "odom") );
+    odom_origin_tf_.sendTransform( generateOdomOriginMsg(getNewestPoseTime(), world_origin_, "odom") );
     // odom_world_tf_.sendTransform( generateOdomOriginMsg(ros::Time::now(), pose_, "body") );
     
-    world_pose_pub_.publish( generatePoseMsg(ros::Time::now(), pose_) ); // TODO: Use latest stamp from map
+    world_pose_pub_.publish( generatePoseMsg(getNewestPoseTime(), pose_) ); // TODO: Use latest stamp from map
     // world_cloud_pub_.publish( generateCloudMsg(ros::Time::now(), current_estimate_) );
 
     // Reset parameters
@@ -464,6 +480,19 @@ bool Backend::tryGetEstimate(gtsam::Key key, gtsam::Values result, Value& estima
 }
 
 
+bool Backend::isLeaf(gtsam::Key key, gtsam::ISAM2 graph)
+{
+  gtsam::BayesTree<gtsam::ISAM2Clique>::Nodes cliques = graph.nodes();
+  for (std::pair<gtsam::Key, boost::shared_ptr<gtsam::ISAM2Clique>> clique : cliques)
+  {
+    if (key == clique.first)
+      return true;
+  }
+
+  return false;
+}
+
+
 gtsam::FastList<gtsam::Key> Backend::findAllLeafNodeLandmarks(gtsam::ISAM2 graph)
 {
   gtsam::FastList<gtsam::Key> variables_to_marginalize;
@@ -474,6 +503,39 @@ gtsam::FastList<gtsam::Key> Backend::findAllLeafNodeLandmarks(gtsam::ISAM2 graph
     gtsam::Symbol symb(clique.first);
     if ( (symb.chr() == 'l') && (clique.second->treeSize() == 1) )
       variables_to_marginalize.push_back( gtsam::Key(symb) );
+  }
+
+  return variables_to_marginalize;
+}
+
+
+gtsam::FastList<gtsam::Key> Backend::popLeafNodeLandmarksOlderThanLag(double lagged_stamp, gtsam::ISAM2 graph, std::map< double, std::vector<gtsam::Key> >& landmarks_in_frame, std::vector<gtsam::Key>& pending_landmarks_to_remove)
+{
+  gtsam::FastList<gtsam::Key> variables_to_marginalize;
+
+  // Add old landmarks - should be no duplicates
+  std::map<double, std::vector<gtsam::Key>>::iterator stamped_key;
+  for (stamped_key = landmarks_in_frame.begin(); stamped_key != landmarks_in_frame.end(); )
+  {
+    if (stamped_key->first > lagged_stamp)
+      break;
+
+    std::vector<gtsam::Key> keys_at_stamp = stamped_key->second;
+    pending_landmarks_to_remove.insert(pending_landmarks_to_remove.end(), keys_at_stamp.begin(), keys_at_stamp.end());
+
+    stamped_key = landmarks_in_frame.erase(stamped_key);
+  }  
+
+  std::vector<gtsam::Key>::iterator key_it;
+  for(key_it = pending_landmarks_to_remove.begin(); key_it != pending_landmarks_to_remove.end(); )
+  {
+    if ( isLeaf(*key_it, graph) )
+    {
+      variables_to_marginalize.push_back(*key_it);
+      key_it = pending_landmarks_to_remove.erase(key_it);
+    }
+    else
+      key_it++;
   }
 
   return variables_to_marginalize;
