@@ -405,20 +405,19 @@ public:
       keyframe_id_++;
     }
 
-    if ( ! sequencer_.current.T_r.isApprox(Eigen::Affine3d::Identity()) ) // Check not first frame - or standing still
-      vo_pub_.publish( generateMsgInBody(cam_left->header.stamp,
-                                          sequence_id_, 
-                                          sequencer_.current.T_r,
-                                          is_keyframe_,
-                                          keyframe_id_,
-                                          loop_result.found,
-                                          loop_result.match_id,
-                                          T_loop_closure,
-                                          sequencer_.current.kpts_l,
-                                          sequencer_.current.kpts_r,
-                                          sequencer_.current.world_points,
-                                          sequencer_.current.indices,
-                                          frame_) );
+    vo_pub_.publish( generateMsgInBody(cam_left->header.stamp,
+                                        sequence_id_, 
+                                        sequencer_.current.T_r,
+                                        is_keyframe_,
+                                        keyframe_id_,
+                                        loop_result.found,
+                                        loop_result.match_id,
+                                        T_loop_closure,
+                                        sequencer_.current.kpts_l,
+                                        sequencer_.current.kpts_r,
+                                        sequencer_.current.world_points,
+                                        sequencer_.current.indices,
+                                        frame_) );
 
     // std::cout << "\nmain() - Computed Transformation: \n" << sequencer_.current.T_r.matrix() << std::endl;
 

@@ -72,7 +72,6 @@ private:
   // For local BA
   bool pgo_;
   bool use_loop_closure_;
-  bool has_closed_loop_;
   double loop_stamp_;
   int max_num_landmarks_;
   std::map<int, StereoMeasurement> prev_stereo_measurements_; // <landmark id, stereo measurement>
@@ -96,7 +95,6 @@ public:
   , sensorTbody_(gtsam::Pose3::identity())
   , pgo_( parameters.get< bool >("pgo") )
   , use_loop_closure_( parameters.get< bool >("use_loop_closure", true) )
-  , has_closed_loop_( false )
   , loop_stamp_(0.0)
   , max_num_landmarks_( parameters.get< int >("vslam.max_num_landmarks", 50) )
   , pose_noise_( gtsam::noiseModel::Diagonal::Sigmas(
@@ -196,7 +194,6 @@ public:
       );
 
       backend_->markUpdateWithLoop();
-      has_closed_loop_ = true;
       loop_stamp_ = msg.header.stamp.toSec();
     }
 
@@ -260,7 +257,6 @@ public:
 
       prev_stereo_measurements_ = cur_stereo_measurements;
       from_keyframe_id_ = to_id;
-      has_closed_loop_ = false;
       
       // std::cout << "\nAdded " << num_inserted << " landmarks.." << std::endl;
     }

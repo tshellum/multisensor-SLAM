@@ -8,11 +8,12 @@
 #include <sys/stat.h> 
 
 
-void appendToFile(std::string filepath, double stamp, Eigen::Vector3d t, Eigen::Quaterniond q)
+void appendToFile(std::string filepath, ros::Time stamp, Eigen::Vector3d t, Eigen::Quaterniond q)
 {
     std::ofstream results;
     results.open(filepath, std::ios_base::app);
-    results << stamp << " "    // timestamp for current pose
+    results << std::setprecision(20);
+    results << stamp.sec << "." << stamp.nsec << " "    // timestamp for current pose
             << t.x() << " "	   // x translation 
             << t.y() << " "	   // y translation
             << t.z() << " "	   // z translation 

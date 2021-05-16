@@ -52,8 +52,7 @@ class Motion2file
 
     void gt_callback(const tf2_msgs::TFMessage msg) 
     {
-      // double stamp = ros::Time::now().toSec();
-      double stamp = msg.transforms[0].header.stamp.toSec();
+      ros::Time stamp = msg.transforms[0].header.stamp;
 
       Eigen::Vector3d t;
       tf2::fromMsg(msg.transforms[0].transform.translation, t);
@@ -67,8 +66,7 @@ class Motion2file
 
     void vo_callback(const geometry_msgs::PoseStamped msg) 
     {
-      // double stamp = ros::Time::now().toSec();
-      double stamp = msg.header.stamp.toSec();
+      ros::Time stamp = msg.header.stamp;
 
       Eigen::Vector3d t;
       tf2::fromMsg(msg.pose.position, t);
