@@ -7,7 +7,7 @@
 			"x0" 	 : -1,
 			"y0" 	 : -1,
 			"width"  : -1,
-			"height" : 750
+			"height" : 700
 		},
 		"brightness_gamma_correction" : true,
 		"brightness_gain" : 1.0

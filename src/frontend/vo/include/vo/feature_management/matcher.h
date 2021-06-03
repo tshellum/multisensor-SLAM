@@ -598,15 +598,15 @@ std::pair<std::vector<cv::Point3f>, std::vector<int>> Matcher::triangulate(std::
     bool less_than_200 = pt3D.at<double>(2) > 200;
     bool same_id = match_left[i].class_id != match_right[i].class_id;
 
-    // ROS_INFO_STREAM("pt3D[" << i << "] : " << pt3D.t());
-    // ROS_INFO_STREAM("z < 0: " << positive);
-    // ROS_INFO_STREAM("z > 200: " << less_than_200);
-    // ROS_INFO_STREAM("left.class_id: " << match_left[i].class_id << ", right.class_id: " << match_right[i].class_id << " - is equal: "  << same_id);
+    // std::cout << "\n-----" << std::endl;
+    // std::cout << "pt3D[" << i << "] : " << pt3D.t() << std::endl;
+    // std::cout << "- z < 0: " << positive << std::endl;
+    // std::cout << "- z > 200: " << less_than_200 << std::endl;
     // std::cout << "\nLeft  pt org: " << match_left[pt_it].pt << ", reprojected: " << proj_l << std::endl;
     // std::cout << "- Reproj left error: " << std::sqrt(pow((match_left[pt_it].pt.x - proj_l.x), 2)  + pow((match_left[pt_it].pt.y - proj_l.y), 2)) << std::endl;
     // std::cout << "- Left x diff: " << (match_left[pt_it].pt.x - proj_l.x) << std::endl;
     // std::cout << "- Left y diff: " << (match_left[pt_it].pt.y - proj_l.y) << std::endl;
-    // std::cout << "Right pt org: " << match_right[pt_it].pt << ", reprojected: " << proj_r << std::endl;
+    // std::cout << "\nRight pt org: " << match_right[pt_it].pt << ", reprojected: " << proj_r << std::endl;
     // std::cout << "- Reproj right error: " << std::sqrt(pow((match_right[pt_it].pt.x - proj_r.x), 2) + pow((match_right[pt_it].pt.y - proj_r.y), 2)) << std::endl;
     // std::cout << "- Right x diff: " << (match_right[pt_it].pt.x - proj_r.x) << std::endl;
     // std::cout << "- Right y diff: " << (match_right[pt_it].pt.y - proj_r.y) << std::endl;

@@ -35,6 +35,16 @@ $ roslaunch vo kitti.launch
 $ roslaunch backend kitti.launch
 ```
 
+or 
+
+```bash
+$ roscore
+$ catkin build
+$ ROS_NAMESPACE=camera_array rosrun stereo_image_proc stereo_image_proc
+$ roslaunch vo ma2.launch
+$ roslaunch backend ma2.launch
+```
+
 To visualize the generated point cloud and the motion of the vessel, type:
 
 ```bash
@@ -51,6 +61,11 @@ Then play the rosbag
 
 ```bash
 $ rosbag play /path/to/rosbag
+```
+
+To visualize images use rviz or
+```bash
+$ rosrun image_view stereo_view stereo:=camera_array image:=image_rect
 ```
 
 Example: For the 00 sequence of the rosbag it is recommended to play from 3 seconds in becasue the measurement rate is for some reason lower initially. 
