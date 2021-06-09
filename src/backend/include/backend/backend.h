@@ -10,10 +10,6 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/static_transform_broadcaster.h>
 
-#include <message_filters/subscriber.h>
-#include <message_filters/synchronizer.h>
-#include <message_filters/sync_policies/approximate_time.h>
-
 /*** GTSAM packages ***/
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/nonlinear/ISAM2.h>
@@ -23,6 +19,8 @@
 #include "gtsam/nonlinear/Marginals.h"
 #include <gtsam/nonlinear/NonlinearFactorGraph.h>
 #include <gtsam/navigation/ImuBias.h>
+#include <gtsam_unstable/nonlinear/ConcurrentIncrementalFilter.h>
+#include <gtsam_unstable/nonlinear/ConcurrentIncrementalSmoother.h>
 
 /*** Local ***/ 
 #include "support.h"
@@ -30,6 +28,7 @@
 // #include "backend/motion_model.h"
 
 /*** Standard library ***/ 
+#include <string>
 #include <fstream>
 #include <time.h>
 
@@ -55,26 +54,41 @@ private:
 
   // File
   std::string result_path_;
-  std::string graph_filename_;
+  std::string filter_filename_;
+  std::string smoother_filename_;
 
   // ISAM2
   int num_opt_;
   gtsam::ISAM2 isam2_; 
   gtsam::ISAM2Params isam2_params_; 
   gtsam::Values current_estimate_; 
+  gtsam::Values smoother_estimate_; 
 
   // Graph 
   bool updated_; 
   gtsam::Values new_values_; 
   gtsam::NonlinearFactorGraph new_factors_;
+  gtsam::Values smoother_values_;
+  gtsam::NonlinearFactorGraph smoother_factors_;
   std::map< double, std::vector<gtsam::Key> > landmarks_in_frame_;
   std::vector<gtsam::Key> pending_landmarks_to_remove_;
+  std::vector<gtsam::Symbol> removed_symbols_;
+  std::vector<gtsam::Symbol> removed_keys_;
+
+  double smooth_lag_;
+  double sync_lag_;
+  ros::Time prev_sync_;
+  ros::Time loop_stamp_;
+  std::map<ros::Time, std::vector<gtsam::Key>> stamped_keys_;
+  gtsam::ConcurrentIncrementalFilter concurrent_filter_;
+  gtsam::ConcurrentIncrementalSmoother concurrent_smoother_;
 
   // Association
   ros::Time time_prev_pose_relative_;
   double association_threshold_; // in seconds
   std::map<ros::Time, int> stamped_pose_ids_;
   bool update_contains_loop_;
+  int loop_id_;
   ros::Time pending_odometry_stamp_;
 
   // Current state
@@ -101,15 +115,19 @@ public:
   , association_threshold_(0.05)
   , pose_(gtsam::Pose3::identity())
   , velocity_(gtsam::Vector3(0.0, 0.0, 0.0))
-  , graph_filename_("graph.dot")
+  , filter_filename_("filter.dot")
+  , smoother_filename_("smoother.dot")
   , result_path_(ros::package::getPath("backend") + "/../../results/")
   , buffer_size_(1000)
-  , optimize_timer_(nh_.createTimer(ros::Duration(0.1), &Backend::callback, this))
+  , optimize_timer_(nh_.createTimer(ros::Duration(0.01), &Backend::callback, this))
   , world_pose_pub_(nh_.advertise<geometry_msgs::PoseStamped>("/backend/pose", buffer_size_))
   , world_cloud_pub_(nh_.advertise<sensor_msgs::PointCloud2>("/backend/cloud", buffer_size_))
   , update_contains_loop_(false)
   , world_origin_(gtsam::Pose3::identity())
   , pending_odometry_stamp_(ros::Time(0.0))
+  , smooth_lag_( parameters.get< double >("smooth_lag", 2.0) )
+  , sync_lag_( parameters.get< double >("synchronization_lag", 1.0) )
+  , loop_id_(-1)
   {
     isam2_params_.relinearizeThreshold = parameters.get< double >("relinearization_threshold", 0.1);
     isam2_params_.relinearizeSkip = 10;
@@ -123,7 +141,9 @@ public:
 
   ~Backend() 
   {
-    isam2_.saveGraph(result_path_ + graph_filename_);
+    concurrent_filter_.getFactors().saveGraph(result_path_ + filter_filename_);
+    concurrent_filter_.getISAM2().saveGraph(result_path_ + "isam2_" + filter_filename_);
+    concurrent_smoother_.getFactors().saveGraph(result_path_ + smoother_filename_);
   }
 
 
@@ -135,7 +155,9 @@ public:
   gtsam::NonlinearFactorGraph& getGraph() { return new_factors_; }
   gtsam::Pose3 getPose()                  { return pose_; }
   gtsam::Pose3 getPoseAt(gtsam::Key key);
+  gtsam::Pose3 getPoseAt(gtsam::Key key, gtsam::Values result);
   gtsam::Point3 getPointAt(gtsam::Key key);
+  gtsam::Point3 getPointAt(gtsam::Key key, gtsam::Values result);
   gtsam::Vector3 getVelocity()            { return velocity_; }
   gtsam::imuBias::ConstantBias getBias()  { return bias_; }
   gtsam::ISAM2& getiSAM2()                { return isam2_; }
@@ -145,6 +167,7 @@ public:
   bool isOdometryPending()                { return (pending_odometry_stamp_ != ros::Time(0.0)); }
   ros::Time newestOdometryStamp()         { return pending_odometry_stamp_; }
   int getPoseIDAtStamp(ros::Time stamp)   { return stamped_pose_ids_[stamp]; }
+  bool loopIsAdded()                      { return update_contains_loop_; }
 
   int  incrementPoseID()                                { return ++pose_id_; }
   void registerStampedPose(ros::Time stamp, int id)     { stamped_pose_ids_[stamp] = id; }
@@ -159,13 +182,21 @@ public:
   void setWorldOrigin(gtsam::Pose3 pose)                { world_origin_= pose; }
   void setOdometryStamp(ros::Time stamp)                { pending_odometry_stamp_ = stamp; }
   void relateLandmarkToFrame(double frame_stamp, gtsam::Key landmark_key) { landmarks_in_frame_[frame_stamp].push_back(landmark_key); }
+  void setLoopStamp(ros::Time stamp)                    { loop_stamp_ = stamp; }
+  void setLoopID(int id)                                { loop_id_ = id; }
+  void updateSyncStamp(ros::Time stamp)                 { prev_sync_ = stamp; }
 
   void callback(const ros::TimerEvent& event);
 
   bool valueExist(gtsam::Key key);
+  
+  bool valueExistSmoother(gtsam::Key key);
 
   template <typename Value>
   bool tryInsertValue(gtsam::Key key, Value value);
+
+  template <typename Value>
+  bool tryInsertValue(gtsam::Key key, Value value, ros::Time stamp);
 
   template <typename Value>
   void forceInsertValue(gtsam::Key key, Value value);
@@ -178,15 +209,23 @@ public:
   template <typename FactorType>
   void addFactor(FactorType factor) { new_factors_.add(factor); }
 
+  template <typename FactorType>
+  void addSmootherFactor(FactorType factor) { smoother_factors_.add(factor); }
+
   bool isLeaf(gtsam::Key key, gtsam::ISAM2 graph);
   gtsam::FastList<gtsam::Key> findAllLeafNodeLandmarks(gtsam::ISAM2 graph);
   gtsam::FastList<gtsam::Key> popLeafNodeLandmarksOlderThanLag(double lag, gtsam::ISAM2 graph, std::map< double, std::vector<gtsam::Key> >& landmarks_in_frame, std::vector<gtsam::Key>& pending_landmarks_to_remove);
+  std::pair<gtsam::FastList<gtsam::Key>, gtsam::FactorIndices> findAllLandmarkFactors(std::map<ros::Time, std::vector<gtsam::Key>>& stamped_keys);
+  std::pair<gtsam::FastList<gtsam::Key>, gtsam::FactorIndices> findAllLandmarkFactors(double lag, std::map<ros::Time, std::vector<gtsam::Key>>& stamped_keys);
+
+  // gtsam::FastList<gtsam::Key> popKeysOlderThanLag(double lag, std::map<ros::Time, std::vector<gtsam::Key>>& stamped_keys);
+  std::pair<gtsam::FastList<gtsam::Key>, gtsam::FactorIndices> popKeysOlderThanLag(double lag, std::map<ros::Time, std::vector<gtsam::Key>>& stamped_keys);
 
   std::pair<int, bool> searchAssociatedPose(ros::Time pose_stamp, ros::Time prev_pose_stamp = ros::Time(0.0));
 
   void clearOldAssocations(double interval = 1.0);
   ros::Time findPoseStamp(int pose_id);
-  bool isValidMotion(gtsam::Pose3 pose_relative, double x_thresh=-0.5, double yaw_thresh=M_PI/9, double pitch_thresh=M_PI/18, double roll_thresh=M_PI/18);
+  bool isValidMotion(gtsam::Pose3 pose_relative, bool update_contains_loop, double x_thresh=-0.5, double yaw_thresh=M_PI/9, double pitch_thresh=M_PI/18, double roll_thresh=M_PI/18);
 };
 
 
@@ -203,19 +242,22 @@ void Backend::callback(const ros::TimerEvent& event)
     // new_values_.print("----- Values -----");
     // new_factors_.print("----- New factors -----");
 
-    if ( update_contains_loop_ )
-    {  
-      std::cout << "\nNumber of values before marginalization: " << current_estimate_.size() << std::endl;
-      try 
-      {
-        isam2_.marginalizeLeaves( findAllLeafNodeLandmarks(isam2_) );
-        std::cout << "Marginalized before loop closure added..." << std::endl;
-      }
-      catch(std::invalid_argument& e)
-      {
-        std::cout << "Marginalization error" << std::endl;
-      }
+    std::cout << std::endl;
+    std::pair<gtsam::FastList<gtsam::Key>, gtsam::FactorIndices> popped_variables;
+    if (update_contains_loop_)
+    {
+      std::cout << "Removes all landmarks........." << std::endl;
+      // popped_variables = findAllLandmarkFactors(smooth_lag_, stamped_keys_);
+      popped_variables = findAllLandmarkFactors(stamped_keys_);
     }
+    else
+      popped_variables = popKeysOlderThanLag(smooth_lag_, stamped_keys_);
+
+    // std::pair<gtsam::FastList<gtsam::Key>, gtsam::FactorIndices> popped_variables = popKeysOlderThanLag(smooth_lag_, stamped_keys_);
+
+    gtsam::FastList<gtsam::Key> old_keys = popped_variables.first;
+    gtsam::FactorIndices remove_indices = popped_variables.second;
+
 
     // Optimize   
     bool invalid_optimization = true;
@@ -224,22 +266,207 @@ void Backend::callback(const ros::TimerEvent& event)
     gtsam::Values result;
     unsigned char indeterminant_char;
     unsigned int indeterminant_idx;
-    gtsam::FactorIndices remove_indices;
+    bool added_loop_constraint = false;
+    bool invalid_motion = false;
+    bool value_exist = true;
+
+    // Save before optimize graph
+    gtsam::ConcurrentIncrementalFilter filter_error_prone = concurrent_filter_;
+    gtsam::ConcurrentIncrementalSmoother smoother_error_prone = concurrent_smoother_;
 
     int num_tries = -1;
     while (invalid_optimization)
     {      
-      if (num_tries++ > 500)
+      if (num_tries++ > 20)
         assert(false);
 
       try
       {
-        isam2_.update(new_factors_, new_values_, remove_indices);
+        std::cout << "filter update" << std::endl;
+        gtsam::NonlinearFactorGraph filter_fg_before = concurrent_filter_.getFactors();
+        std::cout << "- old_keys size: " << old_keys.size() << std::endl;
+        std::cout << "- remove_indices size: " << remove_indices.size() << std::endl;
+
+        // while (value_exist)
+        // {
+        //   try
+        //   {
+        //     concurrent_filter_.update(new_factors_, new_values_);
+        //     value_exist = false;
+        //   }
+        //   catch(const gtsam::ValuesKeyAlreadyExists e)
+        //   {
+        //     gtsam::Symbol s(e.key());
+        //     std::cerr << "\nValue key " << s.chr() << "(" << s.index() << ")" << " already exist in new values" << std::endl;
+
+        //     if (new_values_.exists(e.key()))
+        //       new_values_.erase(e.key());
+
+        //     concurrent_filter_ = filter_error_prone;
+        //   }
+        // }
+        
+        concurrent_filter_.update(new_factors_, new_values_);
+        concurrent_filter_.update(gtsam::NonlinearFactorGraph(), gtsam::Values(), gtsam::FastList<gtsam::Key>(), remove_indices);
+        concurrent_filter_.update(gtsam::NonlinearFactorGraph(), gtsam::Values(), old_keys, gtsam::FactorIndices());
         for (int i = 0; i < num_opt_; ++i)
-          isam2_.update(); 
+          concurrent_filter_.update();
+
+        gtsam::NonlinearFactorGraph filter_fg_after = concurrent_filter_.getFactors();
+
+        for(int i = 0; i < remove_indices.size(); i ++)
+        {
+          bool exists_before = filter_fg_before.exists(remove_indices[i]);
+          bool exists_after = filter_fg_after.exists(remove_indices[i]);
+          // bool value_exist = result.exists(gtsam::Key(removed_symbols_[i]));
+
+          // std::cout << "[" << i << "] factor " << remove_indices[i] << ": exists before? " << exists_before << ", exists after? " << exists_after << std::endl;
+          // std::cout << "[" << i << "] value " << removed_symbols_[i].chr() << "(" << removed_symbols_[i].index() << "): exists? " << value_exist << std::endl;
+          
+          if ( exists_before && exists_after )
+          {  
+            std::cout << "[" << i << "] factor " << remove_indices[i] << ": exists before? " << exists_before << ", exists after? " << exists_after << std::endl;
+            assert(false);
+          }
+          // if (!value_exist)
+          // {
+          //   std::cout << "[" << i << "] value " << removed_symbols_[i].chr() << "(" << removed_symbols_[i].index() << "): exists? " << value_exist << std::endl;
+          //   assert(false);
+          // }
+        }
 
 
-        result = isam2_.calculateBestEstimate();
+    
+        // if (update_contains_loop_)
+        // {
+        //   std::cout << "Preparing for loop closure" << std::endl;
+
+        //   concurrent_smoother_.update();
+        //   synchronize(concurrent_filter_, concurrent_smoother_);
+
+        //   gtsam::ConcurrentIncrementalFilter concurrent_filter_new;
+
+        //   gtsam::Values new_values; 
+        //   gtsam::NonlinearFactorGraph new_factors;
+
+        //   gtsam::NonlinearFactorGraph filter_fg = concurrent_filter_.getFactors();
+        //   gtsam::VariableIndex key2factor_indices = concurrent_filter_.getISAM2().getVariableIndex();
+        //   gtsam::Values filter_estimate = concurrent_filter_.calculateEstimate();
+          
+        //   std::cout << "Iterate factors" << std::endl;
+
+        //   for (gtsam::Key k : filter_estimate.keys())
+        //   {
+        //     gtsam::Symbol s(k);
+        //     if (s.chr() == 'x')
+        //     {
+        //       gtsam::Pose3 p = getPoseAt(k, filter_estimate);
+        //       new_values_.insert(k, p);
+        
+        //       gtsam::FactorIndices factor_indices = key2factor_indices[k];
+        //       for(gtsam::FactorIndex index : factor_indices)
+        //       {
+        //         std::cout << std::string(typeid(*filter_fg[index]).name()).substr(9,13) << std::endl; // BetweenFactor
+                
+        //         // if (std::string(typeid(*filter_fg[index]).name()).substr(9,19) == "GenericStereoFactor")
+        //         //   new_factors.add(*filter_fg[index]);
+        //       }
+        //       assert(false);
+              
+        //     }
+              
+        //   }
+
+        //   std::cout << "loop filter reset" << std::endl;
+        //   concurrent_filter_new.update(new_factors, new_values);   
+        //   concurrent_filter_ = concurrent_filter_new;
+        //   concurrent_filter_.update(new_factors_, new_values_);          
+        // }
+
+        result = concurrent_filter_.calculateEstimate();
+        std::cout << "Filter updated size: " << result.size() << std::endl;
+        
+        if ( (prev_sync_ < (getNewestPoseTime() - ros::Duration(sync_lag_))) || update_contains_loop_ )
+        {
+          std::cout << "smoother update" << std::endl;
+          
+          // Synchronize the Filter and Smoother
+          concurrent_smoother_.update();
+          synchronize(concurrent_filter_, concurrent_smoother_);
+
+          smoother_estimate_ = concurrent_smoother_.calculateEstimate();
+          updateSyncStamp( getNewestPoseTime() );
+          
+          std::cout << "Smoother size: " << smoother_estimate_.size() << std::endl;
+        }
+
+        if (update_contains_loop_ && smoother_estimate_.exists(gtsam::symbol_shorthand::X(loop_id_)))
+        {
+          std::cout << "\n\n\n\n\n-----\nAdding loop closure at id: " << loop_id_ << ", num smoother factors: " << smoother_factors_.size() << "\n-----" << std::endl;
+          
+          concurrent_smoother_.update(smoother_factors_, gtsam::Values());
+          for (int i = 0; i < num_opt_; i++)
+            concurrent_smoother_.update();
+
+          synchronize(concurrent_filter_, concurrent_smoother_);
+
+          added_loop_constraint = true;
+          smoother_estimate_ = concurrent_smoother_.calculateEstimate();
+        }
+
+
+        // if ( (prev_sync_ < (getNewestPoseTime() - ros::Duration(sync_lag_)) ))
+        // {
+        //   std::cout << "smoother update" << std::endl;
+          
+        //   // Synchronize the Filter and Smoother
+        //   concurrent_smoother_.update();
+        //   synchronize(concurrent_filter_, concurrent_smoother_);
+
+        //   smoother_estimate_ = concurrent_smoother_.calculateEstimate();
+
+        //   // if (update_contains_loop_ && (getNewestPoseTime().toSec() > (loop_stamp_.toSec() + (sync_lag_ + smooth_lag_ + 10.0))) )
+        //   if ( update_contains_loop_ && smoother_estimate_.exists(gtsam::symbol_shorthand::X(loop_id_)) )
+        //   {
+        //     std::cout << "\n\n\n\n\n-----\nAdding loop closure at id: " << loop_id_ << ", num smoother factors: " << smoother_factors_.size() << "\n-----" << std::endl;
+            
+        //     concurrent_smoother_.update(smoother_factors_, gtsam::Values());
+        //     for (int i = 0; i < num_opt_; i++)
+        //       concurrent_smoother_.update();
+
+        //     // synchronize(concurrent_filter_, concurrent_smoother_);
+
+        //     added_loop_constraint = true;
+        //     smoother_estimate_ = concurrent_smoother_.calculateEstimate();
+
+        //     // int filter_l = 0;
+        //     // for (gtsam::Key k : current_estimate_.keys())
+        //     // {
+        //     //   gtsam::Symbol s(k);
+        //     //   if (s.chr() == 'l')
+        //     //     filter_l++;
+        //     // }
+
+        //     // int smoother_l = 0;
+        //     // for (gtsam::Key k : smoother_estimate_.keys())
+        //     // {
+        //     //   gtsam::Symbol s(k);
+        //     //   if (s.chr() == 'l')
+        //     //     smoother_l++;
+        //     // }
+
+        //     // std::cout << filter_l << " landmarks in filter - " << smoother_l << " landmarks in smoother" << std::endl;
+        //   }
+
+        //   updateSyncStamp( getNewestPoseTime() );
+
+        //   // gtsam::Values filter_result = concurrent_filter_.calculateEstimate();
+          
+        //   std::cout << "Smoother size: " << smoother_estimate_.size() << std::endl;
+        // }
+
+
+        // result = isam2_.calculateBestEstimate();
         gtsam::Pose3 pose_previous = pose_;
         gtsam::Pose3 pose_current;
         tryGetEstimate(gtsam::symbol_shorthand::X(newest_pose_id), result, pose_current);
@@ -247,10 +474,15 @@ void Backend::callback(const ros::TimerEvent& event)
         // Ensure valid motion if all conditions are met
         gtsam::Pose3 pose_relative = pose_previous.between(pose_current);
 
-        if ( isValidMotion(pose_relative, -0.5, M_PI / 9, M_PI / 18, M_PI / 18) )
-          error_correction = NONE;
-        else
-          error_correction = (error_correction == INVALID_MOTION ? NONE : INVALID_MOTION );
+        error_correction = NONE;
+
+        if (! isValidMotion(pose_relative, update_contains_loop_, -0.5, M_PI / 9, M_PI / 18, M_PI / 18) )
+          std::cout << "\n\n\n\n\n\n\n--------------------------------------------" << std::endl;
+
+        // if ( isValidMotion(pose_relative, update_contains_loop_, -0.5, M_PI / 9, M_PI / 18, M_PI / 18) )
+        //   error_correction = NONE;
+        // else
+        //   error_correction = (error_correction == INVALID_MOTION ? NONE : INVALID_MOTION );
 
       }
       catch(gtsam::IndeterminantLinearSystemException e)
@@ -278,8 +510,12 @@ void Backend::callback(const ros::TimerEvent& event)
       {
       case REMOVE_IMU:
       {
-        isam2_ = isam2_error_prone;
-        remove_indices = gtsam::FactorIndices();
+        std::cout << "REMOVE_IMU" << std::endl;
+
+        concurrent_filter_ = filter_error_prone;
+        concurrent_smoother_ = smoother_error_prone;
+        
+        // remove_indices = gtsam::FactorIndices();
 
         // Typically the IMU is the issue --> remove IMUfactors
         for ( int i = 0; i < new_factors_.size(); )
@@ -301,8 +537,12 @@ void Backend::callback(const ros::TimerEvent& event)
 
       case INVALID_MOTION:
       {
-        isam2_ = isam2_error_prone;
-        remove_indices = gtsam::FactorIndices();
+        std::cout << "INVALID_MOTION" << std::endl;
+
+        concurrent_filter_ = filter_error_prone;
+        concurrent_smoother_ = smoother_error_prone;
+        
+        // remove_indices = gtsam::FactorIndices();
 
         // Remove both landmarks and IMU factors
         for ( int i = 0; i < new_factors_.size(); )
@@ -310,6 +550,8 @@ void Backend::callback(const ros::TimerEvent& event)
           bool remove = false;
           for ( int j = 0; j < new_factors_.at(i)->size(); j++)
           {
+            std::cout << "[" << i << "] = " << std::string(typeid(*new_factors_[i]).name()).substr(9,13) << std::endl;
+
             gtsam::Symbol symb(new_factors_.at(i)->keys()[j]);
             if (symb.chr() != 'x')
             {
@@ -330,34 +572,89 @@ void Backend::callback(const ros::TimerEvent& event)
 
       case REMOVE_LANDMARK:
       {
-        isam2_ = isam2_error_prone;
-        remove_indices = gtsam::FactorIndices();
+        std::cout << "REMOVE_LANDMARK" << std::endl;
+
+        concurrent_filter_ = filter_error_prone;
+        concurrent_smoother_ = smoother_error_prone;
+        
+        // remove_indices = gtsam::FactorIndices();
         gtsam::Symbol key(indeterminant_char, indeterminant_idx);
 
-        if ( current_estimate_.exists(key) && isLeaf(key, isam2_) )
+        if (std::find(removed_keys_.begin(), removed_keys_.end(), key) != removed_keys_.end())
         {
-          gtsam::FastList<gtsam::Key> remove_indices;
-          remove_indices.push_back(key);
-          isam2_.marginalizeLeaves( remove_indices );
+          gtsam::Point3 landmark = getPointAt(key, result);
+          addFactor(
+            gtsam::PriorFactor<gtsam::Point3>(
+              key, landmark, gtsam::noiseModel::Isotropic::Sigma(3, 10)
+            )
+          );
 
-          // gtsam::VariableIndex key2factor_index = isam2_.getVariableIndex();
-          // remove_indices = key2factor_index[gtsam::Symbol(indeterminant_char, indeterminant_idx)];
         }
-
-        // Remove initial estimate of measurement
-        tryEraseValue(key); // Landmark key
-
-        // Remove GenericProjectionFactor
-        for ( int i = 0; i < new_factors_.size(); )
+        else
         {
-          gtsam::KeyVector::const_iterator found_it = new_factors_.at(i)->find( key );
-
-          if ( found_it != new_factors_.at(i)->end() )
+          if ( current_estimate_.exists(key) )
           {
-            new_factors_.erase( new_factors_.begin() + i ); // Generic projection factor
+            std::cout << "Landmark exists in factor graph..." << std::endl;
+            std::cout << "Landmark is leaf? " << isLeaf(key, concurrent_filter_.getISAM2()) << std::endl;
+        
+            gtsam::NonlinearFactorGraph filter_fg = concurrent_filter_.getFactors();
+            gtsam::VariableIndex key2factor_indices = concurrent_filter_.getISAM2().getVariableIndex();
+            gtsam::FactorIndices factor_indices = key2factor_indices[key];
+    
+            std::cout << key.chr() << "(" << key.index() << ") - number of factor indices:" << factor_indices.size() << std::endl;
+            
+            for(gtsam::FactorIndex index : factor_indices)
+            {
+              gtsam::KeyVector factor_keys = filter_fg.at(index)->keys();
+              if (factor_keys.size() == 2)
+              {
+                bool inserted = false;
+
+                gtsam::Symbol s1, s2;
+                int i = 0;
+                for (gtsam::Key k : factor_keys)
+                {
+                  i++;
+                  if (i == 1)
+                    s1 = gtsam::Symbol(k);
+                  if (i == 2)
+                    s2 = gtsam::Symbol(k);
+
+                  gtsam::Symbol s(k);
+                  if (s.chr() == 'l')
+                  {
+                    inserted = true;
+                    remove_indices.push_back(index);
+
+                    removed_symbols_.push_back(s);
+                    break;
+                  }
+                }
+
+                std::cout << "- " << index << " inserted? " << inserted << ", keys: " << s1.chr() << "(" << s1.index() << "), " << s2.chr() << "(" << s2.index() << ")" << std::endl;
+              }
+            }
           }
-          else
-            i++;
+
+          // Remove initial estimate of measurement
+          tryEraseValue(key); // Landmark key
+
+          // Remove projection factor
+          for ( int i = 0; i < new_factors_.size(); i++)
+          {
+            gtsam::KeyVector::const_iterator found_it = new_factors_.at(i)->find( key );
+
+            if ( found_it != new_factors_.at(i)->end() )
+            {
+              gtsam::KeyVector factor_keys = new_factors_.at(i)->keys();
+
+              new_factors_.erase( new_factors_.begin() + i ); // Generic projection factor
+            }
+            else
+              i++;
+          }
+
+          removed_keys_.push_back(key);
         }
 
         invalid_optimization = true;
@@ -374,8 +671,8 @@ void Backend::callback(const ros::TimerEvent& event)
       }
     }
 
-    if ( update_contains_loop_ )
-      std::cout << "Number of values after marginalization: " << current_estimate_.size() << std::endl;
+    // if ( update_contains_loop_ )
+    //   std::cout << "Number of values after marginalization: " << current_estimate_.size() << std::endl;
 
     // std::cout << "\n" << num_tries << " landmarks removed: " << std::endl;
 
@@ -391,8 +688,14 @@ void Backend::callback(const ros::TimerEvent& event)
     new_factors_.resize(0);
     new_values_.clear();
     clearOldAssocations();
-    update_contains_loop_ = false;
-
+    removed_keys_.clear();
+    
+    if (added_loop_constraint)
+    {
+      update_contains_loop_ = false;
+      smoother_factors_.resize(0);
+      // assert(false);
+    }
     ros::Time toc = ros::Time::now();
     printSummary((toc - tic).toSec(),
                   Eigen::Affine3d{pose_.matrix()} );
@@ -412,6 +715,17 @@ gtsam::Pose3 Backend::getPoseAt(gtsam::Key key)
 }
 
 
+gtsam::Pose3 Backend::getPoseAt(gtsam::Key key, gtsam::Values result)
+{
+  if (result.exists(key))
+    return result.at<gtsam::Pose3>(key);
+  if (new_values_.exists(key))
+    return new_values_.at<gtsam::Pose3>(key);
+  else
+    return gtsam::Pose3();
+}
+
+
 gtsam::Point3 Backend::getPointAt(gtsam::Key key)
 {
   if (current_estimate_.exists(key))
@@ -422,10 +736,25 @@ gtsam::Point3 Backend::getPointAt(gtsam::Key key)
     return gtsam::Point3();
 }
 
+gtsam::Point3 Backend::getPointAt(gtsam::Key key, gtsam::Values result)
+{
+  if (result.exists(key))
+    return result.at<gtsam::Point3>(key);
+  else if (new_values_.exists(key))
+    return new_values_.at<gtsam::Point3>(key);
+  else
+    return gtsam::Point3();
+}
 
 bool Backend::valueExist(gtsam::Key key)
 {
   return ( current_estimate_.exists(key) || new_values_.exists(key) );
+}
+
+
+bool Backend::valueExistSmoother(gtsam::Key key)
+{
+  return ( current_estimate_.exists(key) || smoother_values_.exists(key) );
 }
 
 
@@ -434,6 +763,20 @@ bool Backend::tryInsertValue(gtsam::Key key, Value value)
 {
   if (! valueExist(key)) // Value doesn't exist, thus is inserted
   {
+    new_values_.insert(key, value); 
+    return true;
+  }
+  else
+    return false;
+}
+
+
+template <typename Value>
+bool Backend::tryInsertValue(gtsam::Key key, Value value, ros::Time stamp)
+{
+  if (! valueExist(key)) // Value doesn't exist, thus is inserted
+  {
+    stamped_keys_[stamp].push_back(key);
     new_values_.insert(key, value); 
     return true;
   }
@@ -542,6 +885,191 @@ gtsam::FastList<gtsam::Key> Backend::popLeafNodeLandmarksOlderThanLag(double lag
 }
 
 
+
+std::pair<gtsam::FastList<gtsam::Key>, gtsam::FactorIndices> Backend::popKeysOlderThanLag(double lag, std::map<ros::Time, std::vector<gtsam::Key>>& stamped_keys)
+{
+  gtsam::FactorIndices remove_indices;
+  gtsam::FastList<gtsam::Key> old_keys;
+  removed_symbols_.clear();
+
+  if (stamped_keys.empty())
+    return std::make_pair(old_keys, remove_indices);
+
+  gtsam::VariableIndex key2factor_indices = concurrent_filter_.getISAM2().getVariableIndex();
+  gtsam::NonlinearFactorGraph filter_fg = concurrent_filter_.getFactors();
+  // gtsam::Values filter_result = concurrent_filter_.calculateEstimate();
+  
+  std::map<ros::Time, std::vector<gtsam::Key>>::iterator stamped_key = stamped_keys.begin();
+  ros::Time newest_stamp = stamped_keys.rbegin()->first;
+
+  while (stamped_key != stamped_keys.end())
+  {
+    if (stamped_key->first > (newest_stamp - ros::Duration(lag)) )
+      break;
+    
+    std::vector<gtsam::Key> keys = stamped_key->second;
+    
+    // std::cout << "popKeysOlderThanLag() - keys.size: " << keys.size() << std::endl;
+
+    for(gtsam::Key key : keys)
+    {
+      gtsam::Symbol symb(key);
+      try
+      {
+        gtsam::FactorIndices factor_indices = key2factor_indices[key];
+        // std::cout << "poplag(): " <<  symb.chr() << "(" << symb.index() << ") - number of factor indices: " << factor_indices.size() << std::endl;
+        
+        if (symb.chr() == 'x')
+        {
+          old_keys.push_back(key);
+          int j = 0;
+          for(gtsam::FactorIndex index : factor_indices)
+          {
+            if (std::string(typeid(*filter_fg[index]).name()).substr(9,19) == "GenericStereoFactor")
+              remove_indices.push_back(index);
+          }
+        }
+        else if (symb.chr() == 'l')
+        {
+          for(gtsam::FactorIndex index : factor_indices)
+          {
+            if (std::string(typeid(*filter_fg[index]).name()).substr(9,11) == "PriorFactor")
+              remove_indices.push_back(index);
+          }
+        }
+      }
+      catch(const std::exception& e)
+      {
+        std::cerr << e.what() << '\n';
+      }
+    }
+    // old_keys.push_back(stamped_key->second);
+    stamped_key = stamped_keys.erase(stamped_key);
+  }
+
+  return std::make_pair(old_keys, remove_indices);
+}
+
+
+std::pair<gtsam::FastList<gtsam::Key>, gtsam::FactorIndices> Backend::findAllLandmarkFactors(std::map<ros::Time, std::vector<gtsam::Key>>& stamped_keys)
+{
+  gtsam::FactorIndices remove_indices;
+  gtsam::FastList<gtsam::Key> old_keys;
+
+  gtsam::VariableIndex key2factor_indices = concurrent_filter_.getISAM2().getVariableIndex();
+  gtsam::NonlinearFactorGraph filter_fg = concurrent_filter_.getFactors();
+  gtsam::Values filter_estimate = concurrent_filter_.calculateEstimate();
+  
+  for (gtsam::Key key : filter_estimate.keys())
+  {
+    gtsam::Symbol symb(key);
+    
+    if ( (symb.chr() == 'x') /*&& (symb.index() != getNewestPoseID()) */)
+        old_keys.push_back(key);
+
+    if (symb.chr() == 'l')    
+    {
+      try
+      {
+        gtsam::FactorIndices factor_indices = key2factor_indices[key];
+        for(gtsam::FactorIndex index : factor_indices)
+        {
+          if ( (std::string(typeid(*filter_fg[index]).name()).substr(9,19) == "GenericStereoFactor") 
+            || (std::string(typeid(*filter_fg[index]).name()).substr(9,11) == "PriorFactor") )
+          {
+            remove_indices.push_back(index);
+          }
+        }
+      }
+      catch(const std::exception& e)
+      {
+        std::cerr << e.what() << '\n';
+      }
+      
+    }
+  }
+
+  gtsam::KeyVector new_keys = new_values_.keys();
+
+  std::map<ros::Time, std::vector<gtsam::Key>>::iterator stamped_key = stamped_keys.begin();
+
+  while (stamped_key != stamped_keys.end())
+  { 
+    bool remove = true;
+    std::vector<gtsam::Key> keys = stamped_key->second;
+    for(gtsam::Key key : keys)
+    {    
+      if ( std::find(new_keys.begin(), new_keys.end(), key) != new_keys.end() )
+        remove = false;
+    }
+    if (remove)
+      stamped_key = stamped_keys.erase(stamped_key);
+    else
+      stamped_key++;
+  }
+
+  return std::make_pair(old_keys, remove_indices);
+}
+
+
+std::pair<gtsam::FastList<gtsam::Key>, gtsam::FactorIndices> Backend::findAllLandmarkFactors(double lag, std::map<ros::Time, std::vector<gtsam::Key>>& stamped_keys)
+{
+  gtsam::FactorIndices remove_indices;
+  gtsam::FastList<gtsam::Key> old_keys;
+
+  if (stamped_keys.empty())
+    return std::make_pair(old_keys, remove_indices);
+
+  std::map<ros::Time, std::vector<gtsam::Key>>::iterator stamped_key = stamped_keys.begin();
+  ros::Time newest_stamp = stamped_keys.rbegin()->first;
+
+  while (stamped_key != stamped_keys.end())
+  {
+    if (stamped_key->first > (newest_stamp - ros::Duration(lag)) )
+      break;
+    
+    std::vector<gtsam::Key> keys = stamped_key->second;
+    for(gtsam::Key key : keys)
+      old_keys.push_back(key);
+
+    stamped_key = stamped_keys.erase(stamped_key);
+  }
+
+  // Remove all landmarks
+  gtsam::NonlinearFactorGraph filter_fg = concurrent_filter_.getFactors();
+  gtsam::VariableIndex key2factor_indices = concurrent_filter_.getISAM2().getVariableIndex();
+  gtsam::Values filter_estimate = concurrent_filter_.calculateEstimate();
+
+  std::cout << "loop for" << std::endl;
+  for (gtsam::Key k : filter_estimate.keys())
+  {
+    gtsam::Symbol s(k);
+    if (s.chr() == 'l')
+    {
+      try
+      {
+        gtsam::FactorIndices factor_indices = key2factor_indices[k];
+        for(gtsam::FactorIndex index : factor_indices)
+        {
+          if ( (std::string(typeid(*filter_fg[index]).name()).substr(9,19) == "GenericStereoFactor") 
+            || (std::string(typeid(*filter_fg[index]).name()).substr(9,11) == "PriorFactor") )
+          {
+            remove_indices.push_back(index);
+          }
+        }
+      }
+      catch(const std::exception& e)
+      {
+        std::cerr << e.what() << '\n';
+      }      
+    } 
+  }
+
+  return std::make_pair(old_keys, remove_indices);
+}
+
+
+
 std::pair<int, bool> Backend::searchAssociatedPose(ros::Time pose_stamp, ros::Time prev_pose_stamp)
 {    
   std::map<ros::Time, int>::iterator stamped_pose_id = stamped_pose_ids_.begin();
@@ -613,15 +1141,15 @@ ros::Time Backend::findPoseStamp(int pose_id)
 }
 
 
-bool Backend::isValidMotion(gtsam::Pose3 pose_relative, double x_thresh, double yaw_thresh, double pitch_thresh, double roll_thresh)
+bool Backend::isValidMotion(gtsam::Pose3 pose_relative, bool update_contains_loop, double x_thresh, double yaw_thresh, double pitch_thresh, double roll_thresh)
 {
   return ( ( (pose_relative.x() >= -0.5)
             || ( (pose_relative.x() >= pose_relative.y())
               && (pose_relative.x() >= pose_relative.z()) ) )
           && (std::abs(pose_relative.rotation().yaw()) < yaw_thresh) 
           && (std::abs(pose_relative.rotation().pitch()) < pitch_thresh)
-          && (std::abs(pose_relative.rotation().roll()) < roll_thresh) 
-          && (! update_contains_loop_) );
+          && (std::abs(pose_relative.rotation().roll()) < roll_thresh) );
+          // || (update_contains_loop) );
 }
 
 

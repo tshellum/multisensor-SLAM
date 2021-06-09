@@ -220,7 +220,8 @@ public:
     if ( ! pose_predictor_.evaluateValidity(sequencer_.current.T_r, sequencer_.previous.T_r) )
       sequencer_.current.T_r = sequencer_.previous.T_r;
 
-    sequencer_.current.T_r.translation() *= sequencer_.previous.scale;
+    if (sequencer_.previous.scale < 2)
+      sequencer_.current.T_r.translation() *= sequencer_.previous.scale;
 
 
     
@@ -338,7 +339,7 @@ public:
     {
       sequencer_.current.scale = sequencer_.previous.scale;
     }
-    else
+    else // bad estimate
     {
       sequencer_.current.T_r = T_r_opt;
       sequencer_.current.scale = scale_cur;

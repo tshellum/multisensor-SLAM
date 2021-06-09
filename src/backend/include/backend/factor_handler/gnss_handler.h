@@ -134,7 +134,8 @@ public:
     }
 
     gtsam::Key pose_key = gtsam::symbol_shorthand::X(pose_id_);       
-    backend_->tryInsertValue(pose_key, associated_pose);
+    // backend_->tryInsertValue(pose_key, associated_pose);
+    backend_->tryInsertValue(pose_key, associated_pose, stamp);
     backend_->addFactor(
       gtsam::PriorFactor<gtsam::Pose3>(
         pose_key, associated_pose, noise_
