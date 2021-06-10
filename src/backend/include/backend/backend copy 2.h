@@ -293,23 +293,7 @@ void Backend::callback(const ros::TimerEvent& event)
         //   }
         // }
         
-        try
-        {
-          concurrent_filter_.update(new_factors_, new_values_);
-        }
-        catch(const gtsam::ValuesKeyAlreadyExists e)
-        {
-          gtsam::Symbol s(e.key());
-          std::cout << "\nValue key " << s.chr() << "(" << s.index() << ")" << " already exist in new values? " << new_values_.exists(e.key()) << std::endl;
-
-          gtsam::Values result = concurrent_filter_.calculateEstimate();
-
-          std::cout << "Value key " << s.chr() << "(" << s.index() << ")" << " already exist in filter values? " << result.exists(e.key()) << std::endl;
-
-          concurrent_filter_.update(new_factors_, new_values_);
-        }
-
-        // concurrent_filter_.update(new_factors_, new_values_);
+        concurrent_filter_.update(new_factors_, new_values_);
         concurrent_filter_.update(gtsam::NonlinearFactorGraph(), gtsam::Values(), gtsam::FastList<gtsam::Key>(), remove_indices);
         concurrent_filter_.update(gtsam::NonlinearFactorGraph(), gtsam::Values(), old_keys, gtsam::FactorIndices());
         for (int i = 0; i < num_opt_; ++i)
@@ -395,7 +379,7 @@ void Backend::callback(const ros::TimerEvent& event)
       {
       case REMOVE_IMU:
       {
-        // std::cout << "REMOVE_IMU" << std::endl;
+        std::cout << "REMOVE_IMU" << std::endl;
 
         concurrent_filter_ = filter_error_prone;
         concurrent_smoother_ = smoother_error_prone;
@@ -422,7 +406,7 @@ void Backend::callback(const ros::TimerEvent& event)
 
       case INVALID_MOTION:
       {
-        // std::cout << "INVALID_MOTION" << std::endl;
+        std::cout << "INVALID_MOTION" << std::endl;
         // std::cout << "- new_factors_.size(): " << new_factors_.size() << std::endl;
         // std::cout << "- new_values_.size(): " << new_values_.size() << std::endl;
 
@@ -460,7 +444,7 @@ void Backend::callback(const ros::TimerEvent& event)
 
       case REMOVE_LANDMARK:
       {
-        // std::cout << "REMOVE_LANDMARK" << std::endl;
+        std::cout << "REMOVE_LANDMARK" << std::endl;
 
         concurrent_filter_ = filter_error_prone;
         concurrent_smoother_ = smoother_error_prone;

@@ -217,11 +217,16 @@ public:
     //                       sequencer_.current.kpts_l,
     //                       "Matched Features: Previous-->Current" ); 
 
-    if ( ! pose_predictor_.evaluateValidity(sequencer_.current.T_r, sequencer_.previous.T_r) )
+    if ( (sequencer_.previous.T_r.matrix() != Eigen::Matrix4d::Identity()) && ( ! sequencer_.isUpToScaleTransformationSmooth(sequencer_.current.T_r, sequencer_.previous.T_r) ) )
+    {
+      // std::cout << "\nInvalid up to scale" << std::endl;
       sequencer_.current.T_r = sequencer_.previous.T_r;
+    }
+    // if ( ! pose_predictor_.evaluateValidity(sequencer_.current.T_r, sequencer_.previous.T_r) )
+    //   sequencer_.current.T_r = sequencer_.previous.T_r;
 
-    if (sequencer_.previous.scale < 2)
-      sequencer_.current.T_r.translation() *= sequencer_.previous.scale;
+    // if (sequencer_.previous.scale < 2)
+    //   sequencer_.current.T_r.translation() *= sequencer_.previous.scale;
 
 
     
@@ -307,18 +312,8 @@ public:
                                                   features_cur_l,
                                                   features_cur_r);
 
-    // // PYR
-    // if (! sequencer_.previous.img_l.empty())
-    // {
-    //   pyr_.estimate(sequencer_.previous.img_l, sequencer_.current.img_l);
-    //   pyr_.setFFTReuse(true);
-    //   sequencer_.current.T_r.linear() = euler2rotationMatrix(pyr_.pitch(), pyr_.yaw(), pyr_.roll());    
-
-    //   // displayWindow(pyr_.draw(sequencer_.current.img_l.clone()), cv::Mat(), "PYR");
-    // }
-
-    double scale_cur = pose_predictor_.calculateScale(T_r_opt.translation(), 
-                                                      sequencer_.previous.scale);
+    // double scale_cur = pose_predictor_.calculateScale(T_r_opt.translation(), 
+    //                                                   sequencer_.previous.scale);
 
 
     /***** End of iteration processes *****/
@@ -329,21 +324,29 @@ public:
                           "Published Stereo Features" ); 
     
     // Rejecting bad pose optimization --> Setting equal to previous
-    if ( (T_r_opt.matrix() == Eigen::Matrix4d::Identity()) // motion-BA actually produces an estimate
-      || (scale_cur > 2)                                   // No large motion
-      || (scale_cur < 0.1)                                 // Standing still - this is typically where thing goes wrong
-      || (T_r_opt(2,3) < -0.1)                             // No large backward motion
-      || (T_r_opt(2,3) < T_r_opt(0,3))                     // z < x (in camera frame)
-      || (T_r_opt(2,3) < T_r_opt(1,3))                     // z < y (in camera frame)
-    )                                
+    if ( (sequencer_.previous.T_r.matrix() != Eigen::Matrix4d::Identity()) && (! sequencer_.isTransformationSmooth(T_r_opt, sequencer_.previous.T_r)) )
     {
-      sequencer_.current.scale = sequencer_.previous.scale;
+      sequencer_.current.T_r = sequencer_.previous.T_r;
+      // std::cout << "\nInvalid optimized estimate" << std::endl;
     }
-    else // bad estimate
-    {
+    else
       sequencer_.current.T_r = T_r_opt;
-      sequencer_.current.scale = scale_cur;
-    }
+
+    // if ( (T_r_opt.matrix() == Eigen::Matrix4d::Identity()) // motion-BA actually produces an estimate
+    //   || (scale_cur > 2)                                   // No large motion
+    //   || (scale_cur < 0.1)                                 // Standing still - this is typically where thing goes wrong
+    //   || (T_r_opt(2,3) < -0.1)                             // No large backward motion
+    //   || (T_r_opt(2,3) < T_r_opt(0,3))                     // z < x (in camera frame)
+    //   || (T_r_opt(2,3) < T_r_opt(1,3))                     // z < y (in camera frame)
+    // )                                
+    // {
+    //   sequencer_.current.scale = sequencer_.previous.scale;
+    // }
+    // else // bad estimate
+    // {
+    //   sequencer_.current.T_r = T_r_opt;
+    //   sequencer_.current.scale = scale_cur;
+    // }
 
 
     /***** Loop closure *****/

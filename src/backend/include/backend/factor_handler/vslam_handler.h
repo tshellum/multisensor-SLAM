@@ -213,12 +213,12 @@ public:
       // if ( (! pgo_) && backend_->loopIsAdded() )   
       if (! pgo_)
       {
-        // if (backend_->loopIsAdded())
-        // {
-        //   prev_stereo_measurements_ = std::map<int, StereoMeasurement>();
-        //   from_keyframe_id_ = to_id;
-        // }
-        // else
+        if (backend_->loopIsAdded())
+        {
+          prev_stereo_measurements_ = std::map<int, StereoMeasurement>();
+          from_keyframe_id_ = to_id;
+        }
+        else
         {
           gtsam::Key pose_key_from_kf = gtsam::symbol_shorthand::X(from_keyframe_id_); 
 
@@ -244,8 +244,8 @@ public:
             cur_stereo_measurements[landmark_id] = StereoMeasurement(landmark, lfeature, rfeature);
 
             std::map<int, StereoMeasurement>::iterator landmark_it = prev_stereo_measurements_.find(landmark_id);
-            if ( (msg.header.stamp.toSec() > (loop_stamp_+10.0)) && (landmark_it != prev_stereo_measurements_.end()) && (num_inserted < max_num_landmarks_) ) 
-            // if ( (landmark_it != prev_stereo_measurements_.end()) && (num_inserted < max_num_landmarks_) ) 
+            // if ( (msg.header.stamp.toSec() > (loop_stamp_+20.0)) && (landmark_it != prev_stereo_measurements_.end()) && (num_inserted < max_num_landmarks_) ) 
+            if ( (landmark_it != prev_stereo_measurements_.end()) && (num_inserted < max_num_landmarks_) ) 
             {
               num_inserted++;
               gtsam::Symbol l_symb(landmark_key);
@@ -261,12 +261,6 @@ public:
                   )
                 );
 
-                // backend_->addFactor(
-                //   gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3>(
-                //     prev_stereo_measurements_[landmark_id].lfeature, feature_noise_, pose_key_from_kf, landmark_key, K_, sensorTbody_
-                //   )
-                // );
-
                 gtsam::StereoPoint2 stereo_feature_prev(prev_stereo_measurements_[landmark_id].lfeature.x(), prev_stereo_measurements_[landmark_id].rfeature.x(), 
                                                         (prev_stereo_measurements_[landmark_id].lfeature.y() + prev_stereo_measurements_[landmark_id].rfeature.y() ) / 2 );
 
@@ -275,18 +269,7 @@ public:
                     stereo_feature_prev, stereo_feature_noise_, pose_key_from_kf, landmark_key, K_stereo_, sensorTbody_
                   )
                 );
-
-                gtsam::Symbol pp_symb(pose_key_from_kf);
-                // std::cout << "- VSLAM() prev " << l_symb.chr() << "(" << l_symb.index() << "), " << pp_symb.chr() << "(" << pp_symb.index() << ")" << std::endl;
-
-                // backend_->relateLandmarkToFrame(msg.header.stamp.toSec(), landmark_key);
               }
-
-              // backend_->addFactor(
-              //   gtsam::GenericProjectionFactor<gtsam::Pose3, gtsam::Point3>(
-              //     lfeature, feature_noise_, pose_key_to, landmark_key, K_, sensorTbody_
-              //   )
-              // );
 
               gtsam::StereoPoint2 stereo_feature_cur(cur_stereo_measurements[landmark_id].lfeature.x(), cur_stereo_measurements[landmark_id].rfeature.x(), 
                                                       (cur_stereo_measurements[landmark_id].lfeature.y() + cur_stereo_measurements[landmark_id].rfeature.y() ) / 2 );
@@ -296,9 +279,6 @@ public:
                   stereo_feature_cur, stereo_feature_noise_, pose_key_to, landmark_key, K_stereo_, sensorTbody_
                 )
               );
-
-              gtsam::Symbol pc_symb(pose_key_to);
-              // std::cout << "- VSLAM() curr " << l_symb.chr() << "(" << l_symb.index() << "), " << pc_symb.chr() << "(" << pc_symb.index() << ")" << std::endl;
             }
           }
 
