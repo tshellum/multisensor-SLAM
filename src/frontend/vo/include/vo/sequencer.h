@@ -286,6 +286,6 @@ bool Sequencer::isTransformationSmooth(Eigen::Affine3d T_cur, Eigen::Affine3d T_
         && ( (std::abs(T_cur(1,3)) - std::abs(T_prev(1,3)) ) < t_thresh )        
         // && ( (std::abs(T_cur(2,3)) - std::abs(T_prev(2,3)) ) < t_thresh )        
         && (T_cur.translation().norm() < 3)     
-        // && ( T_cur.translation().norm() > 0.1 )     
+        // && ( T_cur.translation().norm() > 0.05 )     
   );
 }

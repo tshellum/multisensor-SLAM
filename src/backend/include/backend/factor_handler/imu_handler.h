@@ -182,14 +182,7 @@ public:
     {
       from_id_ = backend_->getPoseID();
       initialized_ = true;
-
-      // stamped_measurements_[msg->header.stamp] = IMUMeasurement(IMU_measurement_body.second, IMU_measurement_body.first, dt_);
-      // stamped_measurements_[msg->header.stamp] = IMUMeasurement(gtsam::Vector3(gyr), gtsam::Vector3(acc), dt_);
-
     }
-    // else
-      // stamped_measurements_[msg->header.stamp] = IMUMeasurement(IMU_measurement_body.second, IMU_measurement_body.first, (msg->header.stamp - prev_stamp_).toSec());
-      // stamped_measurements_[msg->header.stamp] = IMUMeasurement(gtsam::Vector3(gyr), gtsam::Vector3(acc), (msg->header.stamp - prev_stamp_).toSec());
     
     double dt = (msg->header.stamp - prev_stamp_).toSec();
     if ( (std::abs(dt) > 1) || (std::abs(dt) < 0.001) )
@@ -197,9 +190,10 @@ public:
     else
       stamped_measurements_[msg->header.stamp] = IMUMeasurement(IMU_measurement_body.second, IMU_measurement_body.first, dt);
 
+
     // New pose is added --> add preintegrated measurement
     int to_id = backend_->getNewestPoseID();
-    if  (to_id > from_id_)
+    if ( (to_id > from_id_) && backend_->valueExist(gtsam::symbol_shorthand::X(from_id_)) && backend_->valueExist(gtsam::symbol_shorthand::X(to_id)) )
     {        
       // std::cout << "IMU callback() - from_id: " << from_id_ << ", to_id: " << to_id << std::endl;
 
@@ -225,6 +219,42 @@ public:
 
       from_id_ = to_id;
     }
+
+
+    // if  (to_id > from_id_)
+    // {        
+
+    //   int from_id = backend_->getSecondNewestPoseID();
+    //   if (from_id != from_id_)
+    //   {
+    //     std::cout << "-----\nIMU - from id_: " << from_id_ << ", to id: " << to_id << std::endl;
+    //     std::cout << "IMU - from id: " << from_id << ", to id: " << to_id << "\n-----" << std::endl;
+    //   }
+
+    //   // std::cout << "IMU callback() - from_id: " << from_id_ << ", to_id: " << to_id << std::endl;
+
+    //   ros::Time from_time = backend_->findPoseStamp(from_id_);
+    //   ros::Time to_time = backend_->getNewestPoseTime();
+
+    //   // Integrate measurements and delete all measurements that was integrated
+    //   std::map<ros::Time, IMUMeasurement>::iterator to_it = integrateMeasurements(from_time, to_time);
+    //   stamped_measurements_.erase(stamped_measurements_.begin(), to_it);
+
+    //   // Add preintegrate measurement to factor graph
+    //   addPreintegratedFactor(from_id_, to_id);
+
+
+    //   // Update states
+    //   prev_state_ = gtsam::NavState(backend_->getPoseAt(gtsam::symbol_shorthand::X(to_id)),
+    //                                 backend_->getVelocity());
+
+    //   prev_bias_ = backend_->getBias();
+
+    //   // Reset integration
+    //   preintegrated_->resetIntegrationAndSetBias(prev_bias_);
+
+    //   from_id_ = to_id;
+    // }
     
     // Update stamp of previous IMU measurement for next dt
     prev_stamp_ = msg->header.stamp;
@@ -289,15 +319,16 @@ public:
     gtsam::Pose3 to_pose = backend_->getPoseAt(gtsam::symbol_shorthand::X(to_id));
 
     gtsam::Vector3 velocity = approximateVelocityWorldFrame(from_pose, to_pose, (to_time - from_time).toSec());
-    gtsam::imuBias::ConstantBias bias = backend_->getBias();
+    // gtsam::imuBias::ConstantBias bias = backend_->getBias();
+    gtsam::imuBias::ConstantBias bias = initial_bias_;
 
     gtsam::Key vel_key_from  = gtsam::symbol_shorthand::V(from_id); 
     gtsam::Key bias_key_from = gtsam::symbol_shorthand::B(from_id); 
 
     // Insert priors
-    if ( backend_->tryInsertValue(vel_key_from, velocity) )
+    if ( backend_->tryInsertValue(vel_key_from, velocity, from_time) )
       backend_->addFactor(gtsam::PriorFactor<gtsam::Vector3>(vel_key_from, velocity, velocity_noise_model_));
-    if ( backend_->tryInsertValue(bias_key_from, bias) )
+    if ( backend_->tryInsertValue(bias_key_from, bias, from_time) )
       backend_->addFactor(gtsam::PriorFactor<gtsam::imuBias::ConstantBias>(bias_key_from, bias, bias_noise_model_));
 
     // Update prev state

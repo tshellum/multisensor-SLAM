@@ -22,7 +22,7 @@ if __name__ == "__main__":
 
     # Trajectory
     fig1,ax1 = plt.subplots(num=1)
-    ax1.plot(x_vo, y_vo, '-', color='red', label='Visual odometry')
+    ax1.plot(x_vo, y_vo, '-', color='red', label='VSLAM')
     ax1.plot(x_gt, y_gt, '-', color='darkblue', label='Ground truth')
     ax1.legend(loc='upper left', frameon=True)    
     ax1.set_ylabel('Latitude [m]')

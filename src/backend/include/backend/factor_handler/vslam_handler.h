@@ -122,7 +122,7 @@ public:
         -1,  0, 0,
          0, -1, 0
       ), gtsam::Point3());
-      
+
     
     if (camera_parameters != boost::property_tree::ptree())
     {
@@ -194,9 +194,16 @@ public:
 
       backend_->addSmootherFactor(
         gtsam::BetweenFactor<gtsam::Pose3>(
-          loop_key_from, loop_key_to, pose_loop, pose_noise_
+          loop_key_from, loop_key_to, gtsam::Pose3::identity(), pose_noise_
         )
       );
+
+      // gtsam::Pose3 pose_loop_to = backend_->getPoseAt(loop_key_to);
+      // backend_->addSmootherFactor(
+      //   gtsam::PriorFactor<gtsam::Pose3>(
+      //     loop_key_to, pose_loop_to, gtsam::noiseModel::Constrained::All(6)
+      //   )
+      // );
 
       backend_->markUpdateWithLoop();
       backend_->setLoopID(to_id);
@@ -250,7 +257,6 @@ public:
               num_inserted++;
               gtsam::Symbol l_symb(landmark_key);
 
-              // if ( backend_->tryInsertValue(landmark_key, prev_stereo_measurements_[landmark_id].landmark) )
               if ( backend_->tryInsertValue(landmark_key, prev_stereo_measurements_[landmark_id].landmark, msg.header.stamp) )
               {
                 prev_inserted++;

@@ -9,7 +9,7 @@
 
 	"sensor_status" : {
 		"gnss"		 : false,
-		"imu"		 : false,
+		"imu"		 : true,
 		"vslam" 	 : true,
 		"lidar_slam" : false
 	},
